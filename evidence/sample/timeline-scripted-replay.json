@@ -1,0 +1,756 @@
+{
+  "session_id": "ui-1792116100308",
+  "config": {
+    "eot_policy": "margin",
+    "eot_margin": 0.2,
+    "spec_margin": 0.3,
+    "speculative_llm": true,
+    "eot_input": "last_segment",
+    "confirm_silence_ms": 700,
+    "cut_wait_ms": 1500,
+    "think_wait_ms": 3000,
+    "max_silence_ms": 2000,
+    "eot_timeout_ms": 900,
+    "eot_max_inflight": 3,
+    "debounce_ms": 80,
+    "reuse_tools_if_text_unchanged": true,
+    "tool_set": "navigation"
+  },
+  "events": [
+    {
+      "event": "vad",
+      "t_ms": 0,
+      "text_version": 0,
+      "kind": "speech_start"
+    },
+    {
+      "event": "asr_update",
+      "t_ms": 167,
+      "text_version": 1,
+      "text": "我",
+      "final": false,
+      "segment": "我",
+      "turn_text": "我",
+      "changed": true
+    },
+    {
+      "event": "eot_start",
+      "t_ms": 247.12379205226898,
+      "text_version": 1,
+      "text": "我",
+      "version": 1
+    },
+    {
+      "event": "tools_start",
+      "t_ms": 247.12379205226898,
+      "text_version": 1,
+      "text": "我",
+      "version": 1
+    },
+    {
+      "event": "asr_update",
+      "t_ms": 333,
+      "text_version": 2,
+      "text": "我去",
+      "final": false,
+      "segment": "我去",
+      "turn_text": "我去",
+      "changed": true
+    },
+    {
+      "event": "eot_start",
+      "t_ms": 417.9252920150757,
+      "text_version": 2,
+      "text": "我去",
+      "version": 2
+    },
+    {
+      "event": "eot_scores",
+      "t_ms": 484.8861669898033,
+      "text_version": 2,
+      "stale": true,
+      "text": "我",
+      "complete": 0.3889,
+      "cut": 0.3761,
+      "wait": 0.1479,
+      "label": "complete",
+      "margin": 0.012800000000000034,
+      "wall_ms": 233.18108299281448,
+      "kev_ms": 40.9
+    },
+    {
+      "event": "eot_skipped",
+      "t_ms": 484.8861669898033,
+      "text_version": 2,
+      "reason": "stale",
+      "text": "我"
+    },
+    {
+      "event": "asr_update",
+      "t_ms": 500,
+      "text_version": 3,
+      "text": "我去买",
+      "final": false,
+      "segment": "我去买",
+      "turn_text": "我去买",
+      "changed": true
+    },
+    {
+      "event": "eot_start",
+      "t_ms": 583.3582920432091,
+      "text_version": 3,
+      "text": "我去买",
+      "version": 3
+    },
+    {
+      "event": "asr_update",
+      "t_ms": 667,
+      "text_version": 4,
+      "text": "我去买菜",
+      "final": false,
+      "segment": "我去买菜",
+      "turn_text": "我去买菜",
+      "changed": true
+    },
+    {
+      "event": "eot_scores",
+      "t_ms": 667,
+      "text_version": 4,
+      "stale": true,
+      "text": "我去",
+      "complete": 0.4563,
+      "cut": 0.1976,
+      "wait": 0.2415,
+      "label": "complete",
+      "margin": 0.2148,
+      "wall_ms": 248.76512499758974,
+      "kev_ms": 40.7
+    },
+    {
+      "event": "eot_skipped",
+      "t_ms": 667,
+      "text_version": 4,
+      "reason": "stale",
+      "text": "我去"
+    },
+    {
+      "event": "vad",
+      "t_ms": 667,
+      "text_version": 4,
+      "kind": "speech_end"
+    },
+    {
+      "event": "eot_start",
+      "t_ms": 751.2685829997063,
+      "text_version": 4,
+      "text": "我去买菜",
+      "version": 4
+    },
+    {
+      "event": "tools_scores",
+      "t_ms": 985.7524170279503,
+      "text_version": 4,
+      "reused": false,
+      "text": "我",
+      "selected": [
+        "navi_open_address_page",
+        "navi_to_special_poi",
+        "navi_search_in_address_page"
+      ],
+      "timing": {
+        "stage1_ms": 703.7064579781145,
+        "stage2_ms": 3.2497079810127616,
+        "total_ms": 734.1240409878083
+      },
+      "top": [
+        {
+          "name": "navi_open_address_page",
+          "score": 0.8644
+        },
+        {
+          "name": "navi_to_special_poi",
+          "score": 0.8534
+        },
+        {
+          "name": "navi_search_in_address_page",
+          "score": 0.6594
+        }
+      ]
+    },
+    {
+      "event": "tools_start",
+      "t_ms": 985.7524170279503,
+      "text_version": 4,
+      "text": "我去买菜",
+      "version": 4
+    },
+    {
+      "event": "eot_scores",
+      "t_ms": 1034.4642499685287,
+      "text_version": 4,
+      "stale": true,
+      "text": "我去买",
+      "complete": 0.4224,
+      "cut": 0.4948,
+      "wait": 0.2002,
+      "label": "cut",
+      "margin": -0.07240000000000002,
+      "wall_ms": 445.0717499712482,
+      "kev_ms": 46.4
+    },
+    {
+      "event": "eot_skipped",
+      "t_ms": 1034.4642499685287,
+      "text_version": 4,
+      "reason": "stale",
+      "text": "我去买"
+    },
+    {
+      "event": "eot_scores",
+      "t_ms": 1034.4642499685287,
+      "text_version": 4,
+      "stale": false,
+      "text": "我去买菜",
+      "complete": 0.6171,
+      "cut": 0.1666,
+      "wait": 0.2033,
+      "label": "complete",
+      "margin": 0.41379999999999995,
+      "wall_ms": 277.07129099871963,
+      "kev_ms": 46.4
+    },
+    {
+      "event": "state_change",
+      "t_ms": 1034.4642499685287,
+      "text_version": 4,
+      "from": "LISTENING",
+      "to": "MAYBE_DONE",
+      "why": "eot_complete"
+    },
+    {
+      "event": "vad",
+      "t_ms": 1267,
+      "text_version": 4,
+      "kind": "speech_start"
+    },
+    {
+      "event": "state_change",
+      "t_ms": 1267,
+      "text_version": 4,
+      "from": "MAYBE_DONE",
+      "to": "LISTENING",
+      "why": "speech_start"
+    },
+    {
+      "event": "asr_update",
+      "t_ms": 1433,
+      "text_version": 5,
+      "text": "对",
+      "final": false,
+      "segment": "对",
+      "turn_text": "我去买菜对",
+      "changed": true
+    },
+    {
+      "event": "tools_scores",
+      "t_ms": 1503.6462919712067,
+      "text_version": 5,
+      "reused": false,
+      "text": "我去买菜",
+      "selected": [
+        "navi_search_keyword",
+        "navi_search_nearby_poi",
+        "navi_open_address_page"
+      ],
+      "timing": {
+        "stage1_ms": 479.3583329883404,
+        "stage2_ms": 2.5664589484222233,
+        "total_ms": 514.1500419704244
+      },
+      "top": [
+        {
+          "name": "navi_search_keyword",
+          "score": 0.7053
+        },
+        {
+          "name": "navi_search_nearby_poi",
+          "score": 0.6084
+        },
+        {
+          "name": "navi_open_address_page",
+          "score": 0.6044
+        }
+      ]
+    },
+    {
+      "event": "tools_start",
+      "t_ms": 1503.6462919712067,
+      "text_version": 5,
+      "text": "我去买菜对",
+      "version": 5
+    },
+    {
+      "event": "eot_start",
+      "t_ms": 1517.1397920250893,
+      "text_version": 5,
+      "text": "我去买菜对",
+      "version": 5
+    },
+    {
+      "event": "asr_update",
+      "t_ms": 1600,
+      "text_version": 6,
+      "text": "对了",
+      "final": false,
+      "segment": "对了",
+      "turn_text": "我去买菜对了",
+      "changed": true
+    },
+    {
+      "event": "eot_start",
+      "t_ms": 1682.9395419955254,
+      "text_version": 6,
+      "text": "我去买菜对了",
+      "version": 6
+    },
+    {
+      "event": "asr_update",
+      "t_ms": 1767,
+      "text_version": 7,
+      "text": "对了还",
+      "final": false,
+      "segment": "对了还",
+      "turn_text": "我去买菜对了还",
+      "changed": true
+    },
+    {
+      "event": "eot_scores",
+      "t_ms": 1767,
+      "text_version": 7,
+      "stale": true,
+      "text": "我去买菜对",
+      "complete": 0.6367,
+      "cut": 0.2662,
+      "wait": 0.1213,
+      "label": "complete",
+      "margin": 0.37050000000000005,
+      "wall_ms": 249.666084011551,
+      "kev_ms": 35.4
+    },
+    {
+      "event": "eot_skipped",
+      "t_ms": 1767,
+      "text_version": 7,
+      "reason": "stale",
+      "text": "我去买菜对"
+    },
+    {
+      "event": "eot_start",
+      "t_ms": 1850.393833041191,
+      "text_version": 7,
+      "text": "我去买菜对了还",
+      "version": 7
+    },
+    {
+      "event": "asr_update",
+      "t_ms": 1933,
+      "text_version": 8,
+      "text": "对了还要",
+      "final": false,
+      "segment": "对了还要",
+      "turn_text": "我去买菜对了还要",
+      "changed": true
+    },
+    {
+      "event": "eot_start",
+      "t_ms": 2019.2482079863548,
+      "text_version": 8,
+      "text": "对了还要",
+      "version": 8
+    },
+    {
+      "event": "tools_scores",
+      "t_ms": 2063.0260420441628,
+      "text_version": 8,
+      "reused": false,
+      "text": "我去买菜对",
+      "selected": [
+        "navi_search_keyword",
+        "navi_open_address_page",
+        "navi_show_poi_list"
+      ],
+      "timing": {
+        "stage1_ms": 523.4717919956893,
+        "stage2_ms": 1.4902090188115835,
+        "total_ms": 554.7983330325224
+      },
+      "top": [
+        {
+          "name": "navi_search_keyword",
+          "score": 0.748
+        },
+        {
+          "name": "navi_open_address_page",
+          "score": 0.6787
+        },
+        {
+          "name": "navi_show_poi_list",
+          "score": 0.5732
+        }
+      ]
+    },
+    {
+      "event": "tools_start",
+      "t_ms": 2063.0260420441628,
+      "text_version": 8,
+      "text": "我去买菜对了还要",
+      "version": 8
+    },
+    {
+      "event": "asr_update",
+      "t_ms": 2100,
+      "text_version": 9,
+      "text": "对了还要买",
+      "final": false,
+      "segment": "对了还要买",
+      "turn_text": "我去买菜对了还要买",
+      "changed": true
+    },
+    {
+      "event": "eot_scores",
+      "t_ms": 2107.297291994095,
+      "text_version": 9,
+      "stale": true,
+      "text": "我去买菜对了",
+      "complete": 0.4187,
+      "cut": 0.4149,
+      "wait": 0.2217,
+      "label": "complete",
+      "margin": 0.0038000000000000256,
+      "wall_ms": 421.5074170497246,
+      "kev_ms": 46.9
+    },
+    {
+      "event": "eot_skipped",
+      "t_ms": 2107.297291994095,
+      "text_version": 9,
+      "reason": "stale",
+      "text": "我去买菜对了"
+    },
+    {
+      "event": "eot_scores",
+      "t_ms": 2107.297291994095,
+      "text_version": 9,
+      "stale": true,
+      "text": "我去买菜对了还",
+      "complete": 0.3501,
+      "cut": 0.811,
+      "wait": 0.3016,
+      "label": "cut",
+      "margin": -0.46090000000000003,
+      "wall_ms": 253.97766701644287,
+      "kev_ms": 46.9
+    },
+    {
+      "event": "eot_skipped",
+      "t_ms": 2107.297291994095,
+      "text_version": 9,
+      "reason": "stale",
+      "text": "我去买菜对了还"
+    },
+    {
+      "event": "eot_start",
+      "t_ms": 2180.6904170513153,
+      "text_version": 9,
+      "text": "对了还要买",
+      "version": 9
+    },
+    {
+      "event": "asr_update",
+      "t_ms": 2267,
+      "text_version": 10,
+      "text": "对了还要买酱",
+      "final": false,
+      "segment": "对了还要买酱",
+      "turn_text": "我去买菜对了还要买酱",
+      "changed": true
+    },
+    {
+      "event": "eot_start",
+      "t_ms": 2349.4496669769287,
+      "text_version": 10,
+      "text": "对了还要买酱",
+      "version": 10
+    },
+    {
+      "event": "asr_update",
+      "t_ms": 2433,
+      "text_version": 11,
+      "text": "对了还要买酱油",
+      "final": true,
+      "segment": "对了还要买酱油",
+      "turn_text": "我去买菜对了还要买酱油",
+      "changed": true
+    },
+    {
+      "event": "vad",
+      "t_ms": 2453,
+      "text_version": 11,
+      "kind": "speech_end"
+    },
+    {
+      "event": "tools_scores",
+      "t_ms": 2528.820417046547,
+      "text_version": 11,
+      "reused": false,
+      "text": "我去买菜对了还要",
+      "selected": [
+        "navi_search_keyword",
+        "navi_add_waypoint",
+        "navi_open_address_page"
+      ],
+      "timing": {
+        "stage1_ms": 442.2834159922786,
+        "stage2_ms": 1.8364170100539923,
+        "total_ms": 465.31687496462837
+      },
+      "top": [
+        {
+          "name": "navi_search_keyword",
+          "score": 0.6765
+        },
+        {
+          "name": "navi_add_waypoint",
+          "score": 0.6726
+        },
+        {
+          "name": "navi_open_address_page",
+          "score": 0.5703
+        }
+      ]
+    },
+    {
+      "event": "tools_start",
+      "t_ms": 2528.820417046547,
+      "text_version": 11,
+      "text": "我去买菜对了还要买酱油",
+      "version": 11
+    },
+    {
+      "event": "eot_scores",
+      "t_ms": 2593.6084169745445,
+      "text_version": 11,
+      "stale": true,
+      "text": "对了还要",
+      "complete": 0.2485,
+      "cut": 0.8782,
+      "wait": 0.2455,
+      "label": "cut",
+      "margin": -0.6296999999999999,
+      "wall_ms": 568.0908749927767,
+      "kev_ms": 61.0
+    },
+    {
+      "event": "eot_skipped",
+      "t_ms": 2593.6084169745445,
+      "text_version": 11,
+      "reason": "stale",
+      "text": "对了还要"
+    },
+    {
+      "event": "eot_scores",
+      "t_ms": 2593.6084169745445,
+      "text_version": 11,
+      "stale": true,
+      "text": "对了还要买",
+      "complete": 0.4848,
+      "cut": 0.4859,
+      "wait": 0.1825,
+      "label": "cut",
+      "margin": -0.0010999999999999899,
+      "wall_ms": 406.5653749858029,
+      "kev_ms": 61.0
+    },
+    {
+      "event": "eot_skipped",
+      "t_ms": 2593.6084169745445,
+      "text_version": 11,
+      "reason": "stale",
+      "text": "对了还要买"
+    },
+    {
+      "event": "eot_scores",
+      "t_ms": 2593.6084169745445,
+      "text_version": 11,
+      "stale": true,
+      "text": "对了还要买酱",
+      "complete": 0.5824,
+      "cut": 0.2756,
+      "wait": 0.1829,
+      "label": "complete",
+      "margin": 0.3068,
+      "wall_ms": 237.87020798772573,
+      "kev_ms": 61.0
+    },
+    {
+      "event": "eot_skipped",
+      "t_ms": 2593.6084169745445,
+      "text_version": 11,
+      "reason": "stale",
+      "text": "对了还要买酱"
+    },
+    {
+      "event": "eot_start",
+      "t_ms": 2593.6084169745445,
+      "text_version": 11,
+      "text": "对了还要买酱油",
+      "version": 11
+    },
+    {
+      "event": "tools_scores",
+      "t_ms": 3013.520667016506,
+      "text_version": 11,
+      "reused": false,
+      "text": "我去买菜对了还要买酱油",
+      "selected": [
+        "navi_open_address_page",
+        "navi_add_waypoint",
+        "navi_search_keyword"
+      ],
+      "timing": {
+        "stage1_ms": 453.37633398594335,
+        "stage2_ms": 1.717875013127923,
+        "total_ms": 484.2495830380358
+      },
+      "top": [
+        {
+          "name": "navi_open_address_page",
+          "score": 0.7291
+        },
+        {
+          "name": "navi_add_waypoint",
+          "score": 0.7032
+        },
+        {
+          "name": "navi_search_keyword",
+          "score": 0.5348
+        }
+      ]
+    },
+    {
+      "event": "eot_scores",
+      "t_ms": 3045.135375022888,
+      "text_version": 11,
+      "stale": false,
+      "text": "对了还要买酱油",
+      "complete": 0.5808,
+      "cut": 0.2157,
+      "wait": 0.1982,
+      "label": "complete",
+      "margin": 0.3651,
+      "wall_ms": 447.9285000124946,
+      "kev_ms": 34.8
+    },
+    {
+      "event": "state_change",
+      "t_ms": 3045.135375022888,
+      "text_version": 11,
+      "from": "LISTENING",
+      "to": "MAYBE_DONE",
+      "why": "eot_complete"
+    },
+    {
+      "event": "llm_start",
+      "t_ms": 3045.135375022888,
+      "text_version": 11,
+      "speculative": true,
+      "selected": [
+        "navi_open_address_page",
+        "navi_add_waypoint",
+        "navi_search_keyword"
+      ]
+    },
+    {
+      "event": "state_change",
+      "t_ms": 3156.5097079873085,
+      "text_version": 11,
+      "from": "MAYBE_DONE",
+      "to": "CONFIRMED",
+      "why": "confirm_silence"
+    },
+    {
+      "event": "llm_decision",
+      "t_ms": 5154.653457999229,
+      "text_version": 11,
+      "decision": {
+        "kind": "tool_call",
+        "tool": "navi_search_keyword",
+        "arguments": {
+          "keyword": "菜市场",
+          "query": "买菜",
+          "show_in_map": true
+        },
+        "response_model": "deepseek-v4.1-flash"
+      },
+      "llm_ms": 2107.709874981083,
+      "decision_head": "project_existing_litellm"
+    },
+    {
+      "event": "turn_done",
+      "t_ms": 5154.653457999229,
+      "text_version": 11,
+      "session_id": "ui-1792116100308",
+      "turns": 1,
+      "t_last_word": 2433,
+      "t_confirmed": 3156.5097079873085,
+      "t_llm_start": 3045.135375022888,
+      "t_decision": 5154.653457999229,
+      "t_confirm_latency_ms": 723.5097079873085,
+      "t_llm_start_latency_ms": 612.1353750228882,
+      "t_decision_latency_ms": 2721.6534579992294,
+      "eot_calls": 11,
+      "eot_skipped": 9,
+      "eot_stale": 9,
+      "tool_calls": 5,
+      "llm_calls": 1,
+      "llm_wasted": 0,
+      "timeline_path": "/Users/YUYSONG/Work/tmp/jev-reopt-checkouts/dev-streaming-eot/eval/evidence/turn-session/ui-1792116100308/timeline.json"
+    }
+  ],
+  "turns": [
+    {
+      "session_id": "ui-1792116100308",
+      "turns": 1,
+      "t_last_word": 2433,
+      "t_confirmed": 3156.5097079873085,
+      "t_llm_start": 3045.135375022888,
+      "t_decision": 5154.653457999229,
+      "t_confirm_latency_ms": 723.5097079873085,
+      "t_llm_start_latency_ms": 612.1353750228882,
+      "t_decision_latency_ms": 2721.6534579992294,
+      "eot_calls": 11,
+      "eot_skipped": 9,
+      "eot_stale": 9,
+      "tool_calls": 5,
+      "llm_calls": 1,
+      "llm_wasted": 0
+    }
+  ],
+  "summary": {
+    "session_id": "ui-1792116100308",
+    "turns": 1,
+    "t_last_word": 2433,
+    "t_confirmed": 3156.5097079873085,
+    "t_llm_start": 3045.135375022888,
+    "t_decision": 5154.653457999229,
+    "t_confirm_latency_ms": 723.5097079873085,
+    "t_llm_start_latency_ms": 612.1353750228882,
+    "t_decision_latency_ms": 2721.6534579992294,
+    "eot_calls": 11,
+    "eot_skipped": 9,
+    "eot_stale": 9,
+    "tool_calls": 5,
+    "llm_calls": 1,
+    "llm_wasted": 0
+  }
+}

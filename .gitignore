@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.DS_Store
+# 运行时产物（timeline / 评测明细），只有 sample/ 入库
+evidence/*
+!evidence/sample/

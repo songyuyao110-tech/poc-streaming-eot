@@ -1,0 +1,1 @@
+启动：`/Users/YUYSONG/Agents/navi-dual-system/.venv/bin/python -u -B /Users/YUYSONG/Work/tmp/jev-research/poc-ui/server.py`；打开 http://127.0.0.1:8765/，刷新页面后输入 query，Enter/发送，POST `/api/run/stream` 阶段 SSE 即时更新时间线（执行仅 mock 展示，旧 `/api/run` 保留）；停止：前台 Ctrl+C，后台 `kill $(lsof -t -iTCP:8765 -sTCP:LISTEN)`。

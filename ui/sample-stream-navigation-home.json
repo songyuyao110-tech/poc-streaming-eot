@@ -1,0 +1,965 @@
+{
+  "verification": "PASS",
+  "ui_test": "actual page JS with DOM shim consuming live HTTP SSE (not a browser screenshot)",
+  "arrivals": [
+    {
+      "event": "accepted",
+      "received_ms": 11.945333000000005,
+      "text": "0.9 ms · accepted · 已接受：导航回家",
+      "score_rows": 0,
+      "decision_visible": false
+    },
+    {
+      "event": "kev_start",
+      "received_ms": 28.75500000000001,
+      "text": "20.3 ms · kev_start · KEV 开始评分（kev-latest / 127.0.0.1:8009）",
+      "score_rows": 0,
+      "decision_visible": false
+    },
+    {
+      "event": "kev_scores",
+      "received_ms": 446.546958,
+      "text": "436.7 ms · kev_scores · KEV 分数已到达：14 个分数，候选 navi_to_special_poi、navi_start_route、navi_open_address_page",
+      "score_rows": 0,
+      "decision_visible": false
+    },
+    {
+      "event": "llm_start",
+      "received_ms": 447.027458,
+      "text": "436.7 ms · llm_start · LLM 开始决策，分数与候选已可查看",
+      "score_rows": 14,
+      "decision_visible": false
+    },
+    {
+      "event": "llm_decision",
+      "received_ms": 1826.367542,
+      "text": "1817.2 ms · llm_decision · 决策已到达：tool_call / navi_to_special_poi · project_existing_litellm",
+      "score_rows": 14,
+      "decision_visible": false
+    },
+    {
+      "event": "exec_start",
+      "received_ms": 1827.2549999999999,
+      "text": "1818.7 ms · exec_start · 开始 mock 执行（不会调用业务工具）",
+      "score_rows": 14,
+      "decision_visible": true
+    },
+    {
+      "event": "exec_step",
+      "received_ms": 1827.795917,
+      "text": "1818.8 ms · exec_step · 调用 navi_to_special_poi…（仅模拟，不发送）",
+      "score_rows": 14,
+      "decision_visible": true
+    },
+    {
+      "event": "exec_step",
+      "received_ms": 1828.0362499999999,
+      "text": "1818.8 ms · exec_step · mock 成功（不代表真实任务完成）",
+      "score_rows": 14,
+      "decision_visible": true
+    },
+    {
+      "event": "exec_done",
+      "received_ms": 1831.345417,
+      "text": "1818.8 ms · exec_done · mock 执行展示完成",
+      "score_rows": 14,
+      "decision_visible": true
+    },
+    {
+      "event": "done",
+      "received_ms": 1831.750208,
+      "text": "1818.8 ms · done · 完成：只有 mock 展示，没有真实工具执行",
+      "score_rows": 14,
+      "decision_visible": true
+    }
+  ],
+  "result": {
+    "checkpoint": "C1",
+    "run_id": "c1-ac7153d6546945168607ada5bb8fa8b5",
+    "utterance": "导航回家",
+    "asr": "text_standin",
+    "kev_model": "kev-latest",
+    "kev_endpoint": "http://127.0.0.1:8009/v1/systemone",
+    "top_k": 3,
+    "tool_threshold": 0.5,
+    "mock": false,
+    "executed_tools": 0,
+    "event_elapsed_ms": 1818.7626659637317,
+    "scores": {
+      "tool:navi_to_special_poi": 0.9821,
+      "tool:navi_open_address_page": 0.5156,
+      "tool:navi_search_in_address_page": 0.4926,
+      "tool:navi_search_along_poi": 0.1223,
+      "tool:navi_search_nearby_poi": 0.1253,
+      "tool:navi_search_keyword": 0.2198,
+      "tool:navi_start_route": 0.8029,
+      "tool:navi_get_status": 0.2694,
+      "tool:navi_get_route_info": 0.1557,
+      "tool:navi_add_waypoint": 0.1261,
+      "tool:navi_switch_route": 0.1178,
+      "tool:navi_get_remaining": 0.1431,
+      "tool:navi_cancel_route": 0.1697,
+      "tool:navi_show_poi_list": 0.2455
+    },
+    "kev_latency_ms": 415.44166597304866,
+    "selected_tools": [
+      "navi_to_special_poi",
+      "navi_start_route",
+      "navi_open_address_page"
+    ],
+    "assembled_schemas": [
+      {
+        "name": "navi_to_special_poi",
+        "description": "导航到用户已设置的家庭或公司地址",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "poi_type": {
+              "enum": [
+                "home",
+                "company"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "poi_type"
+          ],
+          "type": "object"
+        }
+      },
+      {
+        "name": "navi_open_address_page",
+        "description": "打开家庭或公司地址设置页面",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "enum": [
+                "home",
+                "company"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        }
+      },
+      {
+        "name": "navi_start_route",
+        "description": "启动导航到明确的目的地，可以指定途经点和路线偏好",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "end_address": {
+              "type": "string"
+            },
+            "end_lat": {
+              "type": "number"
+            },
+            "end_lng": {
+              "type": "number"
+            },
+            "end_name": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "query": {
+              "type": "string"
+            },
+            "route_option": {
+              "enum": [
+                "default",
+                "fastest",
+                "shortest",
+                "avoid_toll",
+                "avoid_highway"
+              ],
+              "type": "string"
+            },
+            "simulate": {
+              "type": "boolean"
+            },
+            "via_points": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "address": {
+                    "type": "string"
+                  },
+                  "lat": {
+                    "type": "number"
+                  },
+                  "lng": {
+                    "type": "number"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "end_name"
+          ],
+          "type": "object"
+        }
+      }
+    ],
+    "assembly_latency_ms": 0.9387920144945383,
+    "decision_head": "project_existing_litellm",
+    "decision_response": {
+      "model": "deepseek-v4.1-flash",
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "call_00_d2fwkk3hwl2ij1x9b2nngizd",
+          "name": "navi_to_special_poi",
+          "input": {
+            "poi_type": "home"
+          },
+          "reasoning_content": "The task: navigate home. home_address_configured is true. So we can use navi_to_special_poi with poi_type home. That's the appropriate tool."
+        }
+      ],
+      "usage": {
+        "input_tokens": 1020,
+        "output_tokens": 83
+      }
+    },
+    "decision": {
+      "kind": "tool_call",
+      "tool": "navi_to_special_poi",
+      "arguments": {
+        "poi_type": "home"
+      },
+      "response_model": "deepseek-v4.1-flash"
+    },
+    "decision_latency_ms": 1380.4339590133168,
+    "outcome": "PASS",
+    "latency_ms": 1815.6097910250537,
+    "mock_execution": {
+      "mock_only": true,
+      "skipped": false,
+      "executed_tools": 0,
+      "message": "mock 执行展示完成"
+    },
+    "ui_total_latency_ms": 1818.7594159971923
+  },
+  "events": [
+    {
+      "event": "accepted",
+      "data": {
+        "utterance": "导航回家",
+        "asr": "text_standin",
+        "mock_only": true,
+        "event_elapsed_ms": 0.8804579847492278
+      }
+    },
+    {
+      "event": "kev_start",
+      "data": {
+        "checkpoint": "C1",
+        "run_id": "c1-ac7153d6546945168607ada5bb8fa8b5",
+        "utterance": "导航回家",
+        "asr": "text_standin",
+        "kev_model": "kev-latest",
+        "kev_endpoint": "http://127.0.0.1:8009/v1/systemone",
+        "top_k": 3,
+        "tool_threshold": 0.5,
+        "mock": false,
+        "executed_tools": 0,
+        "event_elapsed_ms": 20.32812498509884
+      }
+    },
+    {
+      "event": "kev_scores",
+      "data": {
+        "checkpoint": "C1",
+        "run_id": "c1-ac7153d6546945168607ada5bb8fa8b5",
+        "utterance": "导航回家",
+        "asr": "text_standin",
+        "kev_model": "kev-latest",
+        "kev_endpoint": "http://127.0.0.1:8009/v1/systemone",
+        "top_k": 3,
+        "tool_threshold": 0.5,
+        "mock": false,
+        "executed_tools": 0,
+        "scores": {
+          "tool:navi_to_special_poi": 0.9821,
+          "tool:navi_open_address_page": 0.5156,
+          "tool:navi_search_in_address_page": 0.4926,
+          "tool:navi_search_along_poi": 0.1223,
+          "tool:navi_search_nearby_poi": 0.1253,
+          "tool:navi_search_keyword": 0.2198,
+          "tool:navi_start_route": 0.8029,
+          "tool:navi_get_status": 0.2694,
+          "tool:navi_get_route_info": 0.1557,
+          "tool:navi_add_waypoint": 0.1261,
+          "tool:navi_switch_route": 0.1178,
+          "tool:navi_get_remaining": 0.1431,
+          "tool:navi_cancel_route": 0.1697,
+          "tool:navi_show_poi_list": 0.2455
+        },
+        "kev_latency_ms": 415.44166597304866,
+        "selected_tools": [
+          "navi_to_special_poi",
+          "navi_start_route",
+          "navi_open_address_page"
+        ],
+        "assembled_schemas": [
+          {
+            "name": "navi_to_special_poi",
+            "description": "导航到用户已设置的家庭或公司地址",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {
+                "poi_type": {
+                  "enum": [
+                    "home",
+                    "company"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "poi_type"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "name": "navi_open_address_page",
+            "description": "打开家庭或公司地址设置页面",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {
+                "type": {
+                  "enum": [
+                    "home",
+                    "company"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "name": "navi_start_route",
+            "description": "启动导航到明确的目的地，可以指定途经点和路线偏好",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {
+                "end_address": {
+                  "type": "string"
+                },
+                "end_lat": {
+                  "type": "number"
+                },
+                "end_lng": {
+                  "type": "number"
+                },
+                "end_name": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "query": {
+                  "type": "string"
+                },
+                "route_option": {
+                  "enum": [
+                    "default",
+                    "fastest",
+                    "shortest",
+                    "avoid_toll",
+                    "avoid_highway"
+                  ],
+                  "type": "string"
+                },
+                "simulate": {
+                  "type": "boolean"
+                },
+                "via_points": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "address": {
+                        "type": "string"
+                      },
+                      "lat": {
+                        "type": "number"
+                      },
+                      "lng": {
+                        "type": "number"
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "end_name"
+              ],
+              "type": "object"
+            }
+          }
+        ],
+        "assembly_latency_ms": 0.9387920144945383,
+        "event_elapsed_ms": 436.7218330153264
+      }
+    },
+    {
+      "event": "llm_start",
+      "data": {
+        "checkpoint": "C1",
+        "run_id": "c1-ac7153d6546945168607ada5bb8fa8b5",
+        "utterance": "导航回家",
+        "asr": "text_standin",
+        "kev_model": "kev-latest",
+        "kev_endpoint": "http://127.0.0.1:8009/v1/systemone",
+        "top_k": 3,
+        "tool_threshold": 0.5,
+        "mock": false,
+        "executed_tools": 0,
+        "scores": {
+          "tool:navi_to_special_poi": 0.9821,
+          "tool:navi_open_address_page": 0.5156,
+          "tool:navi_search_in_address_page": 0.4926,
+          "tool:navi_search_along_poi": 0.1223,
+          "tool:navi_search_nearby_poi": 0.1253,
+          "tool:navi_search_keyword": 0.2198,
+          "tool:navi_start_route": 0.8029,
+          "tool:navi_get_status": 0.2694,
+          "tool:navi_get_route_info": 0.1557,
+          "tool:navi_add_waypoint": 0.1261,
+          "tool:navi_switch_route": 0.1178,
+          "tool:navi_get_remaining": 0.1431,
+          "tool:navi_cancel_route": 0.1697,
+          "tool:navi_show_poi_list": 0.2455
+        },
+        "kev_latency_ms": 415.44166597304866,
+        "selected_tools": [
+          "navi_to_special_poi",
+          "navi_start_route",
+          "navi_open_address_page"
+        ],
+        "assembled_schemas": [
+          {
+            "name": "navi_to_special_poi",
+            "description": "导航到用户已设置的家庭或公司地址",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {
+                "poi_type": {
+                  "enum": [
+                    "home",
+                    "company"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "poi_type"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "name": "navi_open_address_page",
+            "description": "打开家庭或公司地址设置页面",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {
+                "type": {
+                  "enum": [
+                    "home",
+                    "company"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "name": "navi_start_route",
+            "description": "启动导航到明确的目的地，可以指定途经点和路线偏好",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {
+                "end_address": {
+                  "type": "string"
+                },
+                "end_lat": {
+                  "type": "number"
+                },
+                "end_lng": {
+                  "type": "number"
+                },
+                "end_name": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "query": {
+                  "type": "string"
+                },
+                "route_option": {
+                  "enum": [
+                    "default",
+                    "fastest",
+                    "shortest",
+                    "avoid_toll",
+                    "avoid_highway"
+                  ],
+                  "type": "string"
+                },
+                "simulate": {
+                  "type": "boolean"
+                },
+                "via_points": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "address": {
+                        "type": "string"
+                      },
+                      "lat": {
+                        "type": "number"
+                      },
+                      "lng": {
+                        "type": "number"
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "end_name"
+              ],
+              "type": "object"
+            }
+          }
+        ],
+        "assembly_latency_ms": 0.9387920144945383,
+        "event_elapsed_ms": 436.7309999652207
+      }
+    },
+    {
+      "event": "llm_decision",
+      "data": {
+        "checkpoint": "C1",
+        "run_id": "c1-ac7153d6546945168607ada5bb8fa8b5",
+        "utterance": "导航回家",
+        "asr": "text_standin",
+        "kev_model": "kev-latest",
+        "kev_endpoint": "http://127.0.0.1:8009/v1/systemone",
+        "top_k": 3,
+        "tool_threshold": 0.5,
+        "mock": false,
+        "executed_tools": 0,
+        "scores": {
+          "tool:navi_to_special_poi": 0.9821,
+          "tool:navi_open_address_page": 0.5156,
+          "tool:navi_search_in_address_page": 0.4926,
+          "tool:navi_search_along_poi": 0.1223,
+          "tool:navi_search_nearby_poi": 0.1253,
+          "tool:navi_search_keyword": 0.2198,
+          "tool:navi_start_route": 0.8029,
+          "tool:navi_get_status": 0.2694,
+          "tool:navi_get_route_info": 0.1557,
+          "tool:navi_add_waypoint": 0.1261,
+          "tool:navi_switch_route": 0.1178,
+          "tool:navi_get_remaining": 0.1431,
+          "tool:navi_cancel_route": 0.1697,
+          "tool:navi_show_poi_list": 0.2455
+        },
+        "kev_latency_ms": 415.44166597304866,
+        "selected_tools": [
+          "navi_to_special_poi",
+          "navi_start_route",
+          "navi_open_address_page"
+        ],
+        "assembled_schemas": [
+          {
+            "name": "navi_to_special_poi",
+            "description": "导航到用户已设置的家庭或公司地址",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {
+                "poi_type": {
+                  "enum": [
+                    "home",
+                    "company"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "poi_type"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "name": "navi_open_address_page",
+            "description": "打开家庭或公司地址设置页面",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {
+                "type": {
+                  "enum": [
+                    "home",
+                    "company"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "name": "navi_start_route",
+            "description": "启动导航到明确的目的地，可以指定途经点和路线偏好",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {
+                "end_address": {
+                  "type": "string"
+                },
+                "end_lat": {
+                  "type": "number"
+                },
+                "end_lng": {
+                  "type": "number"
+                },
+                "end_name": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "query": {
+                  "type": "string"
+                },
+                "route_option": {
+                  "enum": [
+                    "default",
+                    "fastest",
+                    "shortest",
+                    "avoid_toll",
+                    "avoid_highway"
+                  ],
+                  "type": "string"
+                },
+                "simulate": {
+                  "type": "boolean"
+                },
+                "via_points": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "address": {
+                        "type": "string"
+                      },
+                      "lat": {
+                        "type": "number"
+                      },
+                      "lng": {
+                        "type": "number"
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "end_name"
+              ],
+              "type": "object"
+            }
+          }
+        ],
+        "assembly_latency_ms": 0.9387920144945383,
+        "decision_head": "project_existing_litellm",
+        "decision_response": {
+          "model": "deepseek-v4.1-flash",
+          "content": [
+            {
+              "type": "tool_use",
+              "id": "call_00_d2fwkk3hwl2ij1x9b2nngizd",
+              "name": "navi_to_special_poi",
+              "input": {
+                "poi_type": "home"
+              },
+              "reasoning_content": "The task: navigate home. home_address_configured is true. So we can use navi_to_special_poi with poi_type home. That's the appropriate tool."
+            }
+          ],
+          "usage": {
+            "input_tokens": 1020,
+            "output_tokens": 83
+          }
+        },
+        "decision": {
+          "kind": "tool_call",
+          "tool": "navi_to_special_poi",
+          "arguments": {
+            "poi_type": "home"
+          },
+          "response_model": "deepseek-v4.1-flash"
+        },
+        "decision_latency_ms": 1380.4339590133168,
+        "outcome": "PASS",
+        "event_elapsed_ms": 1817.1747080050409
+      }
+    },
+    {
+      "event": "exec_start",
+      "data": {
+        "mock_only": true,
+        "skipped": false,
+        "message": "开始 mock 执行（不会调用业务工具）",
+        "event_elapsed_ms": 1818.7309579807334
+      }
+    },
+    {
+      "event": "exec_step",
+      "data": {
+        "step": 1,
+        "mock_only": true,
+        "tool": "navi_to_special_poi",
+        "arguments": {
+          "poi_type": "home"
+        },
+        "message": "调用 navi_to_special_poi…（仅模拟，不发送）",
+        "event_elapsed_ms": 1818.7504159868695
+      }
+    },
+    {
+      "event": "exec_step",
+      "data": {
+        "step": 2,
+        "mock_only": true,
+        "tool": "navi_to_special_poi",
+        "message": "mock 成功（不代表真实任务完成）",
+        "event_elapsed_ms": 1818.7538749771193
+      }
+    },
+    {
+      "event": "exec_done",
+      "data": {
+        "mock_only": true,
+        "skipped": false,
+        "executed_tools": 0,
+        "message": "mock 执行展示完成",
+        "event_elapsed_ms": 1818.7564159743488
+      }
+    },
+    {
+      "event": "done",
+      "data": {
+        "checkpoint": "C1",
+        "run_id": "c1-ac7153d6546945168607ada5bb8fa8b5",
+        "utterance": "导航回家",
+        "asr": "text_standin",
+        "kev_model": "kev-latest",
+        "kev_endpoint": "http://127.0.0.1:8009/v1/systemone",
+        "top_k": 3,
+        "tool_threshold": 0.5,
+        "mock": false,
+        "executed_tools": 0,
+        "scores": {
+          "tool:navi_to_special_poi": 0.9821,
+          "tool:navi_open_address_page": 0.5156,
+          "tool:navi_search_in_address_page": 0.4926,
+          "tool:navi_search_along_poi": 0.1223,
+          "tool:navi_search_nearby_poi": 0.1253,
+          "tool:navi_search_keyword": 0.2198,
+          "tool:navi_start_route": 0.8029,
+          "tool:navi_get_status": 0.2694,
+          "tool:navi_get_route_info": 0.1557,
+          "tool:navi_add_waypoint": 0.1261,
+          "tool:navi_switch_route": 0.1178,
+          "tool:navi_get_remaining": 0.1431,
+          "tool:navi_cancel_route": 0.1697,
+          "tool:navi_show_poi_list": 0.2455
+        },
+        "kev_latency_ms": 415.44166597304866,
+        "selected_tools": [
+          "navi_to_special_poi",
+          "navi_start_route",
+          "navi_open_address_page"
+        ],
+        "assembled_schemas": [
+          {
+            "name": "navi_to_special_poi",
+            "description": "导航到用户已设置的家庭或公司地址",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {
+                "poi_type": {
+                  "enum": [
+                    "home",
+                    "company"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "poi_type"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "name": "navi_open_address_page",
+            "description": "打开家庭或公司地址设置页面",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {
+                "type": {
+                  "enum": [
+                    "home",
+                    "company"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "name": "navi_start_route",
+            "description": "启动导航到明确的目的地，可以指定途经点和路线偏好",
+            "parameters": {
+              "additionalProperties": false,
+              "properties": {
+                "end_address": {
+                  "type": "string"
+                },
+                "end_lat": {
+                  "type": "number"
+                },
+                "end_lng": {
+                  "type": "number"
+                },
+                "end_name": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "query": {
+                  "type": "string"
+                },
+                "route_option": {
+                  "enum": [
+                    "default",
+                    "fastest",
+                    "shortest",
+                    "avoid_toll",
+                    "avoid_highway"
+                  ],
+                  "type": "string"
+                },
+                "simulate": {
+                  "type": "boolean"
+                },
+                "via_points": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "address": {
+                        "type": "string"
+                      },
+                      "lat": {
+                        "type": "number"
+                      },
+                      "lng": {
+                        "type": "number"
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "end_name"
+              ],
+              "type": "object"
+            }
+          }
+        ],
+        "assembly_latency_ms": 0.9387920144945383,
+        "decision_head": "project_existing_litellm",
+        "decision_response": {
+          "model": "deepseek-v4.1-flash",
+          "content": [
+            {
+              "type": "tool_use",
+              "id": "call_00_d2fwkk3hwl2ij1x9b2nngizd",
+              "name": "navi_to_special_poi",
+              "input": {
+                "poi_type": "home"
+              },
+              "reasoning_content": "The task: navigate home. home_address_configured is true. So we can use navi_to_special_poi with poi_type home. That's the appropriate tool."
+            }
+          ],
+          "usage": {
+            "input_tokens": 1020,
+            "output_tokens": 83
+          }
+        },
+        "decision": {
+          "kind": "tool_call",
+          "tool": "navi_to_special_poi",
+          "arguments": {
+            "poi_type": "home"
+          },
+          "response_model": "deepseek-v4.1-flash"
+        },
+        "decision_latency_ms": 1380.4339590133168,
+        "outcome": "PASS",
+        "latency_ms": 1815.6097910250537,
+        "mock_execution": {
+          "mock_only": true,
+          "skipped": false,
+          "executed_tools": 0,
+          "message": "mock 执行展示完成"
+        },
+        "ui_total_latency_ms": 1818.7594159971923,
+        "event_elapsed_ms": 1818.7626659637317
+      }
+    }
+  ]
+}

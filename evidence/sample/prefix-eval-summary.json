@@ -1,0 +1,72 @@
+{
+  "run_id": "px-m2-after",
+  "folder": "/Users/YUYSONG/Work/tmp/jev-reopt-checkouts/dev-streaming-eot/eval/evidence/streaming-prefix/px-m2-after",
+  "cases": "/Users/YUYSONG/Work/tmp/jev-reopt-checkouts/dev-streaming-eot/eval/fixtures/streaming-prefix-cases.jsonl",
+  "config": {
+    "eot_policy": "margin",
+    "eot_margin": 0.2,
+    "spec_margin": 0.3,
+    "speculative_llm": true,
+    "eot_input": "last_segment",
+    "confirm_silence_ms": 700,
+    "cut_wait_ms": 1500,
+    "think_wait_ms": 3000,
+    "max_silence_ms": 2000,
+    "eot_timeout_ms": 900,
+    "debounce_ms": 80,
+    "reuse_tools_if_text_unchanged": true,
+    "tool_set": "navigation"
+  },
+  "args": {
+    "cases": "/Users/YUYSONG/Work/tmp/jev-reopt-checkouts/dev-streaming-eot/eval/fixtures/streaming-prefix-cases.jsonl",
+    "langs": "zh,en",
+    "limit": 0,
+    "per_lang_limit": 0,
+    "prefix_interval_ms": 150,
+    "pause_ratio": 0.2,
+    "decide_ms": 1380.0,
+    "turn_budget_ms": 15000,
+    "seed": 20261015,
+    "config": "{}",
+    "report": "/Users/YUYSONG/Work/tmp/poc-streaming-prefix-eval-report-after.md",
+    "run_id": "px-m2-after",
+    "skip_v0": false,
+    "skip_eval": false,
+    "report_only": null
+  },
+  "v0": {
+    "all": {
+      "n": 168,
+      "correct": 157,
+      "rate": 0.9345238095238095,
+      "cut": 48,
+      "wait": 34,
+      "false_complete": 11
+    },
+    "heldout": {
+      "n": 56,
+      "correct": 53,
+      "rate": 0.9464285714285714,
+      "cut": 17,
+      "wait": 10,
+      "false_complete": 3
+    },
+    "heldout_complete": {
+      "n": 26,
+      "correct": 26,
+      "rate": 1.0,
+      "cut": 0,
+      "wait": 0,
+      "false_complete": 0
+    },
+    "heldout_incomplete": {
+      "n": 30,
+      "correct": 27,
+      "rate": 0.9,
+      "cut": 17,
+      "wait": 10,
+      "false_complete": 3
+    }
+  },
+  "sentences": 398
+}

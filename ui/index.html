@@ -1,0 +1,851 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>KEV 核心链路 · PoC</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f4f6fa; color: #172235; font: 15px/1.6 system-ui, sans-serif; }
+    main { max-width: 1100px; margin: 36px auto; padding: 0 20px; }
+    h1 { margin: 0; font-size: 28px; } h2 { margin: 0 0 12px; font-size: 18px; }
+    .muted { color: #637187; } .card { background: white; border: 1px solid #dce3ed; border-radius: 12px; padding: 20px; }
+    form { display: flex; gap: 12px; margin: 20px 0 10px; }
+    input { flex: 1; min-width: 0; padding: 12px 14px; border: 1px solid #bbc7d9; border-radius: 8px; font: inherit; }
+    select { padding: 12px; border: 1px solid #bbc7d9; border-radius: 8px; font: inherit; }
+    button { padding: 12px 24px; border: 0; border-radius: 8px; background: #245cdb; color: white; font: inherit; cursor: pointer; }
+    button:disabled { opacity: .55; cursor: wait; }
+    #status { min-height: 26px; margin-bottom: 12px; } #error { margin: 12px 0; color: #a61f32; background: #fff1f2; padding: 12px; border-radius: 8px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .stack { display: grid; align-content: start; gap: 16px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { text-align: left; color: #637187; } td, th { padding: 8px 6px; border-bottom: 1px solid #edf0f5; }
+    td:last-child { text-align: right; font-variant-numeric: tabular-nums; } tr.selected { background: #eaf2ff; color: #174dbb; font-weight: 600; }
+    .badge { margin-left: 8px; font-size: 11px; color: #174dbb; white-space: nowrap; }
+    .candidate { padding: 10px 0; border-bottom: 1px solid #edf0f5; } .candidate strong { font: 13px ui-monospace, monospace; overflow-wrap: anywhere; }
+    .timings { display: flex; gap: 12px; margin-bottom: 16px; } .timings .card { flex: 1; }
+    .time { font-size: 22px; font-weight: 600; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; font: 13px/1.6 ui-monospace, monospace; background: #f6f8fc; padding: 12px; border-radius: 8px; margin: 10px 0 0; }
+    summary { cursor: pointer; color: #245cdb; } #raw-section { margin-top: 16px; }
+    #timeline-card { margin-bottom: 16px; }
+    #timeline { margin: 0; padding: 0; list-style: none; }
+    #timeline li { padding: 9px 12px; border-left: 3px solid #245cdb; margin: 6px 0; background: #f6f8fc; font-size: 14px; overflow-wrap: anywhere; }
+    #timeline li.error { color: #a61f32; border-color: #a61f32; background: #fff1f2; }
+    #execution { margin-top: 12px; }
+    [hidden] { display: none !important; }
+    .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 10px; }
+    .row label { display: flex; gap: 6px; align-items: center; font-size: 13px; color: #637187; }
+    .row input[type=number] { width: 76px; padding: 6px 8px; border: 1px solid #bbc7d9; border-radius: 6px; font: inherit; }
+    .row select { padding: 6px 8px; }
+    #turn-config, #turn-config-mic { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+                                   gap: 10px 16px; margin-top: 10px; align-items: start; }
+    #turn-config label { justify-content: space-between; }
+    code { background: #eef2f9; padding: 1px 5px; border-radius: 4px; }
+    #stream-table td { font-variant-numeric: tabular-nums; vertical-align: top; }
+    #stream-table td:last-child { text-align: left; }
+    #stream-table tr.llm td { background: #f0f6ff; }
+    #stream-table tr.llm-cancel td { background: #fff5e8; }
+    #stream-table tr.llm-decision td { background: #eaf7ee; font-weight: 600; }
+    #stream-table tr.state td { color: #174dbb; }
+    #stream-table tr.stale td { color: #8a8f99; }
+    #stream-table tr.done td { background: #eaf2ff; }
+    #stream-table td.text { max-width: 220px; overflow-wrap: anywhere; }
+    @media (max-width: 760px) { main { margin: 20px auto; } .grid { grid-template-columns: 1fr; } .time { font-size: 18px; } .timings { gap: 6px; } .timings .card { padding: 12px; } }
+
+    /* ---------- 时间线可视化 v2（判停卡片流） ---------- */
+    .tl-legend { display: flex; flex-wrap: wrap; gap: 6px 20px; font-size: 12.5px; color: #637187; margin: 0 0 12px; }
+    .tl-legend b { color: #172235; font-weight: 600; }
+    .tl-metrics { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 14px; }
+    .tl-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px;
+               background: #f1f5fb; border: 1px solid #dbe4f0; font-size: 12.5px; color: #33415c; white-space: nowrap; }
+    .tl-chip.live { background: #eef7ff; border-color: #cfe2f8; color: #1c5aa8; }
+    .tl-chip.ok { background: #eaf7ee; border-color: #c7e6d2; color: #1f6b3d; }
+    .tl-chip.warn { background: #fff5e8; border-color: #f2d9b6; color: #a85c11; }
+    .tl-chip.vad { background: #f3eefc; border-color: #ded0f5; color: #6b3fa0; }
+    .tl-badge.pass { background: #e6f7ec; color: #1f6b3d; font-weight: 600; }
+    .tl-badge.hold { background: #f3f4f6; color: #7b8496; }
+    .tl-badge.vad { background: #f3eefc; color: #6b3fa0; }
+    .tl-waterfall { display: flex; width: 260px; height: 10px; border-radius: 6px; overflow: hidden; background: #eef2f9; border: 1px solid #dbe4f0; }
+    .tl-seg { display: block; height: 100%; }
+    .tl-seg.confirm { background: #4a6fa5; } .tl-seg.llm { background: #2f7d4f; } .tl-seg.decide { background: #245cdb; }
+    .tl-groups { display: flex; flex-direction: column; gap: 10px; }
+    .tl-card { border: 1px solid #dce3ed; border-left: 4px solid #b9c6d8; border-radius: 10px; padding: 10px 12px; background: #fff; }
+    .tl-card.complete { border-left-color: #2f7d4f; } .tl-card.cut { border-left-color: #c8862a; }
+    .tl-card.wait { border-left-color: #4a6fa5; } .tl-card.stale { opacity: .7; }
+    .tl-card.llm { box-shadow: inset 0 0 0 1px #cfe0ff; } .tl-card.done { background: #f6faff; border-left-color: #245cdb; }
+    .tl-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+    .tl-time { font: 12px/1.5 ui-monospace, monospace; color: #637187; min-width: 68px; }
+    .tl-text { font-weight: 600; overflow-wrap: anywhere; }
+    .tl-badge { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: #eef2f9; color: #33415c; white-space: nowrap; }
+    .tl-badge.final { background: #e6f0ff; color: #174dbb; }
+    .tl-badge.llm { background: #e8f0ff; color: #174dbb; } .tl-badge.cancel { background: #fff1e2; color: #a85c11; }
+    .tl-badge.decision { background: #e6f7ec; color: #1f6b3d; } .tl-badge.state { background: #eef7ff; color: #1c5aa8; }
+    .tl-badge.error { background: #fff1f2; color: #a61f32; }
+    .tl-body { display: grid; grid-template-columns: minmax(250px, 1.1fr) minmax(230px, 1fr); gap: 8px 18px; margin-top: 8px; }
+    .tl-scores { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; }
+    .tl-score { display: grid; grid-template-columns: 62px 1fr 46px; gap: 8px; align-items: center; }
+    .tl-score .name, .tl-score .val { color: #637187; }
+    .tl-score .val { text-align: right; font-variant-numeric: tabular-nums; }
+    .tl-score.winner .name, .tl-score.winner .val { color: #172235; font-weight: 600; }
+    .tl-bar { display: block; height: 7px; border-radius: 4px; background: #d7e0ee; }
+    .tl-bar.complete { background: #2f7d4f; } .tl-bar.cut { background: #c8862a; } .tl-bar.wait { background: #4a6fa5; }
+    .tl-tools { display: flex; flex-wrap: wrap; gap: 6px; }
+    .tl-events { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
+    .tl-events li { display: flex; gap: 8px; overflow-wrap: anywhere; }
+    .tl-events .et { font: 11.5px/1.6 ui-monospace, monospace; color: #8b95a6; min-width: 60px; }
+    .tl-empty { color: #8b95a6; font-size: 12.5px; }
+    .cfg { display: flex; flex-direction: column; gap: 3px; align-items: stretch; }
+    .cfg .cfg-key { font-size: 12.5px; color: #33415c; font-weight: 600; }
+    .cfg .cfg-hint { font-size: 11.5px; color: #7b8496; line-height: 1.35; }
+    @media (max-width: 900px) { .tl-body { grid-template-columns: 1fr; } .tl-waterfall { width: 160px; } }
+  </style>
+</head>
+<body>
+<main>
+  <h1>KEV 核心链路 <span class="muted">/ PoC</span></h1>
+  <p class="muted">文本 → KEV 工具评分 → top-k 候选 → LLM 决策 → mock 执行展示。阶段完成即更新；ASR 为文本占位，不调用真实工具或真车。</p>
+  <form id="query-form">
+    <input id="utterance" aria-label="输入一句 query" placeholder="输入一句 query，例如：导航回家" value="导航回家" required autofocus>
+    <select id="tool-set" aria-label="工具集模式">
+      <option value="navigation">navigation（14导航工具）</option>
+      <option value="multidomain" selected>multidomain（200工具/两阶段）</option>
+    </select>
+    <select id="mode" aria-label="运行模式">
+      <option value="single">单句（一次决策）</option>
+      <option value="stream">流式模拟（KEV 判停）</option>
+      <option value="mic" selected>麦克风（真实流式 ASR）</option>
+    </select>
+    <button id="send" type="submit">发送 ↵</button>
+  </form>
+  <div id="status" class="muted" role="status" aria-live="polite">麦克风模式：点「开始说话」</div>
+  <div id="error" role="alert" hidden></div>
+  <section id="stream-controls" class="card" hidden>
+    <div class="row">
+      <label>语速 <input id="speed" type="number" value="6" min="1" max="20" step="0.5" aria-label="每秒字数"> 字/秒</label>
+      <label>样例
+        <select id="preset" aria-label="样例脚本">
+          <option value="">（用输入框文本）</option>
+          <option value="导航回家">导航回家</option>
+          <option value="我去买菜|600|对了还要买酱油">我去买菜|600|对了还要买酱油</option>
+          <option value="帮我导航到|1500|人民广场">帮我导航到|1500|人民广场</option>
+          <option value="等一下我想想|2500|回家">等一下我想想|2500|回家</option>
+        </select>
+      </label>
+      <span class="muted">停顿标记：<code>我去买菜|600|对了还要买酱油</code>（<code>|600|</code> 表示停顿 600ms，同时作为新的 ASR 段）</span>
+    </div>
+    <details><summary>TurnConfig（可改）</summary><div id="turn-config"></div></details>
+  </section>
+  <section id="mic-controls" class="card" hidden>
+    <div class="row">
+      <button id="mic-start" type="button">🎤 开始说话</button>
+      <button id="mic-stop" type="button" disabled>停止</button>
+      <label>是否说完
+        <select id="mic-label" aria-label="标注是否说完">
+          <option value="true" selected>说完了</option>
+          <option value="false">没说完</option>
+        </select>
+      </label>
+      <button id="mic-save" type="button" disabled>保存为用例</button>
+      <span id="mic-status" class="muted">未连接 · 16kHz / 20ms 一帧，经 WebSocket 送到 server 的火山豆包流式 ASR</span>
+    </div>
+    <details><summary>TurnConfig（可改）</summary><div id="turn-config-mic"></div></details>
+    <p class="muted">麦克风需要 localhost 或 https，本页 http://127.0.0.1:8765 满足；用例存到 <code>Work/tmp/poc-streaming-mic-cases/</code>。</p>
+  </section>
+  <section id="stream-card" class="card" hidden>
+    <h2>流式时间线（ASR → KEV 判停 / 选工具 → DeepSeek）</h2>
+    <p class="tl-legend">
+      <span><b>三个判停概率</b>：complete=可以接了 · cut=话说一半 · wait=让我想想</span>
+      <span><b>label</b>=最大项 · <b>margin</b>=complete−max(cut,wait)</span>
+      <span><b>状态</b>：LISTENING → MAYBE_DONE → CONFIRMED，或 CUT_OFF_WAIT / THINK_WAIT</span>
+      <span><b>颜色</b>：蓝=LLM 启动 · 橙=作废 · 绿=决策 · 灰=过期/未变</span>
+    </p>
+    <div id="tl-metrics" class="tl-metrics"></div>
+    <div id="tl-groups" class="tl-groups"></div>
+    <details id="tl-raw-details"><summary>原始事件 JSON（调试用）</summary><pre id="tl-raw"></pre></details>
+  </section>
+  <section id="timeline-card" class="card" hidden>
+    <h2>实时阶段时间线</h2><ol id="timeline" aria-live="polite"></ol>
+    <div id="execution" class="muted"></div>
+  </section>
+  <section id="results" hidden>
+    <div class="timings">
+      <div class="card"><div class="muted">KEV</div><div id="kev-time" class="time"></div></div>
+      <div class="card"><div class="muted">LLM / 决策</div><div id="llm-time" class="time"></div></div>
+      <div class="card"><div class="muted">E2E</div><div id="e2e-time" class="time"></div></div>
+    </div>
+    <div class="grid">
+      <div class="card">
+        <h2>1 · KEV 分数表</h2>
+        <p id="score-info" class="muted"></p>
+        <p id="stage-info" class="muted" hidden></p>
+        <table><thead><tr><th>工具名（蓝色为入选 top-k）</th><th>分数</th></tr></thead><tbody id="scores"></tbody></table>
+      </div>
+      <div class="stack">
+        <div class="card"><h2>2 · 交给 LLM 的候选</h2><div id="candidates"></div><details><summary>候选完整 schema</summary><pre id="schemas"></pre></details></div>
+        <div class="card"><h2>3 · 下一步决策</h2><div id="decision-head" class="muted"></div><pre id="decision"></pre></div>
+      </div>
+    </div>
+    <details id="raw-section" class="card"><summary>原始 JSON · 全部结果</summary><pre id="raw"></pre></details>
+  </section>
+</main>
+<script>
+  const byId = id => document.getElementById(id);
+  const pretty = value => JSON.stringify(value, null, 2);
+  const ms = value => typeof value === 'number' ? value.toFixed(1) + ' ms' : '—';
+  const fixed = (value, digits = 3) => typeof value === 'number' ? value.toFixed(digits) : '';
+
+  // ---------- 流式模拟：TurnConfig 表单 + 脚本化 ASR 回放 ----------
+  const TURN_FIELDS = [
+    {key: 'eot_policy', type: 'select', options: ['argmax', 'margin'],
+     hint: '判"说完了"的策略：argmax=三项取最大；margin=complete 必须领先 max(cut,wait) 超过 eot_margin'},
+    {key: 'eot_margin', type: 'number', step: '0.05',
+     hint: 'margin 策略要求的领先幅度（推荐 0.2）：越大越不容易误判说完，但会漏判'},
+    {key: 'spec_margin', type: 'number', step: '0.05',
+     hint: '进入"可能说完"且 margin ≥ 此值时才投机调 LLM（0=只要可能说完就投机）'},
+    {key: 'speculative_llm', type: 'checkbox',
+     hint: '投机启动 DeepSeek：确认前就调，被推翻时作废并计入 llm_wasted（省确认窗）'},
+    {key: 'eot_input', type: 'select', options: ['last_segment', 'turn_text'],
+     hint: '判停送什么文本：last_segment=当前 ASR 段（<4 字时拼上一段）；turn_text=本轮累计全文'},
+    {key: 'confirm_silence_ms', type: 'number', step: '50',
+     hint: '判 complete 后要连续静音多久才确认（必须小于 max_silence_ms，否则被兜底抢先）'},
+    {key: 'cut_wait_ms', type: 'number', step: '100',
+     hint: '判 cut（话说一半）后再等多久强制确认，避免会话卡住'},
+    {key: 'think_wait_ms', type: 'number', step: '100',
+     hint: '判 wait（"等一下/我想想"）最多等多久确认；期间不调 LLM'},
+    {key: 'max_silence_ms', type: 'number', step: '100',
+     hint: '兜底：任何状态静音到这么久就确认（KEV 失败/超时也走这条）'},
+    {key: 'eot_timeout_ms', type: 'number', step: '50',
+     hint: '单次判停超过多久算超时：放弃该次判定、退回静音兜底（晚到的结果仍会展示）'},
+    {key: 'debounce_ms', type: 'number', step: '10',
+     hint: '文本变化后等多久才发判停/选工具：必须小于 ASR partial 间隔，否则每次判停都会被下一次更新顶掉'},
+    {key: 'eot_max_inflight', type: 'number', step: '1',
+     hint: '同时最多几个判停在途：>1 才不会被 single-flight 饿死，越高判停覆盖率越高'},
+    {key: 'reuse_tools_if_text_unchanged', type: 'checkbox',
+     hint: '最终文本归一化后与已评分的相同则复用工具短名单，不再调 KEV'}
+  ];
+  const TURN_DEFAULTS = {eot_policy: 'margin', eot_margin: 0.2, spec_margin: 0.3, speculative_llm: true,
+    eot_input: 'last_segment', confirm_silence_ms: 700, cut_wait_ms: 1500, think_wait_ms: 3000,
+    max_silence_ms: 2000, eot_timeout_ms: 900, debounce_ms: 80, eot_max_inflight: 3, reuse_tools_if_text_unchanged: true};
+  function buildTurnConfig(hostId = 'turn-config') {
+    const host = byId(hostId);
+    for (const field of TURN_FIELDS) {
+      const label = document.createElement('label');
+      label.className = 'cfg';
+      label.title = field.hint;
+      const key = document.createElement('span');
+      key.className = 'cfg-key';
+      key.textContent = field.key + '  ';
+      const mark = document.createElement('em');
+      mark.className = 'muted';
+      mark.style.fontStyle = 'normal';
+      mark.textContent = '?';
+      key.append(mark);
+      let input;
+      if (field.type === 'select') {
+        input = document.createElement('select');
+        for (const option of field.options) input.append(new Option(option, option, false, option === TURN_DEFAULTS[field.key]));
+      } else {
+        input = document.createElement('input');
+        input.type = field.type;
+        if (field.step) input.step = field.step;
+        if (field.type === 'checkbox') input.checked = TURN_DEFAULTS[field.key];
+        else input.value = TURN_DEFAULTS[field.key];
+      }
+      input.dataset.key = field.key;
+      input.dataset.type = field.type;
+      input.id = hostId + '-' + field.key;
+      const hint = document.createElement('span');
+      hint.className = 'cfg-hint';
+      hint.textContent = field.hint;
+      label.append(key, input, hint);
+      host.append(label);
+    }
+  }
+  function collectTurnConfig(hostId = 'turn-config') {
+    const config = {};
+    for (const input of byId(hostId).querySelectorAll('[data-key]')) {
+      config[input.dataset.key] = input.dataset.type === 'checkbox' ? input.checked
+        : input.dataset.type === 'number' ? Number(input.value) : input.value;
+    }
+    return config;
+  }
+  // `|600|` = 600 ms pause that also closes the ASR segment (the next chunk starts a fresh one).
+  function buildScript(text, speed) {
+    const updates = [], vad = [{t_ms: 0, kind: 'speech_start'}];
+    let plain = '', t = 0;
+    for (const chunk of text.split(/\|(\d+)\|/)) {
+      if (/^\d+$/.test(chunk)) {
+        vad.push({t_ms: Math.round(t), kind: 'speech_end'});
+        t += Number(chunk);
+        vad.push({t_ms: Math.round(t), kind: 'speech_start'});
+        plain = '';
+        continue;
+      }
+      for (const char of chunk) {
+        t += 1000 / speed;
+        plain += char;
+        updates.push({t_ms: Math.round(t), text: plain, final: false});
+      }
+    }
+    if (updates.length) {
+      updates[updates.length - 1].final = true;
+      vad.push({t_ms: updates[updates.length - 1].t_ms + 20, kind: 'speech_end'});
+    }
+    return {updates, vad};
+  }
+  // ---------- 时间线可视化：一张卡 = 一次 ASR 更新（判停 / 工具 / LLM 都挂在它下面） ----------
+  const EVENT_TEXT = {
+    eot_start: e => `判停开始 · ${e.text || ''}`,
+    eot_scores: e => `判停结果 · ${e.label}${e.stale ? '（已过期，不入状态机）' : ''}`,
+    eot_skipped: e => `判停跳过 · ${e.reason}${e.text ? ' · ' + e.text : ''}`,
+    tools_start: e => `选工具开始 · ${e.text || ''}`,
+    tools_scores: e => `选工具结果${e.reused ? '（复用短名单）' : ''} · ${(e.selected || []).join('、') || '无候选'}`,
+    state_change: e => `状态 ${e.from} → ${e.to}（${e.why}）`,
+    llm_start: e => `LLM 启动${e.speculative ? '（投机）' : ''} · ${(e.selected || []).join('、')}`,
+    llm_cancel: e => `LLM 作废 · ${e.reason}${e.speculative ? '（投机）' : ''}${e.prepared ? '（结果已就绪仍丢弃）' : ''}`,
+    llm_decision: e => `决策 · ${e.decision?.kind} ${e.decision?.tool || ''}`,
+    barge_in: e => `打断 · ${e.why || ''}`,
+    error: e => `错误 · ${e.error_type || ''} ${e.error || ''}`
+  };
+  const EVENT_CLASS = {llm_start: 'llm', llm_cancel: 'cancel', llm_decision: 'decision', state_change: 'state', error: 'error', vad_end: 'vad'};
+
+  function createTimeline() {
+    const groups = new Map();
+    let current = null, sequence = 0, live = null;
+    let policy = {eot_policy: 'margin', eot_margin: 0.2};
+    let vadEndMs = null, firstToolMs = null, vadChip = null, pendingVad = null;
+    const rawEvents = [], pending = [], byText = new Map();
+    const node = (tag, cls, text) => { const element = document.createElement(tag); if (cls) element.className = cls;
+      if (text !== undefined) element.textContent = text; return element; };
+    const chip = (label, cls) => node('span', 'tl-chip' + (cls ? ' ' + cls : ''), label);
+
+    function reset(config) {
+      if (config) policy = {eot_policy: config.eot_policy, eot_margin: Number(config.eot_margin)};
+      groups.clear(); byText.clear(); current = null; sequence = 0; rawEvents.length = 0; pending.length = 0;
+      vadEndMs = null; firstToolMs = null; vadChip = null; pendingVad = null;
+      byId('tl-groups').replaceChildren();
+      byId('tl-raw').textContent = '';
+      live = chip('最新识别：—', 'live');
+      vadChip = chip('VAD 结束 —', 'vad');
+      byId('tl-metrics').replaceChildren(live, vadChip, node('span', 'tl-empty', '等待判停…'));
+    }
+    function liveAsr(data) {
+      if (!live) reset();
+      live.textContent = `最新识别：${data.text || '—'}（${data.final ? 'final' : 'partial'} @ ${Math.round(data.t_ms)}ms）`;
+      live.classList.toggle('ok', !!data.final);
+    }
+    function marginVerdict(data) {
+      // 「策略先不动」：这里只把既有规则的结果标出来，不改判定。
+      const threshold = policy.eot_margin;
+      const accepted = data.label === 'complete'
+        && (policy.eot_policy !== 'margin' || data.margin >= threshold);
+      return {
+        accepted,
+        text: accepted
+          ? `margin 通过（${data.margin >= 0 ? '+' : ''}${fixed(data.margin)} ≥ ${fixed(threshold)}）→ 判停`
+          : (data.label === 'complete'
+              ? `margin 未通过（${data.margin >= 0 ? '+' : ''}${fixed(data.margin)} < ${fixed(threshold)}）→ 继续听`
+              : `非 complete（${data.label}）→ 继续听`),
+      };
+    }
+    function updateVadChip() {
+      if (!vadChip) return;
+      vadChip.textContent = vadEndMs === null ? 'VAD 结束 —'
+        : `VAD 结束 ${Math.round(vadEndMs)}ms → 首工具 ${firstToolMs === null ? '—' : '+' + Math.round(firstToolMs - vadEndMs) + 'ms'}`;
+    }
+    function markVadEnd(t_ms, source) {
+      if (t_ms === undefined || t_ms === null) return;
+      if (vadEndMs !== null && t_ms <= vadEndMs) return;     // 每轮只认最后一次"说话结束"，同值不重复
+      if (firstToolMs !== null && t_ms > firstToolMs) firstToolMs = null;   // 基准后移 → 重新配对，避免负值
+      vadEndMs = t_ms;
+      updateVadChip();
+      const note = `VAD 结束（${source}）· t=${Math.round(t_ms)}ms`;
+      const target = current && (current.timeMs === undefined || current.timeMs <= t_ms) ? current : null;
+      if (target) addEvent(target, {t_ms, event: 'vad_end'}, note);
+      else pendingVad = {t_ms, note};
+    }
+    function scoreLine(name, value, winner) {
+      const row = node('div', 'tl-score' + (winner ? ' winner' : ''));
+      const track = node('span');
+      const bar = node('span', 'tl-bar ' + name);
+      bar.style.width = Math.max(2, Math.round((value || 0) * 100)) + '%';
+      track.append(bar);
+      row.append(node('span', 'name', name), track, node('span', 'val', (value || 0).toFixed(3)));
+      return row;
+    }
+    function ensure(version, t_ms, text, final) {
+      if (groups.has(version)) return groups.get(version);
+      const card = node('article', 'tl-card');
+      const head = node('div', 'tl-head');
+      const time = node('span', 'tl-time', Math.round(t_ms || 0) + ' ms');
+      const textNode = node('span', 'tl-text', text || '(无文本)');
+      const state = node('span', 'tl-badge state', '状态 LISTENING');
+      const kev = node('span', 'tl-badge', 'KEV —');
+      head.append(time, textNode, node('span', 'tl-badge', 'v' + version),
+                  node('span', 'tl-badge' + (final ? ' final' : ''), final ? 'final' : 'partial'), state, kev);
+      const body = node('div', 'tl-body');
+      const left = node('div');
+      const scores = node('div', 'tl-scores');
+      const verdict = node('div', 'tl-empty', '未判停');
+      left.append(scores, verdict);
+      const right = node('div');
+      const tools = node('div', 'tl-tools');
+      const events = node('ul', 'tl-events');
+      right.append(tools, events);
+      body.append(left, right);
+      card.append(head, body);
+      byId('tl-groups').append(card);
+      const group = {card, time, textNode, state, kev, scores, verdict, tools, events, version, timeMs: t_ms};
+      groups.set(version, group);
+      if (text) byText.set(text, group);          // 判停/选工具事件按"它评的那段文本"归卡
+      current = group;
+      while (pending.length) addEvent(group, pending.shift());
+      if (pendingVad) { addEvent(group, {t_ms: pendingVad.t_ms, event: 'vad_end'}, pendingVad.note); pendingVad = null; }
+      card.scrollIntoView({block: 'nearest'});
+      return group;
+    }
+    function addEvent(group, event, note) {
+      const item = node('li');
+      item.append(node('span', 'et', Math.round(event.t_ms || 0) + 'ms'),
+                  node('span', 'tl-badge ' + (EVENT_CLASS[event.event] || ''),
+                       note || (EVENT_TEXT[event.event] ? EVENT_TEXT[event.event](event) : event.event)));
+      group.events.append(item);
+    }
+    function record(event) {
+      rawEvents.push(event);
+      byId('tl-raw').textContent = rawEvents.map(item => JSON.stringify(item)).join('\n');
+    }
+    function asr(data) {
+      const version = data.text_version === undefined ? ++sequence : data.text_version;
+      const text = data.turn_text || data.text || '';
+      if (data.changed === false) {
+        const group = current || ensure(version, data.t_ms, text, data.final);
+        addEvent(group, {...data, event: 'asr_update'}, `ASR 更新 · 归一化后未变 · ${text}`);
+        record({...data, event: 'asr_update'});
+        return group;
+      }
+      const group = ensure(version, data.t_ms, text, data.final);
+      record({...data, event: 'asr_update'});
+      return group;
+    }
+    function event(data) {
+      record(data);
+      if (data.event === 'asr_update') return asr(data);       // ASR 更新自己开卡
+      if (data.event === 'vad') {                              // 纯 VAD 不单独开卡，有当前卡就记一行
+        if (data.kind === 'speech_end') markVadEnd(data.t_ms, 'VAD speech_end');
+        if (current) addEvent(current, data, data.kind === 'speech_end' ? 'VAD speech_end（音频静音起点）' : 'VAD speech_start（用户又开口）');
+        return null;
+      }
+      if (data.vad_end_ms !== undefined && data.vad_end_ms !== null) markVadEnd(data.vad_end_ms, 'ASR 断句 end_time');
+      const version = data.text_version === undefined ? 0 : data.text_version;
+      // 服务端事件的 text_version 是"发出时的最新版本"，而判停/选工具事件带 text（它评的那段文本）：
+      // 优先按 text 归卡，其次按版本，最后挂到当前卡；都没有就先攒着，等第一张卡出现再挂。
+      const group = (data.text && byText.get(data.text)) || groups.get(version) || current;
+      if (!group) { pending.push(data); return null; }
+      switch (data.event) {
+        case 'eot_scores':
+          group.scores.replaceChildren(
+            scoreLine('complete', data.complete, data.label === 'complete'),
+            scoreLine('cut', data.cut, data.label === 'cut'),
+            scoreLine('wait', data.wait, data.label === 'wait'));
+          group.verdict.className = 'tl-empty';
+          group.verdict.textContent = `label=${data.label} · margin=${data.margin >= 0 ? '+' : ''}${fixed(data.margin)}`
+            + `${data.stale ? ' · 已过期（文本已更新，不入状态机）' : ''}`
+            + ` · KEV 墙钟 ${Math.round(data.wall_ms)}ms / 模型自报 ${Math.round(data.kev_ms)}ms`;
+          group.card.classList.add(data.stale ? 'stale' : data.label);
+          group.kev.textContent = `KEV ${Math.round(data.wall_ms)} / ${Math.round(data.kev_ms)} ms`;
+          {
+            const verdict = marginVerdict(data);
+            const stale = !!data.stale;
+            const badge = node('span', 'tl-badge ' + (verdict.accepted && !stale ? 'pass' : 'hold'),
+                               verdict.text + (stale ? '（已过期，未用于判停）' : ''));
+            group.verdict.after(badge);
+          }
+          break;
+        case 'tools_scores': {
+          const items = (data.top || []).map(item => chip(`${item.name} ${fixed(item.score)}`));
+          group.tools.replaceChildren(...(items.length ? items : [node('span', 'tl-empty', '无候选')]));
+          if (data.reused) group.tools.append(chip('复用短名单', 'ok'));
+          if (vadEndMs !== null && firstToolMs === null && data.t_ms >= vadEndMs) {
+            firstToolMs = data.t_ms;
+            updateVadChip();
+          }
+          break;
+        }
+        case 'state_change':
+          group.state.textContent = `状态 ${data.to}`;
+          group.card.classList.toggle('done', data.to === 'CONFIRMED');
+          break;
+        case 'llm_start':
+          group.card.classList.add('llm');
+          break;
+        case 'turn_done':
+          return done(data);
+      }
+      addEvent(group, data);
+      return group;
+    }
+    function done(data) {
+      record(data);
+      const box = byId('tl-metrics');
+      box.replaceChildren(live || chip('最新识别：—', 'live'), vadChip || chip('VAD 结束 —', 'vad'));
+      updateVadChip();
+      box.append(chip(`最后一字 ${Math.round(data.t_last_word)}ms`),
+                 chip(`判停确认 +${Math.round(data.t_confirm_latency_ms)}ms`),
+                 chip(`LLM 启动 +${Math.round(data.t_llm_start_latency_ms)}ms`, 'ok'),
+                 chip(`决策 +${Math.round(data.t_decision_latency_ms)}ms`, 'ok'),
+                 chip(`判停 ${data.eot_calls} 次（跳过 ${data.eot_skipped}）`),
+                 chip(`选工具 ${data.tool_calls} 次`),
+                 chip(`LLM ${data.llm_calls} 次（浪费 ${data.llm_wasted}）`, data.llm_wasted ? 'warn' : 'ok'));
+      const total = Math.max(1, data.t_decision_latency_ms || 1);
+      const waterfall = node('div', 'tl-waterfall');
+      const segment = (label, value, cls) => {
+        const part = node('span', 'tl-seg ' + cls);
+        part.style.width = Math.max(2, Math.round(((value || 0) / total) * 100)) + '%';
+        part.title = `${label} +${Math.round(value || 0)}ms`;
+        waterfall.append(part);
+      };
+      segment('判停确认', data.t_confirm_latency_ms, 'confirm');
+      segment('LLM 启动', (data.t_llm_start_latency_ms || 0) - (data.t_confirm_latency_ms || 0), 'llm');
+      segment('决策', (data.t_decision_latency_ms || 0) - (data.t_llm_start_latency_ms || 0), 'decide');
+      box.append(waterfall);
+      if (data.timeline_path) box.append(chip('证据 ' + data.timeline_path));
+    }
+    reset();
+    return {reset, asr, event, done, liveAsr, record, markVadEnd};
+  }
+  const timeline = createTimeline();
+
+  async function streamSubmit() {
+    const text = (byId('preset').value || byId('utterance').value).trim();
+    if (!text) return;
+    const speed = Math.max(1, Number(byId('speed').value) || 6);
+    const {updates, vad} = buildScript(text, speed);
+    byId('send').disabled = true;
+    byId('error').hidden = true;
+    byId('stream-card').hidden = false;
+    timeline.reset(collectTurnConfig());
+    byId('status').textContent = `流式回放中：${updates.length} 条 ASR 更新，语速 ${speed} 字/秒…`;
+    try {
+      const response = await fetch('/api/session/stream', {method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({updates, vad, tool_set: byId('tool-set').value, config: collectTurnConfig()})});
+      if (!response.ok) throw new Error(`HTTP ${response.status} ${await response.text()}`);
+      for await (const {type, data} of readEvents(response)) {
+        if (type === 'asr_update') timeline.asr(data);
+        else if (type === 'turn_done') { timeline.done(data); byId('status').textContent = '流式回放完成'; }
+        else timeline.event(data);
+        if (type === 'turn_done') break;
+      }
+    } catch (error) {
+      byId('error').hidden = false;
+      byId('error').textContent = `流式会话失败：${error.message}`;
+    } finally {
+      byId('send').disabled = false;
+    }
+  }
+  // ---------- M4：麦克风模式（16kHz/20ms PCM → WebSocket → 火山豆包流式 ASR → TurnSession） ----------
+  const MIC_RATE = 16000, MIC_FRAME_SAMPLES = 320;   // 20 ms @16 kHz
+  const mic = {socket: null, stream: null, context: null, node: null, pending: null, frames: 0, bytes: 0,
+               partials: 0, finals: 0, sessionId: null, started: null, turn: 0};
+
+  function micStatus(text) { byId('mic-status').textContent = text; }
+
+  function micHandle(kind, data) {
+    const name = kind === 'event' ? data.event : kind;
+    if (name === 'asr') return timeline.liveAsr(data);            // 原始 ASR 只更新"最新识别"，卡片由 asr_update 事件建
+    if (name === 'turn_done') return timeline.done(data);
+    if (name === 'error') return timeline.event({...data, event: 'error', t_ms: data.t_ms || 0});
+    return timeline.event({...data, event: name});
+  }
+
+  // 48k (or whatever the context gives) → 16k, then 16-bit little-endian PCM.
+  function micResample(input, inputRate) {
+    if (inputRate === MIC_RATE) {
+      const out = new Int16Array(input.length);
+      for (let i = 0; i < input.length; i++) out[i] = Math.max(-1, Math.min(1, input[i])) * 0x7fff;
+      return out;
+    }
+    const ratio = inputRate / MIC_RATE;
+    const length = Math.floor(input.length / ratio);
+    const out = new Int16Array(length);
+    for (let i = 0; i < length; i++) out[i] = Math.max(-1, Math.min(1, input[Math.floor(i * ratio)])) * 0x7fff;
+    return out;
+  }
+
+  function micFlushSamples(samples) {
+    const target = mic.pending ? mic.pending.length : 0;
+    const merged = new Int16Array(target + samples.length);
+    if (mic.pending) merged.set(mic.pending, 0);
+    merged.set(samples, target);
+    let offset = 0;
+    while (merged.length - offset >= MIC_FRAME_SAMPLES) {
+      if (mic.socket && mic.socket.readyState === WebSocket.OPEN) {
+        mic.socket.send(merged.slice(offset, offset + MIC_FRAME_SAMPLES).buffer);
+        mic.frames += 1; mic.bytes += MIC_FRAME_SAMPLES * 2;
+      }
+      offset += MIC_FRAME_SAMPLES;
+    }
+    mic.pending = offset < merged.length ? merged.slice(offset) : null;
+  }
+
+  function micOnAudio(event) {
+    const input = event.inputBuffer.getChannelData(0);
+    micFlushSamples(micResample(input, mic.context.sampleRate));
+    if (mic.frames % 25 === 0) {
+      micStatus(`采集中 · 已发 ${mic.frames} 帧（${(mic.bytes / 1024).toFixed(1)} KB）· ASR partial ${mic.partials} / final ${mic.finals}`);
+    }
+  }
+
+  async function micStart() {
+    // 重新开始：先把上一轮的连接收掉（服务端把该轮用例登记在案，稍后仍可保存）
+    if (mic.socket) { const stale = mic.socket; mic.socket = null; try { stale.close(); } catch (e) {} }
+    byId('error').hidden = true;
+    byId('stream-card').hidden = false;
+    timeline.reset(collectTurnConfig('turn-config-mic'));
+    micHandle.ctx = null;
+    mic.frames = 0; mic.bytes = 0; mic.partials = 0; mic.finals = 0; mic.sessionId = null;
+    try {
+      mic.stream = await navigator.mediaDevices.getUserMedia({audio: {channelCount: 1, echoCancellation: false,
+        noiseSuppression: false, autoGainControl: false}});
+    } catch (error) {
+      byId('error').hidden = false;
+      byId('error').textContent = `无法获取麦克风：${error.message}（需要 localhost/https 与授权）`;
+      return;
+    }
+    mic.context = new (window.AudioContext || window.webkitAudioContext)();
+    await mic.context.resume();
+    const source = mic.context.createMediaStreamSource(mic.stream);
+    mic.node = mic.context.createScriptProcessor(2048, 1, 1);
+    mic.node.onaudioprocess = micOnAudio;
+    const mute = mic.context.createGain(); mute.gain.value = 0;
+    source.connect(mic.node); mic.node.connect(mute); mute.connect(mic.context.destination);
+
+    mic.turn += 1;
+    const turn = mic.turn;                       // 每一轮一个编号：旧连接的 onclose 不能动新一轮的 socket
+    const socket = new WebSocket(`${location.origin.replace(/^http/, 'ws')}/api/session/mic`);
+    mic.socket = socket;
+    socket.binaryType = 'arraybuffer';
+    socket.onopen = () => {
+      if (mic.turn !== turn) return;
+      micStatus('WebSocket 已连接，正在等 ASR…');
+      socket.send(JSON.stringify({cmd: 'config', tool_set: byId('tool-set').value,
+                                  config: collectTurnConfig('turn-config-mic')}));
+    };
+    socket.onmessage = message => {
+      if (mic.turn !== turn) return;
+      const {kind, data} = JSON.parse(message.data);
+      if (kind === 'ready') { mic.sessionId = data.session_id; micStatus(`就绪 · ${data.session_id} · ${data.sample_rate}Hz/${data.frame_ms}ms`); }
+      else if (kind === 'asr') {
+        data.final ? mic.finals++ : mic.partials++;
+        if (data.vad_end_ms !== undefined && data.vad_end_ms !== null) timeline.markVadEnd(data.vad_end_ms, 'ASR 断句 end_time');
+        micHandle('asr', data);
+      }
+      else if (kind === 'event') {
+        micHandle(data.event, data);
+        if (data.event === 'turn_done') { byId('mic-start').disabled = false; byId('mic-save').disabled = false; }
+      }
+      else if (kind === 'saved') { micStatus(`已保存：${data.path}（标注：${data.label_complete ? '说完了' : '没说完'}）`); byId('mic-save').disabled = false; }
+      else if (kind === 'error') { byId('error').hidden = false; byId('error').textContent = `mic ${data.stage} 错误：${data.error_type} ${data.error}`; }
+      else if (kind === 'stopping') { micStatus('已停止送音频，等 ASR final 与决策…'); }
+      else if (kind === 'config') { micStatus(`配置已生效 · ${JSON.stringify(data.config)}`); }
+    };
+    socket.onerror = () => {
+      if (mic.turn !== turn) return;
+      byId('error').hidden = false; byId('error').textContent = 'WebSocket 错误，见 server 日志';
+    };
+    socket.onclose = () => {
+      if (mic.turn !== turn) return;             // 旧连接关闭：忽略，不要碰新一轮的状态
+      mic.socket = null; byId('mic-start').disabled = false;
+      micStatus('WebSocket 已关闭 · 可以再次点「开始说话」');
+    };
+    mic.started = Date.now();
+    byId('mic-start').disabled = true;
+    byId('mic-stop').disabled = false;
+    byId('mic-save').disabled = true;
+    micStatus('采集中 · 请说话…');
+  }
+
+  function micStop() {
+    if (mic.socket && mic.socket.readyState === WebSocket.OPEN) mic.socket.send(JSON.stringify({cmd: 'stop'}));
+    micStatus('已停止送音频，等 ASR final 与决策…（可再次点「开始说话」开新一轮）');
+    byId('mic-stop').disabled = true;
+    byId('mic-start').disabled = false;          // 暂停后可以马上再来一轮
+    byId('mic-save').disabled = false;
+    if (mic.node) { mic.node.onaudioprocess = null; mic.node.disconnect(); mic.node = null; }
+    if (mic.stream) { mic.stream.getTracks().forEach(track => track.stop()); mic.stream = null; }
+    if (mic.context) { mic.context.close(); mic.context = null; }
+  }
+
+  async function micSave() {
+    if (!mic.sessionId) { micStatus('还没拿到 session，先点「开始说话」说一句'); return; }
+    const label = byId('mic-label').value === 'true';
+    byId('mic-save').disabled = true;
+    try {
+      const response = await fetch('/api/session/mic/save', {method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({session_id: mic.sessionId, label})});
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+      micStatus(`已保存：${data.path}（标注：${data.label_complete ? '说完了' : '没说完'}）`);
+    } catch (error) {
+      byId('mic-save').disabled = false;
+      byId('error').hidden = false;
+      byId('error').textContent = `保存失败：${error.message}`;
+    }
+  }
+
+  byId('mic-start').addEventListener('click', micStart);
+  byId('mic-stop').addEventListener('click', micStop);
+  byId('mic-save').addEventListener('click', micSave);
+
+  async function* readEvents(response) {
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      buffer += decoder.decode(chunk.value, {stream: true});
+      let boundary;
+      while ((boundary = buffer.indexOf('\n\n')) >= 0) {
+        const packet = buffer.slice(0, boundary);
+        buffer = buffer.slice(boundary + 2);
+        const lines = packet.split('\n');
+        yield {type: lines.find(line => line.startsWith('event: ')).slice(7),
+               data: JSON.parse(lines.find(line => line.startsWith('data: ')).slice(6))};
+      }
+    }
+  }
+
+  function render(data) {
+    byId('results').hidden = false;
+    byId('kev-time').textContent = ms(data.kev_latency_ms);
+    byId('llm-time').textContent = ms(data.decision_latency_ms);
+    byId('e2e-time').textContent = ms(data.latency_ms);
+    byId('score-info').textContent = `模型 ${data.kev_model || 'kev-latest'} · 阈值 ${data.tool_threshold ?? 0.5} · top-k ${data.top_k ?? 3}`;
+    byId('stage-info').hidden = data.tool_set !== 'multidomain';
+    byId('stage-info').textContent = `阶段1 ${ms(data.kev_stage1_ms)} · 阶段2 ${ms(data.kev_stage2_ms)} · 召回域 ${(data.recalled_domains || []).map(domain => `${domain.name} ${Number(domain.score).toFixed(4)}`).join('、') || '—'} · 已评分工具 ${data.scored_tool_count ?? '—'}`;
+    const selected = new Set(data.selected_tools || []);
+    const scores = byId('scores'); scores.replaceChildren();
+    for (const [name, score] of Object.entries(data.scores || {}).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))) {
+      const tool = name.replace(/^tool:/, '');
+      const row = document.createElement('tr');
+      const label = document.createElement('td'); label.textContent = tool;
+      const value = document.createElement('td'); value.textContent = Number(score).toFixed(4);
+      if (selected.has(tool)) {
+        row.className = 'selected';
+        const badge = document.createElement('span'); badge.className = 'badge'; badge.textContent = '入选'; label.append(badge);
+      }
+      row.append(label, value); scores.append(row);
+    }
+    const candidates = byId('candidates'); candidates.replaceChildren();
+    for (const name of data.selected_tools || []) {
+      const schema = (data.assembled_schemas || []).find(tool => tool.name === name);
+      const item = document.createElement('div'); item.className = 'candidate';
+      const title = document.createElement('strong'); title.textContent = name;
+      const description = document.createElement('div'); description.className = 'muted'; description.textContent = schema?.description || '';
+      item.append(title, description); candidates.append(item);
+    }
+    if (!selected.size) candidates.textContent = data.scores ? '无入选业务工具，由决策头判断是否追问。' : '等待 KEV 评分与候选装配…';
+    byId('schemas').textContent = pretty(data.assembled_schemas || []);
+    byId('decision-head').textContent = `决策头：${data.decision_head || '未产生结果'}${data.decision?.response_model ? ' / ' + data.decision.response_model : ''}`;
+    byId('decision').textContent = data.decision ? pretty(data.decision) : '未生成下一步动作。';
+    byId('raw').textContent = pretty(data);
+    if (data.outcome === 'FAIL') {
+      const stage = !data.scores ? 'KEV 评分' : data.selected_tools === undefined ? '候选装配' : 'LiteLLM / 决策';
+      byId('error').hidden = false;
+      byId('error').textContent = `${stage}失败：${data.error_type || ''} ${data.error || '未返回合法结果'}。详情见原始 JSON；未执行任何工具。`;
+    } else if (data.decision_head === 'kev_fallback') {
+      byId('error').hidden = false;
+      byId('error').textContent = `LiteLLM 不可用，已临时使用 KEV Choice 决策头（kev_fallback）。${data.fallback_note || ''}。它只选择工具并追问，不生成业务调用参数。`;
+    }
+  }
+  function applyMode() {
+    const mode = byId('mode').value;
+    byId('stream-controls').hidden = mode !== 'stream';
+    byId('mic-controls').hidden = mode !== 'mic';
+    byId('stream-card').hidden = mode === 'single';
+    byId('results').hidden = true;
+    byId('error').hidden = true;
+    timeline.reset();
+    byId('status').textContent = mode === 'stream' ? '流式模拟：输入文本（可用 |600| 停顿）后发送'
+      : mode === 'mic' ? '麦克风模式：点「开始说话」' : '准备就绪 · Enter 发送';
+    // 开始按钮不因为"还有旧连接"而禁用：新一轮会自己把旧连接收掉（旧轮用例已在服务端登记，仍可保存）
+    if (mode === 'mic') { byId('mic-start').disabled = false; if (!mic.context) byId('mic-stop').disabled = true; }
+  }
+  byId('mode').addEventListener('change', applyMode);
+  applyMode();                                   // 进页面就按默认模式（麦克风 + 200 工具）摆好面板
+  byId('preset').addEventListener('change', () => {
+    if (byId('preset').value) byId('utterance').value = byId('preset').value;
+  });
+  buildTurnConfig('turn-config');
+  buildTurnConfig('turn-config-mic');
+  byId('query-form').addEventListener('submit', async event => {
+    event.preventDefault();
+    if (byId('mode').value === 'stream') return streamSubmit();
+    if (byId('mode').value === 'mic') return micStart();
+    const tool_set = byId('tool-set').value;
+    byId('send').disabled = true;
+    byId('tool-set').disabled = true;
+    byId('error').hidden = true;
+    byId('results').hidden = true;
+    byId('timeline-card').hidden = false;
+    byId('timeline').replaceChildren();
+    byId('execution').textContent = '';
+    byId('status').textContent = '正在连接阶段流…';
+    let latest = {tool_set}, events = [];
+    function receive(type, data) {
+      events.push({event: type, data});
+      const labels = {
+        accepted: `已接受：${data.utterance || ''}`,
+        kev_start: 'KEV 开始评分（kev-latest / 127.0.0.1:8009）',
+        kev_scores: `KEV 分数已到达：${Object.keys(data.scores || {}).length} 个分数，候选 ${(data.selected_tools || []).join('、')}`,
+        llm_start: 'LLM 开始决策，分数与候选已可查看',
+        llm_decision: `决策已到达：${data.decision?.kind || ''} / ${data.decision?.tool || ''} · ${data.decision_head || ''}`,
+        exec_start: data.message,
+        exec_step: data.message,
+        exec_done: data.message,
+        done: '完成：只有 mock 展示，没有真实工具执行',
+        error: `失败：${data.error_type || ''} ${data.error || ''}`
+      };
+      const row = document.createElement('li');
+      row.dataset.event = type;
+      row.textContent = `${ms(data.event_elapsed_ms)} · ${type} · ${labels[type] || type}`;
+      if (type === 'error') row.className = 'error';
+      byId('timeline').append(row);
+      byId('status').textContent = labels[type] || type;
+      if (['kev_start', 'kev_scores', 'llm_start', 'llm_decision', 'done', 'error'].includes(type)) {
+        latest = {...latest, ...data};
+        render(latest);
+      }
+      if (type.startsWith('exec_')) byId('execution').textContent = data.message;
+      byId('raw').textContent = pretty({result: latest, events});
+    }
+    try {
+      const response = await fetch('/api/run/stream', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({utterance: byId('utterance').value.trim(), tool_set})});
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (true) {
+        const chunk = await reader.read();
+        if (chunk.done) break;
+        buffer += decoder.decode(chunk.value, {stream: true});
+        let boundary;
+        while ((boundary = buffer.indexOf('\n\n')) >= 0) {
+          const packet = buffer.slice(0, boundary);
+          buffer = buffer.slice(boundary + 2);
+          const lines = packet.split('\n');
+          const type = lines.find(line => line.startsWith('event: ')).slice(7);
+          const data = JSON.parse(lines.find(line => line.startsWith('data: ')).slice(6));
+          receive(type, data);
+        }
+      }
+    } catch (error) {
+      receive('error', {outcome: 'FAIL', error: `无法取得流式结果：${error.message}，请查看服务终端日志。`});
+    } finally {
+      byId('send').disabled = false;
+      byId('tool-set').disabled = false;
+    }
+  });
+</script>
+</body>
+</html>

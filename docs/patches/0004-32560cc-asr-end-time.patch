@@ -1,0 +1,74 @@
+From 32560cc00f60883720b1e20f94ad7834581dc084 Mon Sep 17 00:00:00 2001
+From: agent <agent@local>
+Date: Fri, 16 Oct 2026 11:13:43 +0800
+Subject: [PATCH] poc/streaming-eot: ASR utterance end_time passthrough, single
+ last-packet in stream_asr
+
+---
+ eval/asr_stream.py | 23 +++++++++++++++--------
+ 1 file changed, 15 insertions(+), 8 deletions(-)
+
+diff --git a/eval/asr_stream.py b/eval/asr_stream.py
+index 8d7091f..7853149 100644
+--- a/eval/asr_stream.py
++++ b/eval/asr_stream.py
+@@ -115,10 +115,17 @@ def parse_message(message) -> list:
+     if not isinstance(result, dict):
+         return []
+     text = str(result.get("text", "")).strip()
++    utterances = [item for item in (result.get("utterances") or []) if isinstance(item, dict)]
+     # The sauc protocol reports the turn boundary on the sentence, not on the top-level result.
+     is_final = bool(result.get("is_final") or result.get("definite")) or any(
+-        isinstance(item, dict) and item.get("definite") for item in (result.get("utterances") or []))
+-    return [(text, is_final)] if text else []
++        item.get("definite") for item in utterances)
++    # end_time = end of the detected speech segment in ms from stream start; the closest thing the
++    # ASR gives us to "where the audio VAD ended" (display only, it does not gate the state machine).
++    ends = [item["end_time"] for item in utterances if isinstance(item.get("end_time"), (int, float))]
++    if isinstance(result.get("end_time"), (int, float)):
++        ends.append(result["end_time"])
++    end_ms = max(ends) if ends else None
++    return [(text, is_final, end_ms)] if text else []
+ 
+ 
+ def _drain(ws, budget_s):
+@@ -167,10 +174,10 @@ class ASRStream:
+ 
+     def _consume(self, updates):
+         fresh = []
+-        for text, final in updates:
++        for text, final, end_ms in updates:
+             if text != self._seen or final:
+                 self._seen = text
+-                fresh.append((text, final))
++                fresh.append((text, final, end_ms))
+         return fresh
+ 
+     def push(self, pcm, *, last=False):
+@@ -199,7 +206,7 @@ class ASRStream:
+             updates, closed = _drain(self._ws, 0.2)
+             fresh = self._consume(updates)
+             collected.extend(fresh)
+-            if any(final for _, final in fresh):
++            if any(final for _text, final, _end in fresh):
+                 break
+             if closed:
+                 break
+@@ -226,14 +233,14 @@ def stream_asr(source, *, sample_rate=16000, chunk_ms=100, realtime=True, final_
+     try:
+         for offset in range(0, len(pcm), step):
+             chunk = pcm[offset:offset + step]
+-            session.push(chunk, last=offset + step >= len(pcm))
++            session.push(chunk)          # finish() sends the single "last packet"; never send two
+             if realtime:
+                 time.sleep(chunk_ms / 1000.0)
+-            for text, final in session.poll():
++            for text, final, _end_ms in session.poll():
+                 yield now_ms(), text, final
+             if session._closed:
+                 return
+-        for text, final in session.finish(final_timeout_s):
++        for text, final, _end_ms in session.finish(final_timeout_s):
+             yield now_ms(), text, final
+     finally:
+         session.close()

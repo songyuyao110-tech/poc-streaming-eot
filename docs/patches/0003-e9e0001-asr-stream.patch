@@ -1,0 +1,157 @@
+From e9e0001beffa38f2c367a643ff33e90f3fd38872 Mon Sep 17 00:00:00 2001
+From: agent <agent@local>
+Date: Fri, 16 Oct 2026 01:31:58 +0800
+Subject: [PATCH] poc/streaming-eot: push-based ASRStream for live microphone
+ frames
+
+---
+ eval/asr_stream.py | 121 ++++++++++++++++++++++++++++++---------------
+ 1 file changed, 81 insertions(+), 40 deletions(-)
+
+diff --git a/eval/asr_stream.py b/eval/asr_stream.py
+index f373002..8d7091f 100644
+--- a/eval/asr_stream.py
++++ b/eval/asr_stream.py
+@@ -141,61 +141,102 @@ def _drain(ws, budget_s):
+         updates.extend(parse_message(message))
+ 
+ 
++class ASRStream:
++    """Push-based session for live audio (microphone): push 20 ms PCM frames, poll partials.
++
++    Same v3 protocol as the file replay; the handshake consumes sequence 1, audio starts at 2.
++    """
++
++    def __init__(self, sample_rate=16000, *, connect_timeout_s=5.0):
++        from simple_websocket import Client
++        config = credentials()
++        self.sample_rate = sample_rate
++        self.url = config["CLOUD_ASR_URL"]
++        headers = {"X-Api-Resource-Id": config["CLOUD_ASR_RESOURCE_ID"],
++                   "X-Api-Request-Id": str(uuid.uuid4()), "X-Api-Sequence": "-1",
++                   "X-Api-Connect-Id": str(uuid.uuid4()),
++                   "X-Api-App-Key": config["CLOUD_ASR_APP_ID"],
++                   "X-Api-Access-Key": config["CLOUD_ASR_ACCESS_TOKEN"]}
++        self._ws = Client.connect(self.url, headers=headers, receive_bytes=65536, max_message_size=1 << 22)
++        self._sequence = 2
++        self._seen = ""
++        self._closed = False
++        self._ws.send(handshake_frame(sample_rate))
++        updates, self._closed = _drain(self._ws, 0.3)
++        self._consume(updates)
++
++    def _consume(self, updates):
++        fresh = []
++        for text, final in updates:
++            if text != self._seen or final:
++                self._seen = text
++                fresh.append((text, final))
++        return fresh
++
++    def push(self, pcm, *, last=False):
++        if not pcm or self._closed:
++            return
++        if last:
++            self._ws.send(audio_frame(pcm, self._sequence, last=True))
++        else:
++            self._ws.send(audio_frame(pcm, self._sequence))
++        self._sequence += 1
++
++    def poll(self):
++        """New (text, is_final) updates since the last call; never blocks longer than ~20 ms."""
++        updates, self._closed = _drain(self._ws, 0.001)
++        return self._consume(updates)
++
++    def finish(self, timeout_s=5.0):
++        """Signal end of audio with a silent last packet and collect the final result."""
++        collected = []
++        try:
++            self.push(b"\x00" * int(self.sample_rate * 0.02) * 2, last=True)
++        except Exception:
++            return collected
++        deadline = time.monotonic() + timeout_s
++        while time.monotonic() < deadline:
++            updates, closed = _drain(self._ws, 0.2)
++            fresh = self._consume(updates)
++            collected.extend(fresh)
++            if any(final for _, final in fresh):
++                break
++            if closed:
++                break
++        return collected
++
++    def close(self):
++        self._closed = True
++        try:
++            self._ws.close()
++        except Exception:
++            pass
++
++
+ def stream_asr(source, *, sample_rate=16000, chunk_ms=100, realtime=True, final_timeout_s=8.0):
+     """Yield (t_ms, text, final) for a wav path (or "mic"), paced in real time like a live stream."""
+-    from simple_websocket import Client
+     pcm = read_pcm(source, sample_rate)
+-    config = credentials()
+-    headers = {"X-Api-Resource-Id": config["CLOUD_ASR_RESOURCE_ID"],
+-               "X-Api-Request-Id": str(uuid.uuid4()), "X-Api-Sequence": "-1",
+-               "X-Api-Connect-Id": str(uuid.uuid4()),
+-               "X-Api-App-Key": config["CLOUD_ASR_APP_ID"],
+-               "X-Api-Access-Key": config["CLOUD_ASR_ACCESS_TOKEN"]}
+-    ws = Client.connect(config["CLOUD_ASR_URL"], headers=headers, receive_bytes=65536, max_message_size=1 << 22)
++    session = ASRStream(sample_rate)
+     started = time.monotonic()
+-    seen, sequence = "", 2  # the handshake consumed sequence 1
+ 
+     def now_ms():
+         return int((time.monotonic() - started) * 1000)
+ 
++    step = int(sample_rate * 2 * chunk_ms / 1000)
+     try:
+-        ws.send(handshake_frame(sample_rate))
+-        updates, closed = _drain(ws, 0.3)
+-        for text, final in updates:
+-            if text != seen:
+-                seen = text
+-                yield now_ms(), text, final
+-        step = int(sample_rate * 2 * chunk_ms / 1000)
+         for offset in range(0, len(pcm), step):
+             chunk = pcm[offset:offset + step]
+-            last = offset + step >= len(pcm)
+-            ws.send(audio_frame(chunk, sequence, last=last))
+-            sequence += 1
++            session.push(chunk, last=offset + step >= len(pcm))
+             if realtime:
+                 time.sleep(chunk_ms / 1000.0)
+-            updates, closed = _drain(ws, 0.02)
+-            for text, final in updates:
+-                if text != seen or final:
+-                    seen = text
+-                    yield now_ms(), text, final
+-            if closed:
+-                return
+-        deadline = time.monotonic() + final_timeout_s
+-        while time.monotonic() < deadline:
+-            updates, closed = _drain(ws, 0.2)
+-            for text, final in updates:
+-                if text != seen or final:
+-                    seen = text
+-                    yield now_ms(), text, final
+-                if final:
+-                    return
+-            if closed:
++            for text, final in session.poll():
++                yield now_ms(), text, final
++            if session._closed:
+                 return
++        for text, final in session.finish(final_timeout_s):
++            yield now_ms(), text, final
+     finally:
+-        try:
+-            ws.close()
+-        except Exception:
+-            pass
++        session.close()
+ 
+ 
+ if __name__ == "__main__":

@@ -1,0 +1,325 @@
+From caa73d89026793f5385452dc1b3f8226eb795732 Mon Sep 17 00:00:00 2001
+From: agent <agent@local>
+Date: Fri, 16 Oct 2026 01:16:40 +0800
+Subject: [PATCH] poc/streaming-eot: dedicated EOT tunnel + concurrent
+ per-prefix EOT, keep speculative cancel
+
+---
+ eval/core_pipeline_run.py     | 12 +++--
+ eval/streaming_prefix_eval.py | 14 +++++-
+ eval/turn_eot.py              |  4 +-
+ eval/turn_session.py          | 86 ++++++++++++++++++++++-------------
+ 4 files changed, 77 insertions(+), 39 deletions(-)
+
+diff --git a/eval/core_pipeline_run.py b/eval/core_pipeline_run.py
+index 5389cd0..687ef70 100644
+--- a/eval/core_pipeline_run.py
++++ b/eval/core_pipeline_run.py
+@@ -29,6 +29,9 @@ from registry import load_registry
+ from decisions import Tool, mixed_questions
+ 
+ KEV_BASE = "http://127.0.0.1:8009"
++# EOT judging goes through its own SSH tunnel so it never queues behind tool scoring on KEV_BASE.
++# Both local ports forward to the same remote KEV service (kev-latest @ 106.53.0.235:8009).
++KEV_EOT_BASE = os.environ.get("KEV_EOT_BASE", "http://127.0.0.1:8010")
+ KEV_MODEL = "kev-latest"
+ # Shared across runs and fallback; retain the tunnel HTTP connection between queries.
+ KEV_CLIENT = httpx2.Client(timeout=30.0, trust_env=False, follow_redirects=False,
+@@ -41,9 +44,10 @@ KEV_MD_CLIENT = httpx2.Client(timeout=30.0, trust_env=False, follow_redirects=Fa
+                               limits=httpx2.Limits(max_connections=2, max_keepalive_connections=2,
+                                                   keepalive_expiry=60.0))
+ atexit.register(KEV_MD_CLIENT.close)
+-# Turn-taking (EOT) judging gets its own single connection so it never competes with tool scoring.
++# Turn-taking (EOT) judging gets its own tunnel + connection pool so it never competes with tool
++# scoring, and concurrent per-prefix EOT calls can be in flight without queueing behind each other.
+ KEV_EOT_CLIENT = httpx2.Client(timeout=30.0, trust_env=False, follow_redirects=False,
+-                               limits=httpx2.Limits(max_connections=1, max_keepalive_connections=1,
++                               limits=httpx2.Limits(max_connections=4, max_keepalive_connections=4,
+                                                    keepalive_expiry=60.0))
+ atexit.register(KEV_EOT_CLIENT.close)
+ TOOL_THRESHOLD = 0.5
+@@ -58,8 +62,8 @@ def unique_object(pairs):
+     return result
+ 
+ 
+-def kev_call(client, state, questions):
+-    response = client.post(KEV_BASE + "/v1/systemone", json={"model": KEV_MODEL, "state": state,
++def kev_call(client, state, questions, base=KEV_BASE):
++    response = client.post(base + "/v1/systemone", json={"model": KEV_MODEL, "state": state,
+                           "questions": questions, "max_output_tokens": 512})
+     if response.status_code != 200:
+         raise ValueError("KEV returned non-200")
+diff --git a/eval/streaming_prefix_eval.py b/eval/streaming_prefix_eval.py
+index 6e28842..5265e6d 100644
+--- a/eval/streaming_prefix_eval.py
++++ b/eval/streaming_prefix_eval.py
+@@ -113,9 +113,10 @@ def analyse(sentence, events, session, meta, cfg):
+     for event in events:
+         if event["event"] != "eot_scores":
+             continue
+-        text = eot_text_by_version.get(event["text_version"], "")
++        text = event.get("text") or eot_text_by_version.get(event["text_version"], "")
+         case = prefix_by_text.get(text)
+         verdicts.append({"text": text, "label": event["label"], "margin": event["margin"],
++                         "stale": bool(event.get("stale")),
+                          "complete": event["complete"], "cut": event["cut"], "wait": event["wait"],
+                          "wall_ms": event["wall_ms"], "idx": case["idx"] if case else None,
+                          "is_full": case["is_full"] if case else None,
+@@ -136,6 +137,7 @@ def analyse(sentence, events, session, meta, cfg):
+             "llm_start_latency_ms": summary["t_llm_start_latency_ms"],
+             "decision_latency_ms": summary["t_decision_latency_ms"],
+             "eot_calls": summary["eot_calls"], "eot_skipped": summary["eot_skipped"],
++            "eot_stale": summary.get("eot_stale"),
+             "tool_calls": summary["tool_calls"], "llm_calls": summary["llm_calls"],
+             "llm_wasted": summary["llm_wasted"],
+             "eot_skips": dict(Counter(event["reason"] for event in events
+@@ -214,6 +216,7 @@ def build_report(rows, v0, config, args):
+         all_prefixes = sum(row["prefix_count"] for row in subset)
+         judged = [v for row in subset for v in row["verdicts"] if v["matched"] and not v["is_full"]]
+         judged_strict = [v for v in judged if not v["natural_complete"]]
++        fresh = [v for v in judged if not v.get("stale")]
+         judged_natural = [v for v in judged if v["natural_complete"]]
+         unmatched = sum(len([v for v in row["verdicts"] if not v["matched"]]) for row in subset)
+         prefix_total, prefix_total_all = len(judged_strict), len(judged)
+@@ -241,13 +244,20 @@ def build_report(rows, v0, config, args):
+             skips.update(row["eot_skips"])
+         add(f"| 指标 | 值 |")
+         add(f"|---|---|")
+-        add(f"| 判停覆盖率（被判过的非整句前缀 / 全部前缀） | {prefix_total_all}/{all_prefixes} = "
++        add(f"| 判停覆盖率（有判停结果的非整句前缀 / 全部前缀） | {prefix_total_all}/{all_prefixes} = "
+             f"{(prefix_total_all / all_prefixes * 100 if all_prefixes else 0):.1f}% |")
++        add(f"| 判停可用覆盖率（结果落地时仍是最新文本，非 stale） | {len(fresh)}/{all_prefixes} = "
++            f"{(len(fresh) / all_prefixes * 100 if all_prefixes else 0):.1f}% |")
++        fresh_all = [v for row in subset for v in row["verdicts"] if not v.get("stale")]
++        add(f"| 每句可用（非 stale）判停结果数（含整句，均值） | "
++            f"{len(fresh_all) / len(subset):.2f} |")
+         add(f"| ① 前缀误判说完率（按前缀，排除 natural_complete） | {prefix_bad}/{prefix_total} = "
+             f"{(prefix_bad / prefix_total * 100 if prefix_total else 0):.2f}% |")
+         add(f"| ① 前缀误判说完率（按前缀，不排除） | {prefix_bad_all}/{prefix_total_all} = "
+             f"{(prefix_bad_all / prefix_total_all * 100 if prefix_total_all else 0):.2f}% |")
+         add(f"| ① 被预标 natural_complete 的前缀中判为 complete | {natural_said_complete}/{len(judged_natural)} |")
++        add(f"| ① 判停结果中判完即过期（stale）的条数 | "
++            f"{sum(1 for v in [v for row in subset for v in row['verdicts']] if v.get('stale'))} |")
+         add(f"| ① 未能归因到某个前缀的判停结果（停顿后段内增量文本） | {unmatched} |")
+         add(f"| ① 前缀误判说完率（按句，任一前缀误判） | {sentence_bad}/{len(subset)} = "
+             f"{(sentence_bad / len(subset) * 100):.2f}% |")
+diff --git a/eval/turn_eot.py b/eval/turn_eot.py
+index efac7b2..ee960f5 100644
+--- a/eval/turn_eot.py
++++ b/eval/turn_eot.py
+@@ -12,7 +12,7 @@ import time
+ sys.path.insert(0, str(Path(__file__).resolve().parent))
+ sys.dont_write_bytecode = True
+ 
+-from core_pipeline_run import KEV_EOT_CLIENT, kev_call, probability
++from core_pipeline_run import KEV_EOT_BASE, KEV_EOT_CLIENT, kev_call, probability
+ 
+ EOT_LABELS = {
+     "complete": "The user's last utterance is a complete turn that can be answered now.",
+@@ -27,7 +27,7 @@ def score_eot(text: str) -> dict:
+     questions = {name: {"type": "noul", "instructions": EOT_LABELS[name]} for name in EOT_ORDER}
+     state = json.dumps({"utterance": text}, ensure_ascii=False, allow_nan=False)
+     began = time.monotonic()
+-    raw = kev_call(KEV_EOT_CLIENT, state, questions)
++    raw = kev_call(KEV_EOT_CLIENT, state, questions, base=KEV_EOT_BASE)
+     wall_ms = (time.monotonic() - began) * 1000
+     answers = raw["answers"]
+     scores = {}
+diff --git a/eval/turn_session.py b/eval/turn_session.py
+index 2b0f6ad..1653550 100644
+--- a/eval/turn_session.py
++++ b/eval/turn_session.py
+@@ -35,14 +35,17 @@ class TurnConfig:
+     eot_policy: str = "margin"          # argmax|margin
+     eot_margin: float = 0.2
+     spec_margin: float = 0.3
+-    speculative_llm: bool = False
++    speculative_llm: bool = True     # intentional: start the decision early, cancel it on reversal
+     eot_input: str = "last_segment"     # last_segment|turn_text
+     confirm_silence_ms: int = 700
+     cut_wait_ms: int = 1500
+     think_wait_ms: int = 3000
+     max_silence_ms: int = 2000
+     eot_timeout_ms: int = 900
+-    debounce_ms: int = 150
++    eot_max_inflight: int = 3        # >1 removes single-flight starvation: every prefix gets scored
++    # Must stay below the ASR partial interval, otherwise each pending call is replaced before it fires
++    # and prefixes stop being judged at all (measured at 150 ms/prefix).
++    debounce_ms: int = 80
+     reuse_tools_if_text_unchanged: bool = True
+     tool_set: str = "navigation"        # navigation|multidomain
+ 
+@@ -67,7 +70,7 @@ class TurnSession:
+         self.decide_fn = decide_fn
+         self.session_id = session_id or ("s-" + str(int(time.time() * 1000)))
+         self.evidence_root = Path(evidence_root) if evidence_root else None
+-        self._pool = ThreadPoolExecutor(max_workers=4)
++        self._pool = ThreadPoolExecutor(max_workers=4 + max(0, cfg.eot_max_inflight - 1))
+         self.context = {"home_address_configured": True, "company_address_configured": True, "synthetic": True}
+         self.events = []
+         self.turns = []
+@@ -87,13 +90,15 @@ class TurnSession:
+         self.turn_done = False
+         self.turn_index = 1
+         self.segment_closed = False
+-        self._jobs = {"eot": None, "tools": None, "llm": None}
++        self._jobs = {"tools": None, "llm": None}
++        self._eot_jobs = []
+         self._eot_pending = None
+         self._tools_pending = None
+         self._tools_cache = None
+         self._tools_result = None
+         self._llm_prepared = None
+-        self.counters = {"eot_calls": 0, "eot_skipped": 0, "tool_calls": 0, "llm_calls": 0, "llm_wasted": 0}
++        self.counters = {"eot_calls": 0, "eot_skipped": 0, "eot_stale": 0, "tool_calls": 0,
++                         "llm_calls": 0, "llm_wasted": 0}
+         self.eot_scores = None
+         self.decision = None
+ 
+@@ -176,17 +181,17 @@ class TurnSession:
+                 self._confirm(now_ms, "max_silence")
+         elif self.state == "LISTENING" and silence >= self.cfg.max_silence_ms:
+             self._confirm(now_ms, "max_silence")
+-        job = self._jobs["eot"]
+-        if job is not None and not job.get("timed_out") and now_ms - job["started_ms"] > self.cfg.eot_timeout_ms \
+-                and self.state != "CONFIRMED":
+-            # Design doc: a KEV failure/timeout falls back to the max_silence rule below.
+-            # The late result is still applied if it arrives before a newer call replaces it.
+-            job["timed_out"] = True
+-            self.counters["eot_skipped"] += 1
+-            self._emit("eot_skipped", now_ms, reason="timeout", text=job["text"])
+-        if (self._jobs["eot"] is None or self._jobs["eot"].get("timed_out")) and self._eot_pending \
++        for job in self._eot_jobs:
++            if not job.get("timed_out") and now_ms - job["started_ms"] > self.cfg.eot_timeout_ms:
++                # Design doc: a KEV failure/timeout falls back to the max_silence rule below; the late
++                # result is still scored and reported, it just no longer gates the state machine.
++                job["timed_out"] = True
++                self.counters["eot_skipped"] += 1
++                self._emit("eot_skipped", now_ms, reason="timeout", text=job["text"])
++        while len(self._eot_jobs) < max(1, self.cfg.eot_max_inflight) and self._eot_pending \
+                 and now_ms >= self._eot_pending["due_ms"]:
+-            self._fire_eot(now_ms)
++            pending, self._eot_pending = self._eot_pending, None
++            self._fire_eot(now_ms, pending)
+         if not self._jobs["tools"] and self._tools_pending and now_ms >= self._tools_pending["due_ms"]:
+             self._fire_tools(now_ms)
+         if self.state == "CONFIRMED":
+@@ -196,7 +201,8 @@ class TurnSession:
+         self.tick(now_ms)
+ 
+     def idle(self) -> bool:
+-        return not any(self._jobs.values()) and not self._eot_pending and not self._tools_pending
++        return (not any(self._jobs.values()) and not self._eot_jobs
++                and not self._eot_pending and not self._tools_pending)
+ 
+     def summary(self) -> dict:
+         return {"session_id": self.session_id, "turns": self.turn_index,
+@@ -232,12 +238,11 @@ class TurnSession:
+ 
+     # ---------- workers ----------
+ 
+-    def _fire_eot(self, now_ms):
+-        pending, self._eot_pending = self._eot_pending, None
++    def _fire_eot(self, now_ms, pending):
+         self.counters["eot_calls"] += 1
+         self._emit("eot_start", now_ms, text=pending["text"], version=pending["version"])
+-        self._jobs["eot"] = {"future": self._pool.submit(self.eot_fn, pending["text"]),
+-                             "version": pending["version"], "started_ms": now_ms, "text": pending["text"]}
++        self._eot_jobs.append({"future": self._pool.submit(self.eot_fn, pending["text"]),
++                               "version": pending["version"], "started_ms": now_ms, "text": pending["text"]})
+ 
+     def _fire_tools(self, now_ms):
+         pending, self._tools_pending = self._tools_pending, None
+@@ -258,7 +263,15 @@ class TurnSession:
+             "version": self.version, "started_ms": now_ms, "speculative": bool(speculative), "canceled": False}
+ 
+     def _poll(self, now_ms):
+-        for kind in ("eot", "tools", "llm"):
++        for job in [job for job in self._eot_jobs if job["future"].done()]:
++            self._eot_jobs.remove(job)
++            try:
++                result = job["future"].result()
++            except Exception as error:  # PoC: surface, do not retry
++                self._emit("error", now_ms, stage="eot", error_type=type(error).__name__, error=str(error))
++                continue
++            self._on_eot_result(now_ms, job, result)
++        for kind in ("tools", "llm"):
+             job = self._jobs[kind]
+             if job is None or not job["future"].done():
+                 continue
+@@ -268,16 +281,21 @@ class TurnSession:
+             except Exception as error:  # PoC: surface, do not retry
+                 self._emit("error", now_ms, stage=kind, error_type=type(error).__name__, error=str(error))
+                 continue
+-            handler = {"eot": self._on_eot_result, "tools": self._on_tools_result, "llm": self._on_llm_result}[kind]
++            handler = {"tools": self._on_tools_result, "llm": self._on_llm_result}[kind]
+             handler(now_ms, job, result)
+ 
+     def _on_eot_result(self, now_ms, job, result):
+-        if job["version"] != self.version:
++        stale = job["version"] != self.version
++        if stale:
++            # The judgement was paid for but no longer describes the newest text: report it (metrics
++            # need every prefix score) and drop it from the state machine.
+             self.counters["eot_skipped"] += 1
++            self.counters["eot_stale"] += 1
++        self.eot_scores = result if not stale else self.eot_scores
++        self._emit("eot_scores", now_ms, stale=stale, text=job["text"], **result)
++        if stale:
+             self._emit("eot_skipped", now_ms, reason="stale", text=job["text"])
+             return
+-        self.eot_scores = result
+-        self._emit("eot_scores", now_ms, **result)
+         if self.state == "CONFIRMED":
+             return
+         label = result["label"]
+@@ -348,20 +366,25 @@ class TurnSession:
+             if self.state == "CONFIRMED" and not self._jobs["tools"] and self._tools_pending is None:
+                 self._tools_pending = {"version": self.version, "text": self.turn_text(), "due_ms": now_ms}
+             return
++        if self.state == "MAYBE_DONE" and self._llm_prepared and self._llm_prepared["version"] == self.version:
++            return
+         if self.state == "MAYBE_DONE" and not speculative:
+             return
+         self._start_llm(now_ms, speculative)
+ 
+     def _cancel_inflight_llm(self, now_ms, reason):
+-        """Drop an in-flight decision whose text is no longer current (speculative or confirmed)."""
+-        if self._llm_prepared and self._llm_prepared["version"] != self.version:
+-            self._llm_prepared = None
++        """Drop a decision that the user's continuation invalidated (in flight or already finished)."""
++        prepared, self._llm_prepared = self._llm_prepared, None
++        if prepared is not None:
++            # A speculative result that already finished is discarded too, and counted as waste.
++            self.counters["llm_wasted"] += 1
++            self._emit("llm_cancel", now_ms, reason=reason, speculative=True, prepared=True)
+         job = self._jobs["llm"]
+         if job is None or job["canceled"]:
+             return
+         job["canceled"] = True
+         self.counters["llm_wasted"] += 1
+-        self._emit("llm_cancel", now_ms, reason=reason, speculative=job["speculative"])
++        self._emit("llm_cancel", now_ms, reason=reason, speculative=job["speculative"], prepared=False)
+ 
+     def _to_state(self, state, now_ms, why):
+         if state == self.state:
+@@ -406,8 +429,8 @@ class TurnSession:
+         self.turn_start_ms = now_ms
+         self.state = "LISTENING"
+         self._jobs["llm"] = None
+-        self._jobs["eot"] = None
+         self._jobs["tools"] = None
++        self._eot_jobs = []
+         self._eot_pending = None
+         self._tools_pending = None
+         self._tools_cache = None
+@@ -415,7 +438,8 @@ class TurnSession:
+         self._llm_prepared = None
+         self.eot_scores = None
+         self.decision = None
+-        self.counters = {"eot_calls": 0, "eot_skipped": 0, "tool_calls": 0, "llm_calls": 0, "llm_wasted": 0}
++        self.counters = {"eot_calls": 0, "eot_skipped": 0, "eot_stale": 0, "tool_calls": 0,
++                         "llm_calls": 0, "llm_wasted": 0}
+ 
+     # ---------- events / evidence ----------
+ 
