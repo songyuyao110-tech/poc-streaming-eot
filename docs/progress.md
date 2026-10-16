@@ -281,3 +281,17 @@ A3 细节：① `导航回家` 1 次决策 / `llm_wasted=0`；② `我去买菜|
 - 顺带修掉一个 M4 重构遗留 bug：`stream_asr` 推完最后一个包又让 `finish()` 再发一次 last packet，火山返回 `45000000 last packet has been received already`（偶发），现在 finish() 独占 last packet。
 
 **验收**：A3 9/9、A4 11/11、A5 4/4、M4 6/6、M1b PASS；浏览器同一页面**连开两轮**真语音各 283/290 帧、2 partial+1 final、2 张卡、`VAD 结束 740ms → 首工具 +1233ms / +1142ms`、绿灰徽标同时可见、停止后按钮可用、HTTP 保存成功（`mic-20261016-111252-5ec8a9.jsonl`，tool_set=multidomain，asr_updates 带 vad_end_ms）。截图 `tmp/poc-mic-v4.png`、`tmp/poc-timeline-v3.png`。
+
+---
+
+## 2026-10-16 · 归档整理：PoC 独立成库
+
+**做了什么**：把散在三处的 PoC 合成一个独立 git 仓库 `/Users/YUYSONG/Work/poc-streaming-eot`（工作区顶层，与上游 worktree、`jev-research/poc-ui` 分离）：
+- `src/`：PoC 核心代码快照（`turn_session.py`/`turn_eot.py`/`asr_stream.py`/`core_pipeline_run.py`/`build_prefix_cases.py`/`streaming_prefix_eval.py` + `fixtures/`）
+- `ui/`、`tests/`（含 `probes/`）、`docs/`（输入 spec、设计稿、进度、报告、调参记录、延迟 spec）、`cases/`（8 个标注样本）、`assets/`
+- 上游依赖（`model_clients.py`/`gateway.py`/`registry.py`/`tools.yaml`/`eval/fixtures/*`）**不复制**，由 `src/bootstrap.py` 经 `POC_UPSTREAM` 注入 sys.path（默认上游 worktree `dev-streaming-eot`）
+- 全部硬编码绝对路径改为仓库相对：`ui/server.py` 的 `POC_CHECKOUT`/`MIC_CASES`、离线脚本的 `POC_CASES`/报告输出、5 个测试脚本的 sys.path
+- 产物落点改为本仓库：`evidence/`（gitignore，只留 sample/）、`cases/`；**上游 worktree 不再被写脏**（已核实 `git status` 干净）
+- `docs/patches/` 导出上游 4 个提交（剔除 evidence，仅代码，1.3MB），便于对上游仓库重放
+
+**验收（从新目录跑）**：A3 9/9、A4 11/11、A5 4/4、M4 6/6、M1b PASS；UI 从 `ui/server.py` 起在 8765、页面 200；产物正确落在新仓库 `cases/`+`evidence/`。初始提交 `c9888ef`。
