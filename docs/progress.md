@@ -319,3 +319,33 @@ A3 细节：① `导航回家` 1 次决策 / `llm_wasted=0`；② `我去买菜|
 - p90 三格恒为 1504ms → 长尾不在编排侧。
 
 **回归**：A3 9/9、A4 11/11、A5 4/4、M4 6/6、M1b PASS。
+
+---
+
+## 2026-10-16 · 流式多轮消费 LLM（消费游标 + 段级多次决策）
+
+**做了什么**：把"判停 → 一次 LLM 决策 → 本轮收尾"改成"判停 → 决策 → 把该段封存为已消费 → ASR 继续说 → 只对**未消费后缀**再判停、再决策"。落点 `src/turn_session.py`（+ `ui/server.py` mic `stop` 接线、`ui/index.html` 时间线标记）。设计稿 `docs/spec-streaming-multi-llm.md`（§3 消费游标 / §4 投机 / §5 C1–C4 / 附录 A）。
+
+**核心机制**：
+- 游标三元组 `consumed_version / consumed_segments / consumed_tail`；边界 = **落地决策发出的那次文本版本**（`job["version"] == self.version` 已保证与当前文本逐字一致 → 封段不会截断/错位）。`suffix_text()` = 未消费后缀，判停入口 / 选工具 / `decide()` 输入全部改吃它。
+- `_apply_llm()` 不再 `_finish_turn()`：`_seal_consumed()` → 发 `segment_consumed` → 回 `LISTENING`；收尾改为"空后缀 + 静音 ≥ `max_silence_ms` + 无在途"或显式 `stop(now_ms)`（`ui/server.py` 的「停止」按钮在 ASR 冲完后调用一次）。
+- `on_asr` 加已消费段去重：同句整句重发 → `eot_skipped(reason=consumed_duplicate)`；前缀重叠（整句重发并延续）→ 只取增量。这是 mic 核心路径（火山对同一 utterance 重发整句）。
+- 投机不变量不变：只有**被反转**的那次记浪费；`segment_consumed` 落地的那次算有效决策。
+
+**验收（`tests/poc-streaming-c1c4.py`，虚拟时钟 + 桩 eot/tools/decide，36/36 PASS）**
+
+| 用例 | 结果 | 关键数字 |
+|---|---|---|
+| C1 单次消费基线 | PASS 10/10 | 输入 `["导航回家"]`；`consumed=1, calls=1, wasted=0`；消费后静音 ≥`max_silence_ms` 才 `turn_done` |
+| C2 两段连续消费 | PASS 10/10 | 输入 `["导航回家","顺便看看路况"]`（第 2 次不含前缀）；`consumptions[*].segments=[1,2]`；两段间无 `turn_done`、无 `barge_in`；`consumed=2, calls=2, wasted=0` |
+| C3 消费后投机作废 | PASS 8/8 | 3 次调用 `["导航回家","顺便看看","顺便看看路况"]`；`llm_cancel(new_text, speculative)`；`consumed=2, calls=3, wasted=1` |
+| C4 同句重发去重 | PASS 8/8 | `consumed_duplicate` 忽略重发；整句重发只取增量 `"附近有加油站吗"`；`consumed=2, calls=2, wasted=0` |
+
+**既有回归（改后代码重跑，真 KEV + 真 LLM）**：A3 9/9、A4 8/8（+reuse 11/11）、A5 4/4、M4 6/6、M1b PASS。
+**端到端冒烟**：`/api/session/stream` 两段脚本 `帮我导航回家|3200|顺便看看路况` → 2 条 `llm_decision`（utterance 恰好两段）、2 条 `segment_consumed`、无 `barge_in`、`llm_calls=4 = consumed 2 + wasted 2`、`timeline.json` 79/79 一致；麦克风两段（`asr-zh.wav` + 3.0s 静音 + 合成"顺便看看路况"）→ 2 条消费（第 2 条走的正是"整句重发 → 前缀去重"）、2 条决策、`stop` 生效、`calls=6 = 2 + 4`。
+
+**关键数字口径**：不变式 `llm_calls == consumed_count + llm_wasted` 在全部用例成立。M4/M1b 的 wasted 来自短名单变化重发（既有行为，非本改动引入）。
+
+**修了 3 处 spec 内部不一致**（spec 本体未改，差异记在 `tmp/poc-streaming-multi-llm-impl-progress.md`）：① §3.2 骨架 `_emit(..., **record)` 会重复传 `t_ms`（TypeError），实现跳过该键；② §3.2 与 §5 C1 的事件顺序冲突，按验收章节 §5（`llm_decision` 先于 `segment_consumed`）；③ §3.3"静音计时语义不变"与 §3.5 收尾规则矛盾——静音只锚定"最后文本变化/`speech_end`"时，决策落地耗时 > `max_silence_ms` 会在消费同一拍立刻 `turn_done`，第二段永远进不来（实测两段冒烟只出 1 条决策：消费 @3854ms 抢在第二段 4200ms 之前）。修正为把"最近一次消费"也作为静音锚点（新增 `t_last_consumed`），`turn_done` = 末次消费 + `max_silence_ms`；confirm/cut_wait/think_wait 行为不变。
+
+**已知限制**：真人麦克风未验（用合成语音，火山把整轮当一个 utterance）；UI"已消费段"只做语法/事件核对、未截图；一轮说两段的停顿有真实窗口（消费 #1 落地前不能来第二段文本，且第二段须在"消费 #1 + `max_silence_ms`"内到达；实测 5.0s 停顿会收尾、3.0s 通过）。未 push。

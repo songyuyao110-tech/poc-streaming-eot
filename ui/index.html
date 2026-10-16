@@ -310,11 +310,12 @@
     state_change: e => `状态 ${e.from} → ${e.to}（${e.why}）`,
     llm_start: e => `LLM 启动${e.speculative ? '（投机）' : ''} · ${(e.selected || []).join('、')}`,
     llm_cancel: e => `LLM 作废 · ${e.reason}${e.speculative ? '（投机）' : ''}${e.prepared ? '（结果已就绪仍丢弃）' : ''}`,
-    llm_decision: e => `决策 · ${e.decision?.kind} ${e.decision?.tool || ''}`,
+    llm_decision: e => `决策 · ${e.decision?.kind} ${e.decision?.tool || ''}${e.utterance ? ' · 「' + e.utterance + '」' : ''}${e.consumed_index ? '（已消费第 ' + e.consumed_index + ' 段）' : ''}`,
+    segment_consumed: e => `已消费第 ${e.index} 段 · 「${e.text || ''}」 · 游标 ${e.segments} 段${e.speculative ? '（投机命中）' : ''}`,
     barge_in: e => `打断 · ${e.why || ''}`,
     error: e => `错误 · ${e.error_type || ''} ${e.error || ''}`
   };
-  const EVENT_CLASS = {llm_start: 'llm', llm_cancel: 'cancel', llm_decision: 'decision', state_change: 'state', error: 'error', vad_end: 'vad'};
+  const EVENT_CLASS = {llm_start: 'llm', llm_cancel: 'cancel', llm_decision: 'decision', segment_consumed: 'ok', state_change: 'state', error: 'error', vad_end: 'vad'};
 
   function createTimeline() {
     const groups = new Map();
@@ -504,6 +505,9 @@
                  chip(`判停 ${data.eot_calls} 次（跳过 ${data.eot_skipped}）`),
                  chip(`选工具 ${data.tool_calls} 次`),
                  chip(`LLM ${data.llm_calls} 次（浪费 ${data.llm_wasted}）`, data.llm_wasted ? 'warn' : 'ok'));
+      if (data.consumed_count !== undefined) {
+        box.append(chip(`已消费 ${data.consumed_count} 段`, data.consumed_count ? 'ok' : ''));
+      }
       const total = Math.max(1, data.t_decision_latency_ms || 1);
       const waterfall = node('div', 'tl-waterfall');
       const segment = (label, value, cls) => {

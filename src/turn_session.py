@@ -1,4 +1,9 @@
-"""Streaming turn session: ASR updates + VAD → KEV EOT judging + tool shortlist → one decision.
+"""Streaming turn session: ASR updates + VAD → KEV EOT judging + tool shortlist → per-segment decisions.
+
+One turn can consume several ASR segments: a landed decision seals the text it was made on (the
+"consumption cursor"), emits `segment_consumed` and returns to LISTENING; whatever the user says next
+is judged as the unconsumed suffix only. The turn is over when the suffix is empty and the silence
+timer (or an explicit stop()) says so.
 
 All state transitions happen on the caller's thread (the driver that calls tick()); the injected
 KEV/LLM callables run in worker threads and their results are applied only if text_version is
@@ -94,6 +99,20 @@ class TurnSession:
         self.t_confirmed = None
         self.t_llm_start = None
         self.t_decision = None
+        self.t_decision_last = None
+        # Consumption cursor: segments[:consumed_segments] were sealed by a landed decision, so the
+        # unconsumed suffix is segments[consumed_segments:] + the in-use segment (see suffix_text()).
+        self.consumed_version = 0
+        self.consumed_segments = 0
+        self.consumed_tail = None
+        self.consumptions = []
+        self.consumed_count = 0
+        self.version_t_ms = None
+        # A landed decision is "work just done", not silence: the end-of-turn silence window restarts
+        # when a segment is consumed (otherwise a decision slower than max_silence_ms would close the
+        # turn the moment it lands and the user's next segment could never arrive).
+        self.t_last_consumed = None
+        self._stop_requested = False
         self.timeline_path = None
         self.turn_done = False
         self.turn_index = 1
@@ -115,7 +134,7 @@ class TurnSession:
         self._shortlist_source = None
         self._shortlist_age_ms = None
         self.counters = {"eot_calls": 0, "eot_skipped": 0, "eot_stale": 0, "tool_calls": 0,
-                         "llm_calls": 0, "llm_wasted": 0, "n_reissue": 0}
+                         "llm_calls": 0, "llm_wasted": 0, "n_reissue": 0, "consumed": 0}
         self.eot_scores = None
         self.decision = None
 
@@ -132,17 +151,31 @@ class TurnSession:
                 return
             self._emit("barge_in", t_ms, why="asr_after_action", text=text)
             self._reset_turn(t_ms)
+        # Volcengine re-sends the whole sentence of an utterance: after a segment was consumed, an exact
+        # re-send is a duplicate and a re-send that continues the consumed text only contributes the tail.
+        if self.consumed_tail:
+            norm_text, norm_tail = normalize(text), normalize(self.consumed_tail)
+            if norm_text and norm_tail and norm_text.startswith(norm_tail):
+                if norm_text == norm_tail:
+                    self.counters["eot_skipped"] += 1
+                    self._emit("asr_update", t_ms, text=text, final=bool(final), segment=self.segment,
+                               turn_text=self.turn_text(), changed=False)
+                    self._emit("eot_skipped", t_ms, reason="consumed_duplicate", text=text)
+                    return
+                if text.startswith(self.consumed_tail):
+                    text = text[len(self.consumed_tail):]
         if self.turn_start_ms is None:
             self.turn_start_ms = t_ms
         if self.segment_closed:
             self.segments.append(self.segment)
             self.segment = ""
             self.segment_closed = False
-        before = normalize(self.turn_text())
+        before = normalize(self.suffix_text())
         self.segment = text
-        changed = normalize(self.turn_text()) != before
+        changed = normalize(self.suffix_text()) != before
         if changed:
             self.version += 1
+            self.version_t_ms = t_ms
         self._emit("asr_update", t_ms, text=text, final=bool(final), segment=self.segment,
                    turn_text=self.turn_text(), changed=changed)
         if not changed:
@@ -162,8 +195,9 @@ class TurnSession:
         self._cancel_inflight_llm(t_ms, "new_text")
         # EOT keeps the debounce (it must not fire per keystroke); tools fire immediately and the newest
         # text wins the single pending slot, so the shortlist starts one round earlier than before.
+        # Both now look at the unconsumed suffix only.
         self._eot_pending = {"version": self.version, "text": self.eot_input(), "due_ms": t_ms + self.cfg.debounce_ms}
-        self._tools_pending = {"version": self.version, "text": self.turn_text()}
+        self._tools_pending = {"version": self.version, "text": self.suffix_text()}
         self.eot_scores = None
         self.tick(t_ms)
 
@@ -203,7 +237,11 @@ class TurnSession:
             elif silence >= self.cfg.max_silence_ms:
                 self._confirm(now_ms, "max_silence")
         elif self.state == "LISTENING" and silence >= self.cfg.max_silence_ms:
-            self._confirm(now_ms, "max_silence")
+            if normalize(self.suffix_text()):
+                self._confirm(now_ms, "max_silence")
+            else:
+                # Nothing left to consume and the user has been quiet: close the whole turn (once).
+                self._maybe_finish_session(now_ms)
         for job in self._eot_jobs:
             if not job.get("timed_out") and now_ms - job["started_ms"] > self.cfg.eot_timeout_ms:
                 # Design doc: a KEV failure/timeout falls back to the max_silence rule below; the late
@@ -237,6 +275,9 @@ class TurnSession:
         return {"session_id": self.session_id, "turns": self.turn_index,
                 "t_last_word": self.t_last_word, "t_confirmed": self.t_confirmed,
                 "t_llm_start": self.t_llm_start, "t_decision": self.t_decision,
+                # t_* keep their "first time in this turn" meaning; t_last_* are the latest occurrence
+                # (one turn can now hold several decisions).
+                "t_last_llm_start": self.t_llm_start_last, "t_last_decision": self.t_decision_last,
                 "t_confirm_latency_ms": self._delta(self.t_confirmed, self.t_last_word),
                 "t_llm_start_latency_ms": self._delta(self.t_llm_start, self.t_last_word),
                 "t_decision_latency_ms": self._delta(self.t_decision, self.t_last_word),
@@ -247,6 +288,8 @@ class TurnSession:
                 "shortlist_source": self._shortlist_source,
                 "shortlist_age_ms": self._shortlist_age_ms,
                 "warm_ms": self.warm_ms,
+                "consumed_count": self.consumed_count, "consumptions": self.consumptions,
+                "t_last_consumed": self.t_last_consumed,
                 **self.counters}
 
     # ---------- text ----------
@@ -254,12 +297,20 @@ class TurnSession:
     def turn_text(self) -> str:
         return self._join(self.segments + ([self.segment] if self.segment else []))
 
+    def suffix_segments(self):
+        """Sealed-but-not-yet-consumed segments (the consumed ones can no longer change)."""
+        return self.segments[self.consumed_segments:]
+
+    def suffix_text(self) -> str:
+        """The unconsumed suffix: everything the next decision is allowed to see."""
+        return self._join(self.suffix_segments() + ([self.segment] if self.segment else []))
+
     def eot_input(self) -> str:
         if self.cfg.eot_input == "turn_text":
-            return self.turn_text()
-        if len(normalize(self.segment)) >= 4 or not self.segments:
+            return self.suffix_text()
+        if len(normalize(self.segment)) >= 4 or not self.suffix_segments():
             return self.segment
-        return self._join(self.segments[-1:] + [self.segment])
+        return self._join(self.suffix_segments()[-1:] + [self.segment])
 
     @staticmethod
     def _join(parts):
@@ -298,15 +349,19 @@ class TurnSession:
         cache = self._tools_cache or {}
         self._shortlist_source = "fresh" if self._tools_ready() else "stale"
         self._shortlist_age_ms = 0 if self._tools_ready() else now_ms - cache.get("ready_ms", now_ms)
+        # The decision only ever sees the unconsumed suffix (no cross-decision context in this PoC).
+        utterance = self.suffix_text()
         self._emit("llm_start", now_ms, speculative=bool(speculative), selected=result.get("selected", []),
-                   shortlist_source=self._shortlist_source, shortlist_age_ms=self._shortlist_age_ms)
+                   shortlist_source=self._shortlist_source, shortlist_age_ms=self._shortlist_age_ms,
+                   utterance=utterance, consumed_segments=self.consumed_segments)
         self._jobs["llm"] = {"shortlist_norm": cache.get("norm"),
                              "shortlist_selected": tuple(result.get("selected") or []),
                              "future": self._pool.submit(
-            self.decide_fn, self.turn_text(), result.get("selected", []), result.get("schemas", []),
+            self.decide_fn, utterance, result.get("selected", []), result.get("schemas", []),
             self.cfg.tool_set, self.context, native_schemas=result.get("native_schemas"),
             available_domains=result.get("domains")),
-            "version": self.version, "started_ms": now_ms, "speculative": bool(speculative), "canceled": False}
+            "version": self.version, "utterance": utterance,
+            "started_ms": now_ms, "speculative": bool(speculative), "canceled": False}
 
     def _poll(self, now_ms):
         for job in [job for job in self._eot_jobs if job["future"].done()]:
@@ -374,7 +429,7 @@ class TurnSession:
         self._emit("tools_scores", now_ms, reused=False, text=job["text"], version=job["version"],
                    newest=newest, selected=result.get("selected", []), timing=result.get("timing"), top=top)
         if self.cfg.reuse_tools_if_text_unchanged and not self._tools_ready():
-            self._tools_pending = {"version": self.version, "text": self.turn_text()}
+            self._tools_pending = {"version": self.version, "text": self.suffix_text()}
         # M4: an in-flight decision that used an older shortlist is reissued once the new one lands.
         llm_job = self._jobs["llm"]
         # 只有"入选的 top-k 真的变了"才重发：文本 lengthen 了但短名单没变时重发纯属浪费。
@@ -394,33 +449,72 @@ class TurnSession:
             return
         if self.state != "CONFIRMED":
             # Speculative result arrived early; keep it until the turn is confirmed.
-            self._llm_prepared = {"version": job["version"], "result": result}
+            self._llm_prepared = {"version": job["version"], "result": result,
+                                  "speculative": bool(job.get("speculative")), "utterance": job.get("utterance")}
             return
-        self._apply_llm(now_ms, result)
+        self._apply_llm(now_ms, result, job)
 
-    def _apply_llm(self, now_ms, result):
+    def _apply_llm(self, now_ms, result, job):
+        """A decision landed: consume the suffix it was made on and keep listening for more."""
         self.decision = result["decision"]
-        self.t_decision = now_ms
+        self.t_decision = now_ms if self.t_decision is None else self.t_decision
+        self.t_decision_last = now_ms
+        # job["version"] == self.version was checked before this call, so the text below is byte-for-byte
+        # what decide() received: sealing it cannot truncate or shift the segment.
+        consumed_text = self.suffix_text()
+        self._seal_consumed()
+        self.consumed_version = job["version"]
+        record = {"index": len(self.consumptions) + 1, "version": job["version"],
+                  "segments": self.consumed_segments, "text": consumed_text,
+                  "t_ms": now_ms, "asr_t_ms": self.version_t_ms,
+                  "speculative": bool(job.get("speculative")), "llm_ms": result.get("llm_ms"),
+                  "decision_kind": result["decision"].get("kind"),
+                  "shortlist_source": self._shortlist_source}
+        self.consumptions.append(record)
+        self.consumed_count = len(self.consumptions)
+        self.counters["consumed"] = self.consumed_count
+        self.t_last_consumed = now_ms
         self._emit("llm_decision", now_ms, decision=result["decision"], llm_ms=result.get("llm_ms"),
+                   utterance=consumed_text, consumed_index=record["index"],
+                   consumed_version=job["version"], consumed_segments=self.consumed_segments,
                    decision_head=(result.get("log_fields") or {}).get("decision_head"))
-        self._finish_turn(now_ms)
+        # `record["t_ms"]` is the same instant _emit stamps, so it is not passed twice.
+        self._emit("segment_consumed", now_ms, **{key: value for key, value in record.items() if key != "t_ms"})
+        self._to_state("LISTENING", now_ms, "consumed")
+        if self._stop_requested:
+            # Explicit stop(): consume what was left, then close the turn.
+            self._maybe_finish_session(now_ms, force=True)
+
+    def _seal_consumed(self):
+        """Seal the in-use segment into `segments` so later partials can no longer rewrite it."""
+        if self.segment:
+            self.segments.append(self.segment)
+            self.segment = ""
+        self.segment_closed = False
+        self.consumed_tail = self.segments[-1] if self.segments else None
+        self.consumed_segments = len(self.segments)
 
     # ---------- state ----------
 
     def _silence_ms(self, now_ms):
         anchors = [value for value in (self.last_change_ms, self.last_speech_end_ms,
-                                       self.speech_start_ms, self.turn_start_ms) if value is not None]
+                                       self.speech_start_ms, self.turn_start_ms,
+                                       self.t_last_consumed) if value is not None]
         return now_ms - max(anchors) if anchors else 0
 
     def _tools_ready(self):
-        return self._tools_cache is not None and self._tools_cache["norm"] == normalize(self.turn_text())
+        return self._tools_cache is not None and self._tools_cache["norm"] == normalize(self.suffix_text())
 
     def _maybe_start_llm(self, now_ms, speculative=False):
         if self.turn_done or self.state not in ("CONFIRMED", "MAYBE_DONE"):
             return
+        if not normalize(self.suffix_text()):
+            return
         if self.state == "CONFIRMED" and self._llm_prepared and self._llm_prepared["version"] == self.version:
             prepared, self._llm_prepared = self._llm_prepared, None
-            self._apply_llm(now_ms, prepared["result"])
+            job = {"version": prepared["version"], "speculative": prepared.get("speculative", False),
+                   "utterance": prepared.get("utterance"), "canceled": False}
+            self._apply_llm(now_ms, prepared["result"], job)
             return
         job = self._jobs["llm"]
         if job is not None and not job["canceled"] and job["version"] == self.version:
@@ -431,7 +525,7 @@ class TurnSession:
             usable = self.cfg.allow_stale_shortlist and self._tools_result is not None and self._tools_cache is not None
             if not usable:
                 if self.state == "CONFIRMED" and not self._tools_jobs and self._tools_pending is None:
-                    self._tools_pending = {"version": self.version, "text": self.turn_text()}
+                    self._tools_pending = {"version": self.version, "text": self.suffix_text()}
                 return
         if self.state == "MAYBE_DONE" and self._llm_prepared and self._llm_prepared["version"] == self.version:
             return
@@ -465,9 +559,39 @@ class TurnSession:
     def _confirm(self, now_ms, why):
         if self.state == "CONFIRMED":
             return
-        self.t_confirmed = now_ms
+        if not normalize(self.suffix_text()):
+            # Nothing unconsumed to decide on: never ask the LLM about an empty utterance.
+            return
+        self.t_confirmed = now_ms if self.t_confirmed is None else self.t_confirmed
         self._to_state("CONFIRMED", now_ms, why)
         self._maybe_start_llm(now_ms)
+
+    def stop(self, now_ms):
+        """Explicit stop: decide on whatever suffix is left, then close the turn."""
+        if self.turn_done:
+            return
+        self._stop_requested = True
+        self._emit("stop_requested", now_ms, text=self.suffix_text(), consumed_segments=self.consumed_segments)
+        if normalize(self.suffix_text()):
+            self._confirm(now_ms, "stop")
+        self._maybe_finish_session(now_ms, force=True)
+
+    def _maybe_finish_session(self, now_ms, force=False):
+        """Close the whole turn once there is nothing left to consume and no decision is in flight."""
+        if self.turn_done:
+            return False
+        if normalize(self.suffix_text()):
+            return False
+        if not force and not self.consumed_count:
+            # The user has not consumed anything yet: keep the turn open and wait for speech.
+            return False
+        job = self._jobs["llm"]
+        if job is not None and not job["canceled"]:
+            return False
+        if self._llm_prepared is not None and self._llm_prepared["version"] == self.version:
+            return False
+        self._finish_turn(now_ms)
+        return True
 
     def _finish_turn(self, now_ms):
         self.turn_done = True
@@ -493,6 +617,15 @@ class TurnSession:
         self.t_confirmed = None
         self.t_llm_start = None
         self.t_decision = None
+        self.t_decision_last = None
+        self.consumed_version = 0
+        self.consumed_segments = 0
+        self.consumed_tail = None
+        self.consumptions = []
+        self.consumed_count = 0
+        self.version_t_ms = None
+        self.t_last_consumed = None
+        self._stop_requested = False
         self.turn_start_ms = now_ms
         self.state = "LISTENING"
         self._jobs["llm"] = None
@@ -510,7 +643,7 @@ class TurnSession:
         self.eot_scores = None
         self.decision = None
         self.counters = {"eot_calls": 0, "eot_skipped": 0, "eot_stale": 0, "tool_calls": 0,
-                         "llm_calls": 0, "llm_wasted": 0, "n_reissue": 0}
+                         "llm_calls": 0, "llm_wasted": 0, "n_reissue": 0, "consumed": 0}
 
     # ---------- events / evidence ----------
 

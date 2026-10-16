@@ -203,7 +203,7 @@ def mic_session():
     pcm_in = Queue()                   # raw PCM frames from the browser
     pending = []                       # ASR updates awaiting the driver thread
     asr_log = []                       # every ASR update, for "save as case"
-    control = {"stop": False, "closed": False, "asr_done": False, "stop_ack": False}
+    control = {"stop": False, "closed": False, "asr_done": False, "stop_ack": False, "stop_sent": False}
     session_id = "mic-" + time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:6]
     cfg = TurnConfig()
     tool_set = {"value": cfg.tool_set}
@@ -259,6 +259,11 @@ def mic_session():
             while pending:
                 update = pending.pop(0)
                 session.on_asr(update["t_ms"], update["text"], update["final"])
+            if control["stop"] and control["asr_done"] and not control["stop_sent"]:
+                # 「停止」= 显式收尾（multi-llm spec §3.5 stop(now_ms)）。等 ASR 把最后一句冲完再收，
+                # 否则 final 文本会被丢掉：先让它进 suffix，再由 stop() 走完最后一次决策。
+                control["stop_sent"] = True
+                session.stop(now_ms())
             session.tick(now_ms())
             time.sleep(0.005)
 
