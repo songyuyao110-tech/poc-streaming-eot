@@ -221,11 +221,18 @@
     {key: 'eot_max_inflight', type: 'number', step: '1',
      hint: '同时最多几个判停在途：>1 才不会被 single-flight 饿死，越高判停覆盖率越高'},
     {key: 'reuse_tools_if_text_unchanged', type: 'checkbox',
-     hint: '最终文本归一化后与已评分的相同则复用工具短名单，不再调 KEV'}
+     hint: '最终文本归一化后与已评分的相同则复用工具短名单，不再调 KEV'},
+    {key: 'tools_max_inflight', type: 'number', step: '1',
+     hint: '同时最多几个选工具在途。实测 >1 反而更慢（p50 849→1503ms、工具调用近翻倍且挤占判停），默认 1'},
+    {key: 'allow_stale_shortlist', type: 'checkbox',
+     hint: '短名单还没回来时，允许先用本轮稍旧的一份发 LLM（回来不同再作废重发），省掉等短名单的时间'},
+    {key: 'warm_llm', type: 'checkbox',
+     hint: '本轮第一个 ASR 更新就发一次 1-token 预热请求，把模型冷启动与建连藏在用户说话期间'}
   ];
   const TURN_DEFAULTS = {eot_policy: 'margin', eot_margin: 0.2, spec_margin: 0.3, speculative_llm: true,
     eot_input: 'last_segment', confirm_silence_ms: 700, cut_wait_ms: 1500, think_wait_ms: 3000,
-    max_silence_ms: 2000, eot_timeout_ms: 900, debounce_ms: 80, eot_max_inflight: 3, reuse_tools_if_text_unchanged: true};
+    max_silence_ms: 2000, eot_timeout_ms: 900, debounce_ms: 80, eot_max_inflight: 3, reuse_tools_if_text_unchanged: true,
+    tools_max_inflight: 1, allow_stale_shortlist: true, warm_llm: true};
   function buildTurnConfig(hostId = 'turn-config') {
     const host = byId(hostId);
     for (const field of TURN_FIELDS) {

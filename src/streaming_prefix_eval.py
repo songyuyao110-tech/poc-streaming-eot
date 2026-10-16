@@ -6,6 +6,7 @@ clock, because KEV latency is one of the quantities under test).
 """
 from __future__ import annotations
 
+import os
 import argparse
 from collections import Counter, defaultdict
 import csv

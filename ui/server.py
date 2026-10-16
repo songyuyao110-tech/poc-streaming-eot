@@ -23,6 +23,7 @@ bootstrap.install()          # 上游仓库根（model_clients/gateway/registry�
 from flask import Flask, Response, jsonify, request, send_file, stream_with_context
 from simple_websocket import Server as WsServer
 from core_pipeline_run import run
+from model_clients import warm_slow_model
 
 app = Flask(__name__)
 app.json.ensure_ascii = False
@@ -111,7 +112,7 @@ def session_stream():
                       key=lambda item: item["t_ms"])
     queue = Queue()
     session_id = "ui-" + str(int(time.time() * 1000))
-    session = TurnSession(cfg, queue.put, session_id=session_id)
+    session = TurnSession(cfg, queue.put, session_id=session_id, warm_fn=warm_slow_model)
 
     def produce():
         try:
@@ -273,7 +274,8 @@ def mic_session():
                 continue
             if isinstance(message, (bytes, bytearray)):
                 if session is None:
-                    session = TurnSession(cfg, lambda event: out.put(("event", event)), session_id=session_id)
+                    session = TurnSession(cfg, lambda event: out.put(("event", event)), session_id=session_id,
+                                          warm_fn=warm_slow_model)
                     holder["session"] = session
                     register_mic_session(session_id, session, asr_log, tool_set["value"])
                     Thread(target=driver, daemon=True).start()

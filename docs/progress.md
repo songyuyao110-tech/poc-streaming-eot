@@ -295,3 +295,27 @@ A3 细节：① `导航回家` 1 次决策 / `llm_wasted=0`；② `我去买菜|
 - `docs/patches/` 导出上游 4 个提交（剔除 evidence，仅代码，1.3MB），便于对上游仓库重放
 
 **验收（从新目录跑）**：A3 9/9、A4 11/11、A5 4/4、M4 6/6、M1b PASS；UI 从 `ui/server.py` 起在 8765、页面 200；产物正确落在新仓库 `cases/`+`evidence/`。初始提交 `c9888ef`。
+
+---
+
+## 2026-10-16 · 延迟优化 M0–M4（改动 1/2/4/5）
+
+**落点**：改动 1/2 在上游仓库 `model_clients.py`（worktree 提交 `da46c65`）；改动 4/5 + 埋点在本仓库 `src/turn_session.py`；注入与开关在 `ui/server.py`、`ui/index.html`（新增 `tools_max_inflight`/`allow_stale_shortlist`/`warm_llm` 三个字段与说明）。
+
+**埋点（M0）**：`t_first_partial`、`t_tools_ready`、`llm_start.shortlist_source/shortlist_age_ms`、`llm_start` 记**第一次**发出（重发不覆盖，否则指标被推后）、`summary` 增 `n_reissue`/`warm_ms`。
+
+**实测（zh 20 句 / 150ms 韵律 / 决策 1380ms 模拟）**
+
+| 配置 | LLM 启动 p50 | 工具/句 | 判停/句 | 浪费 |
+|---|---|---|---|---|
+| 基线 | 849ms | 5.55 | 13.35 | 0 |
+| 只开改动 4（并发 3） | 1503ms | 10.75 | 7.45 | 0 |
+| 改动 5（重发看文本） | 531ms | 5.60 | — | 15 |
+| **改动 5 + 重发收敛 top-k（最终默认）** | **501ms** | 5.90 | — | **5** |
+
+- **改动 4 的并发有害 → 撤销**（默认 `tools_max_inflight=1`）：同一条 KEV 服务被工具调用挤占，判停调用从 13.35 掉到 7.45/句，p50 反而 +654ms。保留"工具去 debounce"。
+- **改动 5 有效**：-41% p50；重发条件收敛到 top-k 变化后浪费从 15 降到 5。
+- 改动 1/2 的收益在 LLM 侧：连接复用轻量端点实测省 68ms/次；预热把 0.8–1.3s 的冷启动移到用户说话期间。完整 completion 上被网关方差掩盖（1-token 请求 1.0–2.9s）。
+- p90 三格恒为 1504ms → 长尾不在编排侧。
+
+**回归**：A3 9/9、A4 11/11、A5 4/4、M4 6/6、M1b PASS。

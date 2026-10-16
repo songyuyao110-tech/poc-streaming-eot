@@ -47,6 +47,13 @@ class TurnConfig:
     # and prefixes stop being judged at all (measured at 150 ms/prefix).
     debounce_ms: int = 80
     reuse_tools_if_text_unchanged: bool = True
+    # M3/M4 latency work: tools run concurrently (single-flight starves the newest text) and fire
+    # without debounce, so the shortlist is usually ready before the EOT verdict lands; if it is not,
+    # the decision may start on a slightly older shortlist and is reissued once it changes.
+    tools_max_inflight: int = 1        # measured: concurrency does NOT help (see spec 的矩阵)
+    allow_stale_shortlist: bool = True
+    shortlist_reissue: bool = True
+    warm_llm: bool = True               # one tiny completion on the first partial (hides cold start)
     tool_set: str = "navigation"        # navigation|multidomain
 
     @classmethod
@@ -61,16 +68,17 @@ class TurnConfig:
 class TurnSession:
     def __init__(self, cfg: TurnConfig, on_event, *, clock=None, eot_fn=score_eot,
                  select_tools_fn=select_tools, decide_fn=decide, session_id=None,
-                 evidence_root=EVIDENCE_ROOT):
+                 evidence_root=EVIDENCE_ROOT, warm_fn=None):
         self.cfg = cfg
         self.on_event = on_event
         self.clock = clock or (lambda: time.monotonic() * 1000.0)
         self.eot_fn = eot_fn
         self.select_tools_fn = select_tools_fn
         self.decide_fn = decide_fn
+        self.warm_fn = warm_fn
         self.session_id = session_id or ("s-" + str(int(time.time() * 1000)))
         self.evidence_root = Path(evidence_root) if evidence_root else None
-        self._pool = ThreadPoolExecutor(max_workers=4 + max(0, cfg.eot_max_inflight - 1))
+        self._pool = ThreadPoolExecutor(max_workers=4 + max(0, max(cfg.eot_max_inflight, cfg.tools_max_inflight) - 1))
         self.context = {"home_address_configured": True, "company_address_configured": True, "synthetic": True}
         self.events = []
         self.turns = []
@@ -90,15 +98,24 @@ class TurnSession:
         self.turn_done = False
         self.turn_index = 1
         self.segment_closed = False
-        self._jobs = {"tools": None, "llm": None}
+        self._jobs = {"llm": None}
         self._eot_jobs = []
+        self._tools_jobs = []           # M3: concurrent shortlist calls (was a single-flight slot)
         self._eot_pending = None
         self._tools_pending = None
         self._tools_cache = None
         self._tools_result = None
         self._llm_prepared = None
+        self.t_tools_ready = None
+        self.t_first_partial = None
+        self.t_llm_start_last = None
+        self.warm_ms = None
+        self._warmed = False
+        self._warm_future = None
+        self._shortlist_source = None
+        self._shortlist_age_ms = None
         self.counters = {"eot_calls": 0, "eot_skipped": 0, "eot_stale": 0, "tool_calls": 0,
-                         "llm_calls": 0, "llm_wasted": 0}
+                         "llm_calls": 0, "llm_wasted": 0, "n_reissue": 0}
         self.eot_scores = None
         self.decision = None
 
@@ -137,10 +154,16 @@ class TurnSession:
             self._to_listening(t_ms, "new_text")
         self.last_change_ms = t_ms
         self.t_last_word = t_ms
+        if self.t_first_partial is None:
+            self.t_first_partial = t_ms
+            if self.cfg.warm_llm and self.warm_fn is not None and not self._warmed:
+                self._warmed = True
+                self._warm_future = self._pool.submit(self.warm_fn)
         self._cancel_inflight_llm(t_ms, "new_text")
+        # EOT keeps the debounce (it must not fire per keystroke); tools fire immediately and the newest
+        # text wins the single pending slot, so the shortlist starts one round earlier than before.
         self._eot_pending = {"version": self.version, "text": self.eot_input(), "due_ms": t_ms + self.cfg.debounce_ms}
-        self._tools_pending = {"version": self.version, "text": self.turn_text(),
-                               "due_ms": t_ms + self.cfg.debounce_ms}
+        self._tools_pending = {"version": self.version, "text": self.turn_text()}
         self.eot_scores = None
         self.tick(t_ms)
 
@@ -192,8 +215,14 @@ class TurnSession:
                 and now_ms >= self._eot_pending["due_ms"]:
             pending, self._eot_pending = self._eot_pending, None
             self._fire_eot(now_ms, pending)
-        if not self._jobs["tools"] and self._tools_pending and now_ms >= self._tools_pending["due_ms"]:
+        while len(self._tools_jobs) < max(1, self.cfg.tools_max_inflight) and self._tools_pending:
             self._fire_tools(now_ms)
+        if self._warm_future is not None and self._warm_future.done() and self.warm_ms is None:
+            try:
+                self.warm_ms = (self._warm_future.result() or {}).get("warm_ms")
+            except Exception:
+                self.warm_ms = None
+            self._warm_future = None
         if self.state == "CONFIRMED":
             self._maybe_start_llm(now_ms)
 
@@ -201,7 +230,7 @@ class TurnSession:
         self.tick(now_ms)
 
     def idle(self) -> bool:
-        return (not any(self._jobs.values()) and not self._eot_jobs
+        return (not any(self._jobs.values()) and not self._eot_jobs and not self._tools_jobs
                 and not self._eot_pending and not self._tools_pending)
 
     def summary(self) -> dict:
@@ -211,6 +240,13 @@ class TurnSession:
                 "t_confirm_latency_ms": self._delta(self.t_confirmed, self.t_last_word),
                 "t_llm_start_latency_ms": self._delta(self.t_llm_start, self.t_last_word),
                 "t_decision_latency_ms": self._delta(self.t_decision, self.t_last_word),
+                # M0 instrumentation: where the "last word → LLM request" time actually went.
+                "t_first_partial": self.t_first_partial,
+                "t_tools_ready": self.t_tools_ready,
+                "t_first_partial_to_last_word_ms": self._delta(self.t_last_word, self.t_first_partial),
+                "shortlist_source": self._shortlist_source,
+                "shortlist_age_ms": self._shortlist_age_ms,
+                "warm_ms": self.warm_ms,
                 **self.counters}
 
     # ---------- text ----------
@@ -248,15 +284,25 @@ class TurnSession:
         pending, self._tools_pending = self._tools_pending, None
         self.counters["tool_calls"] += 1
         self._emit("tools_start", now_ms, text=pending["text"], version=pending["version"])
-        self._jobs["tools"] = {"future": self._pool.submit(self.select_tools_fn, pending["text"], self.cfg.tool_set, self.context),
-                               "version": pending["version"], "started_ms": now_ms, "text": pending["text"]}
+        self._tools_jobs.append(
+            {"future": self._pool.submit(self.select_tools_fn, pending["text"], self.cfg.tool_set, self.context),
+             "version": pending["version"], "started_ms": now_ms, "text": pending["text"]})
 
     def _start_llm(self, now_ms, speculative):
         self.counters["llm_calls"] += 1
-        self.t_llm_start = now_ms
+        # 第一次发出才是"启动"时刻；短名单变化后的重发不覆盖它（否则指标被推后，看起来更慢）
+        if self.t_llm_start is None:
+            self.t_llm_start = now_ms
+        self.t_llm_start_last = now_ms
         result = self._tools_result or {}
-        self._emit("llm_start", now_ms, speculative=bool(speculative), selected=result.get("selected", []))
-        self._jobs["llm"] = {"future": self._pool.submit(
+        cache = self._tools_cache or {}
+        self._shortlist_source = "fresh" if self._tools_ready() else "stale"
+        self._shortlist_age_ms = 0 if self._tools_ready() else now_ms - cache.get("ready_ms", now_ms)
+        self._emit("llm_start", now_ms, speculative=bool(speculative), selected=result.get("selected", []),
+                   shortlist_source=self._shortlist_source, shortlist_age_ms=self._shortlist_age_ms)
+        self._jobs["llm"] = {"shortlist_norm": cache.get("norm"),
+                             "shortlist_selected": tuple(result.get("selected") or []),
+                             "future": self._pool.submit(
             self.decide_fn, self.turn_text(), result.get("selected", []), result.get("schemas", []),
             self.cfg.tool_set, self.context, native_schemas=result.get("native_schemas"),
             available_domains=result.get("domains")),
@@ -271,18 +317,23 @@ class TurnSession:
                 self._emit("error", now_ms, stage="eot", error_type=type(error).__name__, error=str(error))
                 continue
             self._on_eot_result(now_ms, job, result)
-        for kind in ("tools", "llm"):
-            job = self._jobs[kind]
-            if job is None or not job["future"].done():
-                continue
-            self._jobs[kind] = None
+        for job in [job for job in self._tools_jobs if job["future"].done()]:
+            self._tools_jobs.remove(job)
             try:
                 result = job["future"].result()
             except Exception as error:  # PoC: surface, do not retry
-                self._emit("error", now_ms, stage=kind, error_type=type(error).__name__, error=str(error))
+                self._emit("error", now_ms, stage="tools", error_type=type(error).__name__, error=str(error))
                 continue
-            handler = {"tools": self._on_tools_result, "llm": self._on_llm_result}[kind]
-            handler(now_ms, job, result)
+            self._on_tools_result(now_ms, job, result)
+        job = self._jobs["llm"]
+        if job is not None and job["future"].done():
+            self._jobs["llm"] = None
+            try:
+                result = job["future"].result()
+            except Exception as error:  # PoC: surface, do not retry
+                self._emit("error", now_ms, stage="llm", error_type=type(error).__name__, error=str(error))
+            else:
+                self._on_llm_result(now_ms, job, result)
 
     def _on_eot_result(self, now_ms, job, result):
         stale = job["version"] != self.version
@@ -311,15 +362,27 @@ class TurnSession:
         self._to_state("CUT_OFF_WAIT" if label == "cut" else "THINK_WAIT", now_ms, "eot_" + label)
 
     def _on_tools_result(self, now_ms, job, result):
-        self._tools_cache = {"norm": normalize(job["text"]), "text": job["text"], "version": job["version"]}
-        self._tools_result = result
+        newest = self._tools_cache is None or job["version"] >= self._tools_cache["version"]
+        if newest:
+            self._tools_cache = {"norm": normalize(job["text"]), "text": job["text"],
+                                 "version": job["version"], "ready_ms": now_ms}
+            self._tools_result = result
+            self.t_tools_ready = now_ms
         scores = result.get("scores") or {}
         top = [{"name": name.replace("tool:", ""), "score": value} for name, value in
                sorted(scores.items(), key=lambda item: (-item[1], item[0]))[:3]]
-        self._emit("tools_scores", now_ms, reused=False, text=job["text"],
-                   selected=result.get("selected", []), timing=result.get("timing"), top=top)
+        self._emit("tools_scores", now_ms, reused=False, text=job["text"], version=job["version"],
+                   newest=newest, selected=result.get("selected", []), timing=result.get("timing"), top=top)
         if self.cfg.reuse_tools_if_text_unchanged and not self._tools_ready():
-            self._tools_pending = {"version": self.version, "text": self.turn_text(), "due_ms": now_ms}
+            self._tools_pending = {"version": self.version, "text": self.turn_text()}
+        # M4: an in-flight decision that used an older shortlist is reissued once the new one lands.
+        llm_job = self._jobs["llm"]
+        # 只有"入选的 top-k 真的变了"才重发：文本 lengthen 了但短名单没变时重发纯属浪费。
+        changed = set(result.get("selected") or []) != set(llm_job.get("shortlist_selected") or []) if llm_job else False
+        if (newest and self.cfg.shortlist_reissue and changed and llm_job is not None and not llm_job["canceled"]
+                and llm_job["version"] == self.version and self.state in ("MAYBE_DONE", "CONFIRMED")):
+            self._cancel_inflight_llm(now_ms, "shortlist_changed")
+            self.counters["n_reissue"] += 1
         self._maybe_start_llm(now_ms, speculative=self.cfg.speculative_llm and self.state == "MAYBE_DONE")
 
     def _on_llm_result(self, now_ms, job, result):
@@ -363,9 +426,13 @@ class TurnSession:
         if job is not None and not job["canceled"] and job["version"] == self.version:
             return
         if not self._tools_ready():
-            if self.state == "CONFIRMED" and not self._jobs["tools"] and self._tools_pending is None:
-                self._tools_pending = {"version": self.version, "text": self.turn_text(), "due_ms": now_ms}
-            return
+            # M4: a shortlist from this turn is good enough to start with (it is reissued if it changes);
+            # only a turn with no shortlist at all has to wait.
+            usable = self.cfg.allow_stale_shortlist and self._tools_result is not None and self._tools_cache is not None
+            if not usable:
+                if self.state == "CONFIRMED" and not self._tools_jobs and self._tools_pending is None:
+                    self._tools_pending = {"version": self.version, "text": self.turn_text()}
+                return
         if self.state == "MAYBE_DONE" and self._llm_prepared and self._llm_prepared["version"] == self.version:
             return
         if self.state == "MAYBE_DONE" and not speculative:
@@ -429,17 +496,21 @@ class TurnSession:
         self.turn_start_ms = now_ms
         self.state = "LISTENING"
         self._jobs["llm"] = None
-        self._jobs["tools"] = None
+        self._tools_jobs = []
         self._eot_jobs = []
         self._eot_pending = None
         self._tools_pending = None
         self._tools_cache = None
         self._tools_result = None
         self._llm_prepared = None
+        self.t_tools_ready = None
+        self.t_llm_start_last = None
+        self._shortlist_source = None
+        self._shortlist_age_ms = None
         self.eot_scores = None
         self.decision = None
         self.counters = {"eot_calls": 0, "eot_skipped": 0, "eot_stale": 0, "tool_calls": 0,
-                         "llm_calls": 0, "llm_wasted": 0}
+                         "llm_calls": 0, "llm_wasted": 0, "n_reissue": 0}
 
     # ---------- events / evidence ----------
 
