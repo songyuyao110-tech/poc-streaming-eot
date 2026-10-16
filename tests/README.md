@@ -3,15 +3,20 @@
 沿用旧文件名（报告与进度日志里引用了这些名字），只做了目录归置。全部脚本可独立运行，
 路径通过 `src/bootstrap.py` 解析（`POC_UPSTREAM` 覆盖上游仓库位置）。
 
-## 验收（需 UI 在 `PORT` 上运行）
+## 验收
 
 | 脚本 | 验证内容 | 期望 |
 |---|---|---|
-| `poc-streaming-a3.py PORT` | 脚本化 ASR 回放 → SSE：判停/状态迁移/四类脚本用例 | 9/9 |
+| `poc-streaming-c1c4.py` | 多轮消费核心：单/双段消费、投机作废、重发去重（虚拟时钟 + 注入桩） | 36/36 |
+| `poc-streaming-s1s3-core-score.py` | S1–S3：core_score（242/17）两阶段召回、短名单家族、一轮一次决策、执行保持 mock（需 KEV + LLM） | 21/21 |
+| `poc-streaming-a3.py PORT` | 脚本化 ASR 回放 → SSE：判停/状态迁移/四类脚本用例（需 UI 在跑） | 10/10 |
 | `poc-streaming-a4.py PORT [--with-reuse]` | 停顿分段、工具复用、barge-in | 8/8（+reuse 11/11） |
 | `poc-streaming-a5.py PORT` | 投机 LLM 被用户继续说推翻 → 作废与浪费记账 | 4/4 |
 | `poc-streaming-mic-ws.py` | 真 wav 按 20ms 推 WebSocket → ASR → 判停 → 决策 → 用例落盘 | 6/6 |
 | `poc-streaming-m1b.py [wav]` | 文件流式 ASR 端到端（2 partial + 1 final + 1 决策） | PASS |
+
+注：`a3.py` 的 A3-1「无浪费 LLM」期望已因工具集更换改写为「浪费只来自 M4 shortlist 重发（≤1）」，
+原因写在脚本注释里（core_score 两阶段短名单比旧的 14 工具慢，`allow_stale_shortlist` 会先按旧短名单发起决策）。
 
 ## 探针 / 历史实验
 

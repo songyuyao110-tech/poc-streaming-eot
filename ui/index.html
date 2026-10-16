@@ -106,10 +106,8 @@
   <p class="muted">文本 → KEV 工具评分 → top-k 候选 → LLM 决策 → mock 执行展示。阶段完成即更新；ASR 为文本占位，不调用真实工具或真车。</p>
   <form id="query-form">
     <input id="utterance" aria-label="输入一句 query" placeholder="输入一句 query，例如：导航回家" value="导航回家" required autofocus>
-    <select id="tool-set" aria-label="工具集模式">
-      <option value="navigation">navigation（14导航工具）</option>
-      <option value="multidomain" selected>multidomain（200工具/两阶段）</option>
-    </select>
+    <span id="tool-set-label" class="muted" title="PoC 唯一工具集：两阶段 KEV 选工具，242 tools / 17 domains">core_score · 242</span>
+    <input id="tool-set" type="hidden" value="core_score">
     <select id="mode" aria-label="运行模式">
       <option value="single">单句（一次决策）</option>
       <option value="stream">流式模拟（KEV 判停）</option>
@@ -733,7 +731,7 @@
     byId('llm-time').textContent = ms(data.decision_latency_ms);
     byId('e2e-time').textContent = ms(data.latency_ms);
     byId('score-info').textContent = `模型 ${data.kev_model || 'kev-latest'} · 阈值 ${data.tool_threshold ?? 0.5} · top-k ${data.top_k ?? 3}`;
-    byId('stage-info').hidden = data.tool_set !== 'multidomain';
+    byId('stage-info').hidden = data.kev_stage1_ms == null && data.kev_stage2_ms == null;
     byId('stage-info').textContent = `阶段1 ${ms(data.kev_stage1_ms)} · 阶段2 ${ms(data.kev_stage2_ms)} · 召回域 ${(data.recalled_domains || []).map(domain => `${domain.name} ${Number(domain.score).toFixed(4)}`).join('、') || '—'} · 已评分工具 ${data.scored_tool_count ?? '—'}`;
     const selected = new Set(data.selected_tools || []);
     const scores = byId('scores'); scores.replaceChildren();

@@ -1,0 +1,70 @@
+[
+  {
+    "name": "adas",
+    "description": "adas 域车载工具，共 3 个：car_adas_control（启用或取消智能驾驶辅助功能）；car_adas_cruiseSpeed（设置智驾巡航速度）；car_adas_cruiseTimeDistance（设置智驾跟车距离）"
+  },
+  {
+    "name": "alipay",
+    "description": "alipay 域车载工具，共 5 个：alipay_login（支付宝账号一键登录授权）；alipay_miniapp_control（支付宝小程序启动、关闭或页面直达）；alipay_order（支付宝点单服务：唤起点单小程序并进行点单操作）；alipay_parking（支付宝停车缴费：打开停车缴费小程序或查询停车费用/时长）；alipay_query（支付宝信息查询：查询支付结果、点单目的地、收货地址等）"
+  },
+  {
+    "name": "camera",
+    "description": "camera 域车载工具，共 5 个：camera_app_control（打开相机应用或跳转到相机功能页面）；camera_capture（调起车内相机进行拍照）；camera_preview（调起车外摄像头并预览摄像头画面）；camera_setting（设置相机拍照倒计时）；dashcam_control（行车记录仪开关控制与录制状态查询）"
+  },
+  {
+    "name": "energy",
+    "description": "energy 域车载工具，共 14 个：energy_charge_port_cover_control（控制充电口盖开关）；energy_lfp_battery_calibration（响应LFP电池校准请求）；energy_navi_trigger_battery_preheat（导航目的地触发电池预热）；energy_query_charge_port_status（查询充电口盖当前开合状态）；energy_query_charging_info（查询当前充电状态和充电信息）；energy_query_consumption_distribution（查询车辆能耗分布详情）；energy_query_max_soc_limit（查询当前最大SOC充电上限设置）；energy_query_trip_info（查询当前行程能耗和里程信息）；energy_set_eco_switch（设置"
+  },
+  {
+    "name": "fragrance",
+    "description": "fragrance 域车载工具，共 6 个：car_frag_change_type（切换香氛类型）；car_frag_conc（设置香氛浓度模式）；car_frag_delaytime（设置香氛定时关闭时间）；car_frag_level（设置香氛浓度等级）；car_frag_switch（控制香氛系统开关）；car_frag_type（设置香氛香型）"
+  },
+  {
+    "name": "hvac",
+    "description": "hvac 域车载工具，共 10 个：car_hav_after_defrost（控制后挡风玻璃除雾除霜开关）；car_hav_auto_on（开启或关闭自动空调模式）；car_hav_auto_speed（设置自动空调风量档位）；car_hav_fan_direction（设置空调吹风模式（吹面/吹脚/吹窗及组合））；car_hav_front_defrost（控制前挡风玻璃除雾除霜开关）；car_hav_power_on（开启或关闭手动空调）；car_hav_recirc_on（设置空调空气循环模式（内循环/外循环））；car_hav_speed（设置空调手动风量档位和区域）；car_hav_steering_wheel_heat（控制方向盘加热开启或关闭）；car_hav_temperature（调整空调温度，支持不同区域，范围16-28度）"
+  },
+  {
+    "name": "media_audio",
+    "description": "media_audio 域车载工具，共 11 个：audio_adjust（设置播放模式、音质、画质、倍速、音效、跳过片头片尾、排序等参数）；audio_app_control（打开/关闭媒体应用或跳转到指定页面）；audio_download（下载/离线管理：下载当前或指定媒体内容供离线播放）；audio_favorite（收藏或取消收藏当前正在播放的媒体项）；audio_play_content（搜索并直接播放指定的音乐、有声书、短视频或K歌内容）；audio_playback_control（控制音乐/有声书/短视频的播放，包括播放、暂停、停止、切曲、快进快退、跳转进度）；audio_playlist（歌单管理：创建歌单、添加/移除歌曲到歌单、收藏/取消收藏歌单）；audio_query（查询当前音频播放信息和播放状态）；audio_search（搜索音乐/有声书/短视频/播客内容，"
+  },
+  {
+    "name": "media_radio",
+    "description": "media_radio 域车载工具，共 3 个：radio_play_content（播放在线电台内容，按节目名、城市、类型等播放）；radio_query（查询电台信息：电台列表、节目单、收听历史、当前播放）；radio_tuner（车载收音机硬件调谐：FM/AM切换、手动调频、自动搜台、频道收藏）"
+  },
+  {
+    "name": "media_short_video",
+    "description": "media_short_video 域车载工具，共 6 个：short_video_danmaku（短视频弹幕交互：开启/关闭弹幕、发送弹幕）；short_video_interact（短视频社交互动：点赞、收藏、投币、关注）；short_video_listen_mode（短视频听视频模式控制）；short_video_login（短视频应用登录/登出/查询登录状态）；short_video_miniwindow（短视频小窗播放控制）；short_video_recommend（获取短视频推荐内容列表或推荐流入口，不直接播放指定内容）"
+  },
+  {
+    "name": "media_video",
+    "description": "media_video 域车载工具，共 13 个：video_app_control（打开/关闭长视频应用或跳转指定页面）；video_danmaku（长视频弹幕交互：开启/关闭弹幕、发送弹幕）；video_download（长视频下载/离线管理）；video_favorite（收藏或取消收藏当前长视频）；video_fullscreen（霸屏播放控制：进入/退出霸屏模式，设置画面布局（仅多联屏车型支持））；video_interact（长视频社交互动：点赞、收藏、投币、关注）；video_play_content（搜索并播放长视频内容，支持按片名/演员/导演/类型/年代等，支持指定季数集数）；video_playback_control（长视频播控：播放、暂停、停止、上下集、快进快退、跳转进度）；video_query（查询当前视频播放信息和播放状态）；video_recommend（获"
+  },
+  {
+    "name": "navigation",
+    "description": "navigation 域车载工具，共 22 个：car_nav_waypointIndexQuery（查询当前途经点序号）；car_nav_waypointRemainDist（查询到下一途经点的剩余距离）；car_nav_waypointRemainRange（查询途经点剩余个数）；car_nav_waypointRemainTime（查询到下一途经点的剩余时间）；car_navi_add_address（添加新地址到常用地址）；car_navi_add_waypoint（在导航路线中添加途经点）；car_navi_along_search（在导航路线沿途搜索兴趣点）；car_navi_around_search（在当前位置附近搜索兴趣点）；car_navi_cancel（取消当前导航）；car_navi_charging_info（搜索附近充电站信息）；等"
+  },
+  {
+    "name": "phone",
+    "description": "phone 域车载工具，共 3 个：car_call_app_func_jump（跳转到电话应用指定功能页面）；car_call_calling_prop（查询当前通话状态信息）；car_call_control（控制电话拨号、接听、挂断、免提操作）"
+  },
+  {
+    "name": "seat",
+    "description": "seat 域车载工具，共 18 个：car_seat_profile_preference（保存或调用座椅记忆位置偏好）；car_seat_temperature（控制座椅加热温度等级）；car_seat_ventilation（控制座椅通风等级）；seat_armrest_heating_linked（控制扶手加热联动座椅加热功能）；seat_easy_entry_control（控制座椅方便进出功能开关）；seat_headrest_heating_linked（控制头枕加热联动座椅加热功能）；seat_heating_balance_control（控制座椅加热平衡模式）；seat_heating_control（控制座椅加热开关和等级）；seat_lumbar_10x10_control（控制座椅腰部支撑10x10方阵调节）；seat_lumbar_direction_contro"
+  },
+  {
+    "name": "sound",
+    "description": "sound 域车载工具，共 21 个：burmester_4d_seat_control（控制柏林之声4D座椅联动音效）；burmester_bass_effect_control（控制柏林之声低音特效模式）；burmester_equalizer_control（控制柏林之声均衡器设置）；burmester_follow_music_control（控制柏林之声随音悦动功能）；burmester_preset_effect_control（控制柏林之声预设音效模式）；burmester_sound_zone_control（控制柏林之声音响区域设置）；burmester_soundstage_control（控制柏林之声声场聚焦模式）；car_sound_adas_volume（设置智驾提示音量）；car_sound_call_mix（设置通话混音功能开关）；car_sound_call"
+  },
+  {
+    "name": "system",
+    "description": "system 域车载工具，共 7 个：car_app_open（打开车载应用程序）；car_appstore_app_func_jump（跳转到应用商店指定页面）；car_csd_brightness（设置中控屏幕亮度）；car_dim_brightness（设置氛围调光亮度）；car_psd_brightness（设置副驾屏幕亮度）；car_rfd_brightness（设置后排屏幕亮度（右侧））；car_rsd_brightness（设置后排屏幕亮度（左侧））"
+  },
+  {
+    "name": "vehicle_control",
+    "description": "vehicle_control 域车载工具，共 94 个：car_ambience_light_effect_dynamic_alighting（控制氛围灯下车警告效果开关）；car_ambience_light_effect_dynamic_hvac（控制氛围灯空调联动效果开关）；car_ambience_light_effect_dynamic_multicolore（控制氛围灯动态多色彩效果开关）；car_ambience_light_effect_dynamic_welcome（控制氛围灯欢迎效果开关）；car_ambience_light_effect_follow_music（控制氛围灯随音悦动效果开关）；car_ambience_light_effect_operational_feedback（控制氛围灯操作反馈效果开关）；car_ambience_light_effect"
+  },
+  {
+    "name": "weather",
+    "description": "weather 域车载工具，共 1 个：car_weather_info（查询天气预报详情（未来多天/分时预报））"
+  }
+]

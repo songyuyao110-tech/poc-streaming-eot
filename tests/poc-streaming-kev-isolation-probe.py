@@ -48,20 +48,20 @@ if __name__ == "__main__":
         alone_eot.append(eot_via(8010)[0])
     for _ in range(N):
         started = time.perf_counter()
-        select_tools("导航回家", "navigation", CTX)
+        select_tools("导航回家", "core_score", CTX)
         alone_tools.append((time.perf_counter() - started) * 1000)
     shared_eot, separate_eot, tools_under_load = [], [], []
     for _ in range(N):
         with ThreadPoolExecutor(max_workers=2) as pool:
             eot = pool.submit(eot_via, 8009)          # old setup: both on the same tunnel
-            tools = pool.submit(select_tools, "导航回家", "navigation", CTX)
+            tools = pool.submit(select_tools, "导航回家", "core_score", CTX)
             eot_ms, _ = eot.result()
             tools.result()
             shared_eot.append(eot_ms)
     for _ in range(N):
         with ThreadPoolExecutor(max_workers=2) as pool:
             eot = pool.submit(eot_via, 8010)          # new setup: EOT on its own tunnel
-            tools = pool.submit(select_tools, "导航回家", "navigation", CTX)
+            tools = pool.submit(select_tools, "导航回家", "core_score", CTX)
             eot_ms, _ = eot.result()
             started = time.perf_counter()
             tools.result()

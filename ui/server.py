@@ -18,11 +18,11 @@ MIC_FRAME_MS = 20
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(SRC))
 import bootstrap
-bootstrap.install()          # 上游仓库根（model_clients/gateway/registry）
+bootstrap.install()          # 上游仓库根（model_clients/registry）
 
 from flask import Flask, Response, jsonify, request, send_file, stream_with_context
 from simple_websocket import Server as WsServer
-from core_pipeline_run import run
+from core_pipeline_run import TOOL_SET, run
 from model_clients import warm_slow_model
 
 app = Flask(__name__)
@@ -37,7 +37,8 @@ def index():
 @app.post("/api/run")
 def run_query():
     body = request.get_json()
-    result = run(body["utterance"], tool_set=body.get("tool_set", "navigation"))
+    # The PoC serves exactly one tool set; a supplied `tool_set` is ignored, never honoured.
+    result = run(body["utterance"])
     return jsonify(result), 200 if result["outcome"] == "PASS" else 502
 
 
@@ -45,7 +46,6 @@ def run_query():
 def stream_query():
     body = request.get_json()
     utterance = body["utterance"]
-    tool_set = body.get("tool_set", "navigation")
     queue = Queue()
     began = time.monotonic()
 
@@ -55,7 +55,7 @@ def stream_query():
     def produce():
         try:
             # Callbacks fire at the real KEV/LLM boundaries, not after run() returns.
-            result = run(utterance, on_stage=emit, tool_set=tool_set)
+            result = run(utterance, on_stage=emit)
             if result["outcome"] != "PASS":
                 emit("error", result)
                 return
@@ -75,7 +75,7 @@ def stream_query():
             emit("error", {"outcome": "FAIL", "error_type": type(error).__name__, "error": "流式请求未能完成，请查看服务日志；未执行真实工具。"})
 
     def events():
-        emit("accepted", {"utterance": utterance, "tool_set": tool_set, "asr": "text_standin", "mock_only": True})
+        emit("accepted", {"utterance": utterance, "tool_set": TOOL_SET, "asr": "text_standin", "mock_only": True})
         # One producer bridges the synchronous stage callbacks into this SSE response.
         Thread(target=produce, daemon=True).start()
         while True:
@@ -103,8 +103,6 @@ def session_stream():
         cfg = TurnConfig.from_dict(config)
     except (TypeError, ValueError) as error:
         return jsonify({"error": type(error).__name__ + ": " + str(error)}), 400
-    if cfg.tool_set not in {"navigation", "multidomain"}:
-        return jsonify({"error": "Unknown tool_set"}), 400
     timeline = sorted([{"t_ms": item["t_ms"], "type": "asr", "text": item["text"],
                         "final": item.get("final", False)} for item in updates] +
                       [{"t_ms": item["t_ms"], "type": "vad", "vad_kind": item["kind"]}
@@ -292,10 +290,14 @@ def mic_session():
                 overrides = dict(command.get("config") or {})
                 if command.get("tool_set"):
                     overrides["tool_set"] = command["tool_set"]
-                cfg = TurnConfig.from_dict(overrides)
-                tool_set["value"] = cfg.tool_set
-                holder["tool_set"] = cfg.tool_set
-                out.put(("config", {"config": {key: value for key, value in cfg.__dict__.items()}}))
+                try:
+                    cfg = TurnConfig.from_dict(overrides)
+                except (TypeError, ValueError) as error:
+                    out.put(("error", {"stage": "config", "error_type": type(error).__name__, "error": str(error)}))
+                else:
+                    tool_set["value"] = cfg.tool_set
+                    holder["tool_set"] = cfg.tool_set
+                    out.put(("config", {"config": {key: value for key, value in cfg.__dict__.items()}}))
             elif command.get("cmd") == "stop":
                 control["stop"] = True
                 out.put(("stopping", {"asr_done": control["asr_done"]}))

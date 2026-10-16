@@ -1,7 +1,8 @@
 """PoC 运行时路径装配。
 
-PoC 代码依赖上游 navi-dual-system 仓库的 model_clients.py / gateway.py / registry.py / tools.yaml /
-eval/fixtures/*（那些属于另一个项目，不复制进本仓库）。这里把「本仓库 src/」和「上游仓库根」
+PoC 代码依赖上游 navi-dual-system 仓库的 model_clients.py / registry.py / decisions.py /
+eval/fixtures/*（那些属于另一个项目，不复制进本仓库；工具注册表本身是本仓 fixtures/ 里的
+core_score 那套，不再读上游 tools.yaml）。这里把「本仓库 src/」和「上游仓库根」
 注入 sys.path，并对外暴露两个根：
 
     UPSTREAM_ROOT = install()      # 上游仓库根：只读地用它的代码与 fixtures

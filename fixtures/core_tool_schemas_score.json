@@ -1,0 +1,6193 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "car_adas_control",
+      "description": "启用或取消智能驾驶辅助功能",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "enable",
+              "disable"
+            ]
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "domain": "adas"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_adas_cruiseSpeed",
+      "description": "设置智驾巡航速度",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "speed": {
+            "type": "number",
+            "description": "巡航速度"
+          }
+        },
+        "required": [
+          "speed"
+        ]
+      },
+      "domain": "adas"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_adas_cruiseTimeDistance",
+      "description": "设置智驾跟车距离",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "distance": {
+            "type": "string",
+            "enum": [
+              "near",
+              "medium",
+              "far"
+            ]
+          }
+        },
+        "required": [
+          "distance"
+        ]
+      },
+      "domain": "adas"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "alipay_miniapp_control",
+      "description": "支付宝小程序启动、关闭或页面直达",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "launch",
+              "close"
+            ],
+            "description": "操作类型：启动/关闭小程序"
+          },
+          "appId": {
+            "type": "string",
+            "description": "小程序应用标识"
+          },
+          "appName": {
+            "type": "string",
+            "description": "小程序应用名称"
+          },
+          "page": {
+            "type": "string",
+            "description": "页面路径"
+          },
+          "query": {
+            "type": "string",
+            "description": "页面参数"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "domain": "alipay"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "alipay_parking",
+      "description": "支付宝停车缴费：打开停车缴费小程序或查询停车费用/时长",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "open",
+              "query"
+            ],
+            "description": "操作类型：打开停车缴费/查询停车信息"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "domain": "alipay"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "alipay_order",
+      "description": "支付宝点单服务：唤起点单小程序并进行点单操作",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "launch",
+              "select_item",
+              "change_spec",
+              "select_store",
+              "add_to_cart",
+              "select_coupon",
+              "confirm",
+              "get_pickup_code",
+              "one_click_order"
+            ],
+            "description": "点单操作类型"
+          },
+          "appId": {
+            "type": "string",
+            "description": "点单小程序appId"
+          },
+          "itemName": {
+            "type": "string",
+            "description": "商品名称"
+          },
+          "spec": {
+            "type": "string",
+            "description": "规格信息"
+          },
+          "storeName": {
+            "type": "string",
+            "description": "门店名称"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "domain": "alipay"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "alipay_query",
+      "description": "支付宝信息查询：查询支付结果、点单目的地、收货地址等",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "queryType": {
+            "type": "string",
+            "enum": [
+              "payment_result",
+              "order_destination",
+              "address"
+            ],
+            "description": "查询类型"
+          }
+        },
+        "required": [
+          "queryType"
+        ]
+      },
+      "domain": "alipay"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "alipay_login",
+      "description": "支付宝账号一键登录授权",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "appId": {
+            "type": "string",
+            "description": "需要登录授权的小程序appId"
+          }
+        }
+      },
+      "domain": "alipay"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "energy_lfp_battery_calibration",
+      "description": "响应LFP电池校准请求",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "domain": "energy"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "energy_stop_charging",
+      "description": "停止当前充电",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "domain": "energy"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "energy_navi_trigger_battery_preheat",
+      "description": "导航目的地触发电池预热",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "domain": "energy"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "energy_charge_port_cover_control",
+      "description": "控制充电口盖开关",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "open",
+              "close"
+            ]
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "domain": "energy"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "energy_query_max_soc_limit",
+      "description": "查询当前最大SOC充电上限设置",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "domain": "energy"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "energy_query_charging_info",
+      "description": "查询当前充电状态和充电信息",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "domain": "energy"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "energy_query_charge_port_status",
+      "description": "查询充电口盖当前开合状态",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "domain": "energy"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "energy_query_consumption_distribution",
+      "description": "查询车辆能耗分布详情",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "domain": "energy"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "energy_query_trip_info",
+      "description": "查询当前行程能耗和里程信息",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "domain": "energy"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "energy_unlock_charge_cable",
+      "description": "解锁充电枪以断开充电连接",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "domain": "energy"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "energy_set_max_soc_limit",
+      "description": "设置最大SOC充电上限百分比",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "targetSoc": {
+            "type": "number",
+            "description": "目标SOC百分比"
+          }
+        },
+        "required": [
+          "targetSoc"
+        ]
+      },
+      "domain": "energy"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "energy_set_eco_switch",
+      "description": "设置节能模式开关",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "on",
+              "off"
+            ]
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "domain": "energy"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "wireless_charge_phone_control",
+      "description": "控制手机无线充电功能开关",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "开启",
+              "关闭"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "domain": "energy"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "energy_stop_battery_preheat",
+      "description": "停止电池预热",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "domain": "energy"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_frag_change_type",
+      "description": "切换香氛类型",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "scent": {
+            "type": "string",
+            "description": "香型"
+          }
+        }
+      },
+      "domain": "fragrance"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_frag_conc",
+      "description": "设置香氛浓度模式",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "description": "浓度模式"
+          }
+        }
+      },
+      "domain": "fragrance"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_frag_delaytime",
+      "description": "设置香氛定时关闭时间",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "time": {
+            "type": "string",
+            "description": "定时时间"
+          }
+        }
+      },
+      "domain": "fragrance"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_frag_level",
+      "description": "设置香氛浓度等级",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "低",
+              "中",
+              "高"
+            ]
+          }
+        }
+      },
+      "domain": "fragrance"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_frag_switch",
+      "description": "控制香氛系统开关",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "开启",
+              "关闭"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "domain": "fragrance"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_frag_type",
+      "description": "设置香氛香型",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "香型"
+          }
+        }
+      },
+      "domain": "fragrance"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_hav_auto_on",
+      "description": "开启或关闭自动空调模式",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "开启",
+              "关闭"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "domain": "hvac"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_hav_power_on",
+      "description": "开启或关闭手动空调",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "开启",
+              "关闭"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "domain": "hvac"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_hav_auto_speed",
+      "description": "设置自动空调风量档位",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "speed": {
+            "type": "number",
+            "description": "风量档位1-7"
+          }
+        },
+        "required": [
+          "speed"
+        ]
+      },
+      "domain": "hvac"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_hav_speed",
+      "description": "设置空调手动风量档位和区域",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "speed": {
+            "type": "number",
+            "description": "风量档位1-7"
+          },
+          "area": {
+            "type": "string",
+            "enum": [
+              "全车",
+              "前排",
+              "主驾",
+              "副驾",
+              "后排",
+              "后排左",
+              "后排右"
+            ]
+          }
+        },
+        "required": [
+          "speed"
+        ]
+      },
+      "domain": "hvac"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_hav_after_defrost",
+      "description": "控制后挡风玻璃除雾除霜开关",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "开启",
+              "关闭"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "domain": "hvac"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_hav_front_defrost",
+      "description": "控制前挡风玻璃除雾除霜开关",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "开启",
+              "关闭"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "domain": "hvac"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_hav_fan_direction",
+      "description": "设置空调吹风模式（吹面/吹脚/吹窗及组合）",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "area": {
+            "type": "string",
+            "enum": [
+              "全车",
+              "前排",
+              "主驾",
+              "副驾",
+              "后排",
+              "后排左",
+              "后排右"
+            ]
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "吹面",
+              "吹脚",
+              "吹窗",
+              "吹面 + 吹脚",
+              "吹面 + 吹窗",
+              "吹脚 + 吹窗",
+              "吹面 + 吹脚 + 吹窗"
+            ]
+          }
+        }
+      },
+      "domain": "hvac"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_hav_recirc_on",
+      "description": "设置空调空气循环模式（内循环/外循环）",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "内循环",
+              "外循环"
+            ]
+          }
+        }
+      },
+      "domain": "hvac"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_hav_steering_wheel_heat",
+      "description": "控制方向盘加热开启或关闭",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "开启",
+              "关闭"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "domain": "hvac"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_hav_temperature",
+      "description": "调整空调温度，支持不同区域，范围16-28度",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "area": {
+            "type": "string",
+            "enum": [
+              "全车",
+              "前排",
+              "主驾",
+              "副驾",
+              "后排",
+              "后排左",
+              "后排右"
+            ]
+          },
+          "temperature": {
+            "type": "number",
+            "description": "目标温度16-28"
+          }
+        }
+      },
+      "domain": "hvac"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "audio_playback_control",
+      "description": "控制音乐/有声书/短视频的播放，包括播放、暂停、停止、切曲、快进快退、跳转进度",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "play",
+              "pause",
+              "stop",
+              "next",
+              "previous",
+              "fast_forward",
+              "rewind",
+              "seek",
+              "content_switch_up",
+              "content_switch_down"
+            ],
+            "description": "播控动作。content_switch_up/down用于短视频Feeds流上下滑切换"
+          },
+          "progressMs": {
+            "type": "integer",
+            "description": "进度参数（毫秒）：seek时为目标时间点，fast_forward/rewind时为快进快退时长"
+          },
+          "mediaType": {
+            "type": "string",
+            "enum": [
+              "music",
+              "audiobook",
+              "short_video",
+              "ktv"
+            ],
+            "description": "媒体类型"
+          },
+          "controlArea": {
+            "type": "string",
+            "enum": [
+              "csd",
+              "psd",
+              "rsd"
+            ],
+            "description": "控制区域：中控屏/副驾屏/后排屏"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "domain": "media_audio"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "short_video_interact",
+      "description": "短视频社交互动：点赞、收藏、投币、关注",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "like",
+              "unlike",
+              "favorite",
+              "unfavorite",
+              "coin",
+              "follow",
+              "unfollow"
+            ],
+            "description": "互动操作"
+          },
+          "controlArea": {
+            "type": "string",
+            "enum": [
+              "csd",
+              "psd",
+              "rsd"
+            ],
+            "description": "控制区域"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "domain": "media_short_video"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "short_video_danmaku",
+      "description": "短视频弹幕交互：开启/关闭弹幕、发送弹幕",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "enable",
+              "disable",
+              "send"
+            ],
+            "description": "弹幕操作"
+          },
+          "content": {
+            "type": "string",
+            "description": "弹幕内容（发送时必填）"
+          },
+          "controlArea": {
+            "type": "string",
+            "enum": [
+              "csd",
+              "psd",
+              "rsd"
+            ],
+            "description": "控制区域"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "domain": "media_short_video"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "short_video_recommend",
+      "description": "获取短视频推荐内容列表或推荐流入口，不直接播放指定内容",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "packageName": {
+            "type": "string",
+            "description": "指定短视频应用包名"
+          },
+          "recommendType": {
+            "type": "string",
+            "enum": [
+              "feed",
+              "drama",
+              "favorite_series",
+              "continue_play"
+            ],
+            "description": "推荐类型"
+          },
+          "controlArea": {
+            "type": "string",
+            "enum": [
+              "csd",
+              "psd",
+              "rsd"
+            ],
+            "description": "控制区域"
+          }
+        }
+      },
+      "domain": "media_short_video"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "short_video_listen_mode",
+      "description": "短视频听视频模式控制",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "on",
+              "off",
+              "query"
+            ]
+          },
+          "controlArea": {
+            "type": "string",
+            "enum": [
+              "csd",
+              "psd",
+              "rsd"
+            ]
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "domain": "media_short_video"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "short_video_miniwindow",
+      "description": "短视频小窗播放控制",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "play",
+              "pause",
+              "next",
+              "previous",
+              "favorite",
+              "seek",
+              "query"
+            ]
+          },
+          "progressMs": {
+            "type": "integer",
+            "description": "进度毫秒"
+          },
+          "controlArea": {
+            "type": "string",
+            "enum": [
+              "csd",
+              "psd",
+              "rsd"
+            ]
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "domain": "media_short_video"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "short_video_login",
+      "description": "短视频应用登录/登出/查询登录状态",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "login",
+              "logout",
+              "query"
+            ]
+          },
+          "packageName": {
+            "type": "string",
+            "description": "应用包名"
+          },
+          "controlArea": {
+            "type": "string",
+            "enum": [
+              "csd",
+              "psd",
+              "rsd"
+            ]
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "domain": "media_short_video"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "video_fullscreen",
+      "description": "霸屏播放控制：进入/退出霸屏模式，设置画面布局（仅多联屏车型支持）",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "enable",
+              "disable",
+              "set_layout"
+            ],
+            "description": "操作类型"
+          },
+          "layout": {
+            "type": "string",
+            "enum": [
+              "center",
+              "driver_side",
+              "passenger_side"
+            ],
+            "description": "画面布局：居中/偏主驾侧/偏副驾侧"
+          },
+          "mediaType": {
+            "type": "string",
+            "enum": [
+              "long_video",
+              "short_video"
+            ],
+            "description": "媒体类型：长视频/短视频"
+          },
+          "controlArea": {
+            "type": "string",
+            "enum": [
+              "csd",
+              "psd",
+              "rsd"
+            ],
+            "description": "控制区域"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "domain": "media_video"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "video_screenshare",
+      "description": "屏幕分享与多屏共播控制（仅多联屏车型支持）",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "share",
+              "stop"
+            ],
+            "description": "操作类型：分享/停止分享"
+          },
+          "target": {
+            "type": "string",
+            "enum": [
+              "driver",
+              "passenger",
+              "rear_left",
+              "rear_right",
+              "all"
+            ],
+            "description": "分享目标屏：主驾/副驾/后排左/后排右/全车"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "single",
+              "multi_sync"
+            ],
+            "description": "分享模式：单屏分享/多屏同步播放"
+          },
+          "mediaType": {
+            "type": "string",
+            "enum": [
+              "long_video",
+              "short_video"
+            ],
+            "description": "媒体类型：长视频/短视频"
+          },
+          "controlArea": {
+            "type": "string",
+            "enum": [
+              "csd",
+              "psd",
+              "rsd"
+            ],
+            "description": "控制区域"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "domain": "media_video"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "video_playback_control",
+      "description": "长视频播控：播放、暂停、停止、上下集、快进快退、跳转进度",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "play",
+              "pause",
+              "stop",
+              "next",
+              "previous",
+              "fast_forward",
+              "rewind",
+              "seek",
+              "select_episode"
+            ],
+            "description": "播控动作"
+          },
+          "progressMs": {
+            "type": "integer",
+            "description": "进度参数（毫秒）：seek为目标时间点，fast_forward/rewind为时长"
+          },
+          "season": {
+            "type": "string",
+            "description": "季数（select_episode时使用）"
+          },
+          "episode": {
+            "type": "string",
+            "description": "集数（select_episode时使用）"
+          },
+          "controlArea": {
+            "type": "string",
+            "enum": [
+              "csd",
+              "psd",
+              "rsd"
+            ],
+            "description": "控制区域"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "domain": "media_video"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "video_setting",
+      "description": "长视频播放设置：画质、倍速、独立亮度",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "settingType": {
+            "type": "string",
+            "enum": [
+              "video_quality",
+              "playback_rate",
+              "brightness"
+            ],
+            "description": "设置类型"
+          },
+          "videoQuality": {
+            "type": "string",
+            "enum": [
+              "360p",
+              "480p",
+              "720p",
+              "1080p",
+              "4k",
+              "auto",
+              "blu_ray"
+            ],
+            "description": "画质等级"
+          },
+          "rate": {
+            "type": "number",
+            "enum": [
+              0.75,
+              1.0,
+              1.25,
+              1.5,
+              2.0
+            ],
+            "description": "播放倍速"
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "slower",
+              "faster",
+              "fastest",
+              "slowest",
+              "normal"
+            ],
+            "description": "倍速调整方向"
+          },
+          "brightness": {
+            "type": "integer",
+            "description": "视频播放页独立亮度（0~100%），仅影响播放器图层"
+          },
+          "controlArea": {
+            "type": "string",
+            "enum": [
+              "csd",
+              "psd",
+              "rsd"
+            ],
+            "description": "控制区域"
+          }
+        },
+        "required": [
+          "settingType"
+        ]
+      },
+      "domain": "media_video"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "video_favorite",
+      "description": "收藏或取消收藏当前长视频",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "add",
+              "remove"
+            ],
+            "description": "收藏操作"
+          },
+          "controlArea": {
+            "type": "string",
+            "enum": [
+              "csd",
+              "psd",
+              "rsd"
+            ],
+            "description": "控制区域"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "domain": "media_video"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "video_play_content",
+      "description": "搜索并播放长视频内容，支持按片名/演员/导演/类型/年代等，支持指定季数集数",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "contentTitle": {
+            "type": "string",
+            "description": "片名/剧名"
+          },
+          "actorName": {
+            "type": "string",
+            "description": "演员名"
+          },
+          "directorName": {
+            "type": "string",
+            "description": "导演名"
+          },
+          "screenwriter": {
+            "type": "string",
+            "description": "编剧"
+          },
+          "genre": {
+            "type": "string",
+            "description": "类型/流派"
+          },
+          "date": {
+            "type": "string",
+            "description": "年代/上映时间"
+          },
+          "countryRegion": {
+            "type": "string",
+            "description": "国家地区"
+          },
+          "lang": {
+            "type": "string",
+            "description": "语种"
+          },
+          "crowd": {
+            "type": "string",
+            "description": "受众人群"
+          },
+          "rankList": {
+            "type": "string",
+            "description": "排行榜名称"
+          },
+          "rating": {
+            "type": "string",
+            "description": "评分筛选"
+          },
+          "season": {
+            "type": "string",
+            "description": "季数"
+          },
+          "episode": {
+            "type": "string",
+            "description": "集数"
+          },
+          "packageName": {
+            "type": "string",
+            "description": "指定视频应用包名"
+          },
+          "controlArea": {
+            "type": "string",
+            "enum": [
+              "csd",
+              "psd",
+              "rsd"
+            ],
+            "description": "控制区域"
+          }
+        }
+      },
+      "domain": "media_video"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "video_search",
+      "description": "搜索长视频内容，返回结果列表但不直接播放",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "keyword": {
+            "type": "string",
+            "description": "搜索关键词"
+          },
+          "searchType": {
+            "type": "string",
+            "enum": [
+              "title",
+              "actor",
+              "director",
+              "genre"
+            ],
+            "description": "搜索维度"
+          },
+          "packageName": {
+            "type": "string",
+            "description": "指定在哪个应用内搜索"
+          },
+          "controlArea": {
+            "type": "string",
+            "enum": [
+              "csd",
+              "psd",
+              "rsd"
+            ],
+            "description": "控制区域"
+          }
+        },
+        "required": [
+          "keyword"
+        ]
+      },
+      "domain": "media_video"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "video_query",
+      "description": "查询当前视频播放信息和播放状态",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "queryType": {
+            "type": "string",
+            "enum": [
+              "title",
+              "progress",
+              "episode",
+              "quality",
+              "rate",
+              "favorite_status",
+              "all"
+            ]
+          },
+          "controlArea": {
+            "type": "string",
+            "enum": [
+              "csd",
+              "psd",
+              "rsd"
+            ]
+          }
+        }
+      },
+      "domain": "media_video"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "video_app_control",
+      "description": "打开/关闭长视频应用或跳转指定页面",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "open",
+              "close"
+            ],
+            "description": "打开或关闭"
+          },
+          "packageName": {
+            "type": "string",
+            "description": "应用包名"
+          },
+          "pageType": {
+            "type": "string",
+            "enum": [
+              "player",
+              "history",
+              "favorite_list",
+              "download_list",
+              "episode_list"
+            ],
+            "description": "目标页面类型"
+          },
+          "controlArea": {
+            "type": "string",
+            "enum": [
+              "csd",
+              "psd",
+              "rsd"
+            ],
+            "description": "控制区域"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "domain": "media_video"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "video_interact",
+      "description": "长视频社交互动：点赞、收藏、投币、关注",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "like",
+              "unlike",
+              "favorite",
+              "unfavorite",
+              "coin",
+              "follow",
+              "unfollow"
+            ],
+            "description": "互动操作"
+          },
+          "controlArea": {
+            "type": "string",
+            "enum": [
+              "csd",
+              "psd",
+              "rsd"
+            ],
+            "description": "控制区域"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "domain": "media_video"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "video_danmaku",
+      "description": "长视频弹幕交互：开启/关闭弹幕、发送弹幕",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "enable",
+              "disable",
+              "send"
+            ],
+            "description": "弹幕操作"
+          },
+          "content": {
+            "type": "string",
+            "description": "弹幕内容（发送时必填）"
+          },
+          "controlArea": {
+            "type": "string",
+            "enum": [
+              "csd",
+              "psd",
+              "rsd"
+            ],
+            "description": "控制区域"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "domain": "media_video"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "video_download",
+      "description": "长视频下载/离线管理",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "download",
+              "cancel",
+              "query_status"
+            ],
+            "description": "下载操作"
+          },
+          "contentTitle": {
+            "type": "string",
+            "description": "片名/剧名"
+          },
+          "season": {
+            "type": "string",
+            "description": "季数"
+          },
+          "episode": {
+            "type": "string",
+            "description": "集数"
+          },
+          "videoQuality": {
+            "type": "string",
+            "enum": [
+              "360p",
+              "480p",
+              "720p",
+              "1080p",
+              "4k"
+            ],
+            "description": "下载画质"
+          },
+          "controlArea": {
+            "type": "string",
+            "enum": [
+              "csd",
+              "psd",
+              "rsd"
+            ],
+            "description": "控制区域"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "domain": "media_video"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "video_recommend",
+      "description": "获取长视频推荐内容列表，不直接播放指定内容",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "packageName": {
+            "type": "string",
+            "description": "指定长视频应用包名"
+          },
+          "recommendType": {
+            "type": "string",
+            "enum": [
+              "continue_watching",
+              "hot",
+              "short_video"
+            ],
+            "description": "推荐类型"
+          },
+          "controlArea": {
+            "type": "string",
+            "enum": [
+              "csd",
+              "psd",
+              "rsd"
+            ],
+            "description": "控制区域"
+          }
+        }
+      },
+      "domain": "media_video"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "camera_app_control",
+      "description": "打开相机应用或跳转到相机功能页面",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "open",
+              "redirect_page"
+            ],
+            "description": "应用/页面操作"
+          },
+          "pageType": {
+            "type": "string",
+            "enum": [
+              "photo",
+              "video",
+              "settings"
+            ],
+            "description": "相机页面：拍照页/录像页/设置页，redirect_page时必填"
+          },
+          "controlArea": {
+            "type": "string",
+            "enum": [
+              "csd",
+              "psd",
+              "rsd"
+            ],
+            "description": "控制区域"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "domain": "camera"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "camera_setting",
+      "description": "设置相机拍照倒计时",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "countdownSeconds": {
+            "type": "integer",
+            "description": "倒计时秒数"
+          },
+          "controlArea": {
+            "type": "string",
+            "enum": [
+              "csd",
+              "psd",
+              "rsd"
+            ],
+            "description": "控制区域"
+          }
+        },
+        "required": [
+          "countdownSeconds"
+        ]
+      },
+      "domain": "camera"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "camera_capture",
+      "description": "调起车内相机进行拍照",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "controlArea": {
+            "type": "string",
+            "enum": [
+              "csd",
+              "psd",
+              "rsd"
+            ],
+            "description": "控制区域"
+          }
+        }
+      },
+      "domain": "camera"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "camera_preview",
+      "description": "调起车外摄像头并预览摄像头画面",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "controlArea": {
+            "type": "string",
+            "enum": [
+              "csd",
+              "psd",
+              "rsd"
+            ],
+            "description": "控制区域"
+          }
+        }
+      },
+      "domain": "camera"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "dashcam_control",
+      "description": "行车记录仪开关控制与录制状态查询",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "power_on",
+              "power_off"
+            ],
+            "description": "操作类型"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "domain": "camera"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "audio_adjust",
+      "description": "设置播放模式、音质、画质、倍速、音效、跳过片头片尾、排序等参数",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "settingType": {
+            "type": "string",
+            "enum": [
+              "loop_mode",
+              "sound_quality",
+              "video_quality",
+              "playback_rate",
+              "sound_effect",
+              "auto_skip",
+              "sort_order"
+            ],
+            "description": "设置类型"
+          },
+          "loopMode": {
+            "type": "string",
+            "enum": [
+              "all",
+              "single",
+              "shuffle"
+            ],
+            "description": "循环模式：顺序播放/单曲循环/随机播放"
+          },
+          "soundQuality": {
+            "type": "string",
+            "enum": [
+              "standard",
+              "high",
+              "lossless",
+              "hires",
+              "dolby"
+            ],
+            "description": "音质等级"
+          },
+          "videoQuality": {
+            "type": "string",
+            "enum": [
+              "360p",
+              "480p",
+              "720p",
+              "1080p",
+              "4k",
+              "auto"
+            ],
+            "description": "画质等级"
+          },
+          "rate": {
+            "type": "number",
+            "enum": [
+              0.75,
+              1.0,
+              1.25,
+              1.5,
+              2.0
+            ],
+            "description": "播放倍速"
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "slower",
+              "faster",
+              "fastest",
+              "slowest",
+              "normal"
+            ],
+            "description": "倍速调整方向"
+          },
+          "soundEffect": {
+            "type": "string",
+            "enum": [
+              "none",
+              "3d_surround",
+              "car_exclusive",
+              "panoramic",
+              "vinyl",
+              "hifi_live",
+              "pure_vocal",
+              "heavy_bass",
+              "custom"
+            ],
+            "description": "音效模式"
+          },
+          "autoSkip": {
+            "type": "boolean",
+            "description": "跳过片头片尾开关（有声书/播客适用）"
+          },
+          "sortOrder": {
+            "type": "string",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "description": "列表排序方向：正序/倒序（有声书适用）"
+          },
+          "controlArea": {
+            "type": "string",
+            "enum": [
+              "csd",
+              "psd",
+              "rsd"
+            ],
+            "description": "控制区域"
+          }
+        },
+        "required": [
+          "settingType"
+        ]
+      },
+      "domain": "media_audio"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "audio_app_control",
+      "description": "打开/关闭媒体应用或跳转到指定页面",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "open",
+              "close"
+            ],
+            "description": "打开或关闭"
+          },
+          "packageName": {
+            "type": "string",
+            "description": "应用包名"
+          },
+          "pageType": {
+            "type": "string",
+            "enum": [
+              "player",
+              "lyric",
+              "playlist",
+              "history",
+              "favorite_list",
+              "favorite_playlist_list",
+              "custom_playlist_list"
+            ],
+            "description": "目标页面类型"
+          },
+          "mediaType": {
+            "type": "string",
+            "enum": [
+              "music",
+              "audiobook",
+              "short_video",
+              "ktv"
+            ],
+            "description": "媒体类型"
+          },
+          "controlArea": {
+            "type": "string",
+            "enum": [
+              "csd",
+              "psd",
+              "rsd"
+            ],
+            "description": "控制区域"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "domain": "media_audio"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "audio_download",
+      "description": "下载/离线管理：下载当前或指定媒体内容供离线播放",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "download",
+              "cancel",
+              "query_status"
+            ],
+            "description": "下载操作类型"
+          },
+          "itemId": {
+            "type": "string",
+            "description": "媒体项ID"
+          },
+          "queueId": {
+            "type": "string",
+            "description": "媒体队列/歌单ID（批量下载时使用）"
+          },
+          "controlArea": {
+            "type": "string",
+            "enum": [
+              "csd",
+              "psd",
+              "rsd"
+            ],
+            "description": "控制区域"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "domain": "media_audio"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "audio_play_content",
+      "description": "搜索并直接播放指定的音乐、有声书、短视频或K歌内容",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "mediaType": {
+            "type": "string",
+            "enum": [
+              "music",
+              "audiobook",
+              "short_video",
+              "ktv"
+            ],
+            "description": "媒体类型"
+          },
+          "packageName": {
+            "type": "string",
+            "description": "指定应用包名"
+          },
+          "titleName": {
+            "type": "string",
+            "description": "歌名/书名/视频标题"
+          },
+          "artistName": {
+            "type": "string",
+            "description": "歌手/作者/创作者"
+          },
+          "albumName": {
+            "type": "string",
+            "description": "专辑名"
+          },
+          "genre": {
+            "type": "string",
+            "description": "风格/流派"
+          },
+          "lang": {
+            "type": "string",
+            "description": "语种"
+          },
+          "scene": {
+            "type": "string",
+            "description": "场景：工作/睡觉/旅游/运动等"
+          },
+          "typeName": {
+            "type": "string",
+            "description": "心情/风格标签：伤感/放松/热血等"
+          },
+          "crowd": {
+            "type": "string",
+            "description": "受众人群：儿童/成人等"
+          },
+          "date": {
+            "type": "string",
+            "description": "年代：90年代/2020年等"
+          },
+          "topic": {
+            "type": "string",
+            "description": "话题：主题曲/片头曲等"
+          },
+          "rankList": {
+            "type": "string",
+            "description": "排行榜名称"
+          },
+          "specialPlaylist": {
+            "type": "string",
+            "enum": [
+              "my_favorite",
+              "recent",
+              "daily_recommend",
+              "personal_fm"
+            ],
+            "description": "专属歌单类型"
+          },
+          "musicalInstrument": {
+            "type": "string",
+            "description": "乐器：钢琴/吉他等"
+          },
+          "changeTo": {
+            "type": "string",
+            "enum": [
+              "album_other",
+              "artist_other",
+              "other_artist",
+              "other_album"
+            ],
+            "description": "切换目标"
+          },
+          "episode": {
+            "type": "string",
+            "description": "集数（有声书适用）"
+          },
+          "controlArea": {
+            "type": "string",
+            "enum": [
+              "csd",
+              "psd",
+              "rsd"
+            ],
+            "description": "控制区域"
+          }
+        },
+        "required": [
+          "mediaType"
+        ]
+      },
+      "domain": "media_audio"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "audio_playlist",
+      "description": "歌单管理：创建歌单、添加/移除歌曲到歌单、收藏/取消收藏歌单",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "create",
+              "add_to",
+              "remove_from",
+              "favorite_playlist",
+              "unfavorite_playlist"
+            ],
+            "description": "歌单操作类型"
+          },
+          "playlistName": {
+            "type": "string",
+            "description": "歌单名称"
+          },
+          "playlistId": {
+            "type": "string",
+            "description": "目标歌单ID"
+          },
+          "itemId": {
+            "type": "string",
+            "description": "媒体项ID"
+          },
+          "controlArea": {
+            "type": "string",
+            "enum": [
+              "csd",
+              "psd",
+              "rsd"
+            ],
+            "description": "控制区域"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "domain": "media_audio"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "music_recommend",
+      "description": "获取音乐推荐内容列表，不直接播放",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "recommendType": {
+            "type": "string",
+            "enum": [
+              "daily_recommend",
+              "guess_you_like",
+              "rank",
+              "personal_fm",
+              "official_playlist",
+              "channel"
+            ],
+            "description": "推荐类型"
+          },
+          "rankList": {
+            "type": "string",
+            "description": "排行榜名称，recommendType=rank时可选"
+          },
+          "packageName": {
+            "type": "string",
+            "description": "指定音乐应用包名"
+          },
+          "controlArea": {
+            "type": "string",
+            "enum": [
+              "csd",
+              "psd",
+              "rsd"
+            ],
+            "description": "控制区域"
+          }
+        },
+        "required": [
+          "recommendType"
+        ]
+      },
+      "domain": "media_audio"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_navi_along_search",
+      "description": "在导航路线沿途搜索兴趣点",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "keyword": {
+            "type": "string",
+            "description": "搜索关键词"
+          }
+        },
+        "required": [
+          "keyword"
+        ]
+      },
+      "domain": "navigation"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_navi_around_search",
+      "description": "在当前位置附近搜索兴趣点",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "keyword": {
+            "type": "string",
+            "description": "搜索关键词"
+          }
+        },
+        "required": [
+          "keyword"
+        ]
+      },
+      "domain": "navigation"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_navi_keyword_search",
+      "description": "在车载地图上按关键词搜索兴趣点",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "keyword": {
+            "type": "string",
+            "description": "搜索关键词"
+          }
+        },
+        "required": [
+          "keyword"
+        ]
+      },
+      "domain": "navigation"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_navi_search_history",
+      "description": "查询导航搜索历史记录",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "domain": "navigation"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_navi_to_destination",
+      "description": "导航到指定目的地",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "location": {
+            "type": "string",
+            "description": "目的地名称或地址"
+          },
+          "lat": {
+            "type": "number",
+            "description": "目的地纬度"
+          },
+          "lng": {
+            "type": "number",
+            "description": "目的地经度"
+          }
+        },
+        "required": [
+          "location"
+        ]
+      },
+      "domain": "navigation"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_navi_cancel",
+      "description": "取消当前导航",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "domain": "navigation"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_navi_add_waypoint",
+      "description": "在导航路线中添加途经点",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "location": {
+            "type": "string",
+            "description": "途经点名称或地址"
+          },
+          "lat": {
+            "type": "number",
+            "description": "途经点纬度"
+          },
+          "lng": {
+            "type": "number",
+            "description": "途经点经度"
+          }
+        },
+        "required": [
+          "location"
+        ]
+      },
+      "domain": "navigation"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_nav_waypointIndexQuery",
+      "description": "查询当前途经点序号",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "domain": "navigation"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_nav_waypointRemainDist",
+      "description": "查询到下一途经点的剩余距离",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "domain": "navigation"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_nav_waypointRemainRange",
+      "description": "查询途经点剩余个数",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "domain": "navigation"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_nav_waypointRemainTime",
+      "description": "查询到下一途经点的剩余时间",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "domain": "navigation"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_navi_frequently_address",
+      "description": "查询常用地址列表",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "domain": "navigation"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_navi_add_address",
+      "description": "添加新地址到常用地址",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "地址内容"
+          }
+        },
+        "required": [
+          "address"
+        ]
+      },
+      "domain": "navigation"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_navi_set_address_prop",
+      "description": "设置家或公司地址",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "set_home",
+              "set_work"
+            ]
+          },
+          "address": {
+            "type": "string",
+            "description": "地址内容"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "domain": "navigation"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_navi_location_info",
+      "description": "查询当前位置信息",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "domain": "navigation"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_navi_tunnel_info",
+      "description": "查询当前是否在隧道中行驶",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "domain": "navigation"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_navi_geofence",
+      "description": "查询地理围栏状态信息",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "domain": "navigation"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_navi_charging_info",
+      "description": "搜索附近充电站信息",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "domain": "navigation"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_navi_geo_decoder",
+      "description": "对地址进行地理编码或逆地理编码",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "domain": "navigation"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_navi_get_poi_time_distance",
+      "description": "计算到指定兴趣点的距离和时间",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "domain": "navigation"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_navi_speech_type_prop",
+      "description": "设置导航语音播报类型",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "语音播报类型"
+          }
+        }
+      },
+      "domain": "navigation"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_navi_info",
+      "description": "查询当前导航状态信息",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "domain": "navigation"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_call_app_func_jump",
+      "description": "跳转到电话应用指定功能页面",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "跳转目标页"
+          }
+        }
+      },
+      "domain": "phone"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_call_calling_prop",
+      "description": "查询当前通话状态信息",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "domain": "phone"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_call_control",
+      "description": "控制电话拨号、接听、挂断、免提操作",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "dial",
+              "answer",
+              "hangup",
+              "speaker"
+            ]
+          },
+          "number": {
+            "type": "string",
+            "description": "电话号码"
+          },
+          "contactName": {
+            "type": "string",
+            "description": "联系人姓名"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "domain": "phone"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_seat_temperature",
+      "description": "控制座椅加热温度等级",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "area": {
+            "type": "string",
+            "enum": [
+              "主驾",
+              "副驾",
+              "前排",
+              "后排左",
+              "后排右",
+              "后排",
+              "全车"
+            ]
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "关闭",
+              "低",
+              "中",
+              "高"
+            ]
+          }
+        },
+        "required": [
+          "area"
+        ]
+      },
+      "domain": "seat"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_seat_ventilation",
+      "description": "控制座椅通风等级",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "area": {
+            "type": "string",
+            "enum": [
+              "主驾",
+              "副驾",
+              "前排",
+              "后排左",
+              "后排右",
+              "后排",
+              "全车"
+            ]
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "关闭",
+              "低",
+              "中",
+              "高"
+            ]
+          }
+        },
+        "required": [
+          "area"
+        ]
+      },
+      "domain": "seat"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "seat_headrest_heating_linked",
+      "description": "控制头枕加热联动座椅加热功能",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "area": {
+            "type": "string",
+            "enum": [
+              "主驾",
+              "副驾",
+              "前排",
+              "后排",
+              "全车"
+            ]
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "关闭",
+              "低",
+              "中",
+              "高"
+            ]
+          }
+        },
+        "required": [
+          "area"
+        ]
+      },
+      "domain": "seat"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "seat_heating_control",
+      "description": "控制座椅加热开关和等级",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "area": {
+            "type": "string",
+            "enum": [
+              "主驾",
+              "副驾",
+              "前排",
+              "后排左",
+              "后排右",
+              "后排",
+              "全车"
+            ]
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "关闭",
+              "低",
+              "中",
+              "高"
+            ]
+          }
+        },
+        "required": [
+          "area"
+        ]
+      },
+      "domain": "seat"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "seat_heating_balance_control",
+      "description": "控制座椅加热平衡模式",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "area": {
+            "type": "string",
+            "enum": [
+              "主驾",
+              "副驾",
+              "前排",
+              "全车"
+            ]
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "关闭",
+              "低",
+              "中",
+              "高"
+            ]
+          }
+        },
+        "required": [
+          "area"
+        ]
+      },
+      "domain": "seat"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "seat_massage_257_control",
+      "description": "控制座椅按摩功能（257型号）",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "area": {
+            "type": "string",
+            "enum": [
+              "主驾",
+              "副驾",
+              "前排",
+              "后排",
+              "全车"
+            ]
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "关闭",
+              "低",
+              "中",
+              "高"
+            ]
+          }
+        },
+        "required": [
+          "area"
+        ]
+      },
+      "domain": "seat"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "seat_massage_399_control",
+      "description": "控制座椅按摩功能（399型号）",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "area": {
+            "type": "string",
+            "enum": [
+              "主驾",
+              "副驾",
+              "前排",
+              "后排",
+              "全车"
+            ]
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "关闭",
+              "低",
+              "中",
+              "高"
+            ]
+          }
+        },
+        "required": [
+          "area"
+        ]
+      },
+      "domain": "seat"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "seat_massage_48u_control",
+      "description": "控制座椅按摩功能（48U型号）",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "area": {
+            "type": "string",
+            "enum": [
+              "主驾",
+              "副驾",
+              "前排",
+              "后排",
+              "全车"
+            ]
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "关闭",
+              "低",
+              "中",
+              "高"
+            ]
+          }
+        },
+        "required": [
+          "area"
+        ]
+      },
+      "domain": "seat"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "seat_ventilation_control",
+      "description": "控制座椅通风功能开关和等级",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "area": {
+            "type": "string",
+            "enum": [
+              "主驾",
+              "副驾",
+              "前排",
+              "后排左",
+              "后排右",
+              "后排",
+              "全车"
+            ]
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "关闭",
+              "低",
+              "中",
+              "高"
+            ]
+          }
+        },
+        "required": [
+          "area"
+        ]
+      },
+      "domain": "seat"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "seat_armrest_heating_linked",
+      "description": "控制扶手加热联动座椅加热功能",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "area": {
+            "type": "string",
+            "enum": [
+              "主驾",
+              "副驾",
+              "前排"
+            ]
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "关闭",
+              "低",
+              "中",
+              "高"
+            ]
+          }
+        },
+        "required": [
+          "area"
+        ]
+      },
+      "domain": "seat"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "seat_sport_position_control",
+      "description": "控制运动座椅各部位调节",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "area": {
+            "type": "string",
+            "enum": [
+              "主驾",
+              "副驾"
+            ]
+          },
+          "adjustment": {
+            "type": "string",
+            "enum": [
+              "forward_backward",
+              "height",
+              "recline",
+              "leg_rest",
+              "headrest",
+              "lumbar"
+            ]
+          }
+        },
+        "required": [
+          "area"
+        ]
+      },
+      "domain": "seat"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_seat_profile_preference",
+      "description": "保存或调用座椅记忆位置偏好",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "save",
+              "recall"
+            ]
+          },
+          "area": {
+            "type": "string",
+            "enum": [
+              "主驾",
+              "副驾"
+            ]
+          },
+          "slot": {
+            "type": "string",
+            "enum": [
+              "1",
+              "2",
+              "3"
+            ]
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "domain": "seat"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "seat_side_bolster_control",
+      "description": "控制座椅侧支撑调节",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "area": {
+            "type": "string",
+            "enum": [
+              "主驾",
+              "副驾"
+            ]
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "forward",
+              "backward"
+            ]
+          }
+        },
+        "required": [
+          "area"
+        ]
+      },
+      "domain": "seat"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "seat_positioning_control",
+      "description": "控制座椅定位启停功能",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "area": {
+            "type": "string",
+            "enum": [
+              "主驾",
+              "副驾"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "开启",
+              "关闭"
+            ]
+          }
+        },
+        "required": [
+          "area"
+        ]
+      },
+      "domain": "seat"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "seat_lumbar_10x10_control",
+      "description": "控制座椅腰部支撑10x10方阵调节",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "area": {
+            "type": "string",
+            "enum": [
+              "主驾",
+              "副驾"
+            ]
+          }
+        },
+        "required": [
+          "area"
+        ]
+      },
+      "domain": "seat"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "seat_lumbar_direction_control",
+      "description": "控制座椅腰部支撑前后上下方向调节",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "area": {
+            "type": "string",
+            "enum": [
+              "主驾",
+              "副驾"
+            ]
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "forward",
+              "backward",
+              "up",
+              "down"
+            ]
+          }
+        },
+        "required": [
+          "area"
+        ]
+      },
+      "domain": "seat"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "seat_lumbar_support_control",
+      "description": "控制座椅腰部支撑调节",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "area": {
+            "type": "string",
+            "enum": [
+              "主驾",
+              "副驾"
+            ]
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "forward",
+              "backward",
+              "up",
+              "down"
+            ]
+          }
+        },
+        "required": [
+          "area"
+        ]
+      },
+      "domain": "seat"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "seat_easy_entry_control",
+      "description": "控制座椅方便进出功能开关",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "开启",
+              "关闭"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "domain": "seat"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_sound_adas_volume",
+      "description": "设置智驾提示音量",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "number",
+            "description": "音量等级"
+          }
+        }
+      },
+      "domain": "sound"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_sound_call_volume",
+      "description": "设置通话音量",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "number",
+            "description": "音量等级"
+          }
+        }
+      },
+      "domain": "sound"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_sound_media_volume",
+      "description": "设置媒体音量",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "number",
+            "description": "音量等级"
+          }
+        }
+      },
+      "domain": "sound"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_sound_navi_volume",
+      "description": "设置导航音量",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "number",
+            "description": "音量等级"
+          }
+        }
+      },
+      "domain": "sound"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_sound_ringtone_volume",
+      "description": "设置铃声音量",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "number",
+            "description": "音量等级"
+          }
+        }
+      },
+      "domain": "sound"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_sound_voice_volume",
+      "description": "设置语音助手音量",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "number",
+            "description": "音量等级"
+          }
+        }
+      },
+      "domain": "sound"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "burmester_4d_seat_control",
+      "description": "控制柏林之声4D座椅联动音效",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "开启",
+              "关闭"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "domain": "sound"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "burmester_bass_effect_control",
+      "description": "控制柏林之声低音特效模式",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "description": "低音特效模式"
+          }
+        },
+        "required": [
+          "mode"
+        ]
+      },
+      "domain": "sound"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "burmester_equalizer_control",
+      "description": "控制柏林之声均衡器设置",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "description": "均衡器模式"
+          }
+        },
+        "required": [
+          "mode"
+        ]
+      },
+      "domain": "sound"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "burmester_soundstage_control",
+      "description": "控制柏林之声声场聚焦模式",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "description": "声场聚焦模式"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "开启",
+              "关闭"
+            ]
+          }
+        },
+        "required": [
+          "mode"
+        ]
+      },
+      "domain": "sound"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "burmester_follow_music_control",
+      "description": "控制柏林之声随音悦动功能",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "开启",
+              "关闭"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "domain": "sound"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "burmester_sound_zone_control",
+      "description": "控制柏林之声音响区域设置",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "description": "音响区域模式"
+          }
+        },
+        "required": [
+          "mode"
+        ]
+      },
+      "domain": "sound"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "burmester_preset_effect_control",
+      "description": "控制柏林之声预设音效模式",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "description": "预设音效模式"
+          }
+        },
+        "required": [
+          "mode"
+        ]
+      },
+      "domain": "sound"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_sound_call_mix",
+      "description": "设置通话混音功能开关",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "开启",
+              "关闭"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "domain": "sound"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_sound_dnd_mode",
+      "description": "设置勿扰模式开关和等级",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "关闭",
+              "标准勿扰",
+              "深度勿扰"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "domain": "sound"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_sound_drive_mode_tone",
+      "description": "设置驾驶模式切换提示音开关",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "开启",
+              "关闭"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "domain": "sound"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_sound_media_ducking",
+      "description": "设置媒体避让功能开关",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "开启",
+              "关闭"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "domain": "sound"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_sound_navi_exclusive",
+      "description": "设置导航独占音频功能开关",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "开启",
+              "关闭"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "domain": "sound"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_sound_notification_tone",
+      "description": "设置通知提示音开关",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "开启",
+              "关闭"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "domain": "sound"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_sound_system_tone",
+      "description": "设置系统提示音开关",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "开启",
+              "关闭"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "domain": "sound"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_sound_theme",
+      "description": "设置音效主题模式",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "theme": {
+            "type": "string",
+            "enum": [
+              "关闭",
+              "银色声浪",
+              "灵动之流",
+              "和煦清风",
+              "声灵幻境",
+              "纵声天地"
+            ]
+          }
+        },
+        "required": [
+          "theme"
+        ]
+      },
+      "domain": "sound"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_app_open",
+      "description": "打开车载应用程序",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "packageName": {
+            "type": "string",
+            "description": "应用包名"
+          }
+        },
+        "required": [
+          "packageName"
+        ]
+      },
+      "domain": "system"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_appstore_app_func_jump",
+      "description": "跳转到应用商店指定页面",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "跳转目标"
+          }
+        }
+      },
+      "domain": "system"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_csd_brightness",
+      "description": "设置中控屏幕亮度",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "brightness": {
+            "type": "number",
+            "description": "亮度值"
+          }
+        },
+        "required": [
+          "brightness"
+        ]
+      },
+      "domain": "system"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_dim_brightness",
+      "description": "设置氛围调光亮度",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "brightness": {
+            "type": "number",
+            "description": "亮度值"
+          }
+        },
+        "required": [
+          "brightness"
+        ]
+      },
+      "domain": "system"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_psd_brightness",
+      "description": "设置副驾屏幕亮度",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "brightness": {
+            "type": "number",
+            "description": "亮度值"
+          }
+        },
+        "required": [
+          "brightness"
+        ]
+      },
+      "domain": "system"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_rfd_brightness",
+      "description": "设置后排屏幕亮度（右侧）",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "brightness": {
+            "type": "number",
+            "description": "亮度值"
+          }
+        },
+        "required": [
+          "brightness"
+        ]
+      },
+      "domain": "system"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_rsd_brightness",
+      "description": "设置后排屏幕亮度（左侧）",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "brightness": {
+            "type": "number",
+            "description": "亮度值"
+          }
+        },
+        "required": [
+          "brightness"
+        ]
+      },
+      "domain": "system"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_ambience_light_effect_dynamic_alighting",
+      "description": "控制氛围灯下车警告效果开关",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "开启",
+              "关闭"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_ambience_light_effect_dynamic_hvac",
+      "description": "控制氛围灯空调联动效果开关",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "开启",
+              "关闭"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_ambience_light_effect_dynamic_multicolore",
+      "description": "控制氛围灯动态多色彩效果开关",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "开启",
+              "关闭"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_ambience_light_effect_dynamic_welcome",
+      "description": "控制氛围灯欢迎效果开关",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "开启",
+              "关闭"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_ambience_light_effect_follow_music",
+      "description": "控制氛围灯随音悦动效果开关",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "开启",
+              "关闭"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_ambience_light_effect_operational_feedback",
+      "description": "控制氛围灯操作反馈效果开关",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "开启",
+              "关闭"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_ambience_light_effect_warning_aid",
+      "description": "控制氛围灯警告辅助效果开关",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "开启",
+              "关闭"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_ambience_light_marquee_color",
+      "description": "设置氛围灯跑马灯颜色",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "color": {
+            "type": "number",
+            "description": "颜色值"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_ambience_light_multi_color",
+      "description": "设置氛围灯多色彩颜色",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "color": {
+            "type": "number",
+            "description": "颜色值"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_ambience_light_single_color",
+      "description": "设置氛围灯单色彩颜色",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "color": {
+            "type": "number",
+            "description": "颜色值"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_ambience_light_switch",
+      "description": "控制氛围灯总开关",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "开启",
+              "关闭"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_light_AmbientBrightnessSet",
+      "description": "设置氛围灯分区亮度",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "查询入参",
+              "查询出参",
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "氛围灯亮度设置"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_light_AmbientColorSet",
+      "description": "设置氛围灯分区颜色",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "查询入参",
+              "查询出参",
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "氛围灯颜色设置"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_light_AmbientEffectSet",
+      "description": "设置氛围灯效果模式",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "查询入参",
+              "查询出参",
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "氛围灯效果设置"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_window_position",
+      "description": "控制车窗开关和位置",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "open",
+              "close",
+              "ventilate",
+              "pause",
+              "set_position"
+            ]
+          },
+          "area": {
+            "type": "string",
+            "enum": [
+              "主驾",
+              "副驾",
+              "后排左",
+              "后排右",
+              "全部车窗"
+            ]
+          },
+          "position": {
+            "type": "number",
+            "description": "开度百分比"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_window_state",
+      "description": "查询车窗开合状态",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_control_Vehicle_WindowLockControl",
+      "description": "锁定/解锁后排车窗物理按键",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "车窗锁控制"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_control_Vehicle_AllSunblindControl",
+      "description": "控制全部遮阳帘全开/全关",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "全部遮阳帘控制"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_control_Vehicle_AutoSunblindSet",
+      "description": "设置锁车时自动关闭遮阳帘/解锁时自动打开遮阳帘",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "查询入参",
+              "查询出参",
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "自动遮阳帘设置"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_control_Vehicle_PanoramicModeSet",
+      "description": "设置全景天幕透明/遮光/图案模式",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "全景天幕模式设置"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_control_Vehicle_PanoramicZoneSet",
+      "description": "设置全景天幕指定区域为透明/遮光",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "全景天幕区域设置"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_control_Vehicle_SunblindControl",
+      "description": "控制指定遮阳帘打开/关闭/暂停",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "遮阳帘控制"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_control_Vehicle_SunroofSunblindControl",
+      "description": "控制电动天窗遮阳帘打开/关闭/暂停",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "天窗遮阳帘控制"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_window_sunshade_sliding_open",
+      "description": "控制遮阳帘滑动打开或关闭",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "open",
+              "close",
+              "pause"
+            ]
+          },
+          "area": {
+            "type": "string",
+            "enum": [
+              "天窗遮阳帘",
+              "后挡风遮阳帘",
+              "后排左",
+              "后排右"
+            ]
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_window_sunshade_sliding_position",
+      "description": "设置遮阳帘开度位置",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "area": {
+            "type": "string",
+            "enum": [
+              "天窗遮阳帘",
+              "后挡风遮阳帘",
+              "后排左",
+              "后排右"
+            ]
+          },
+          "position": {
+            "type": "number",
+            "description": "开度百分比"
+          }
+        },
+        "required": [
+          "area"
+        ]
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_control_Vehicle_ApproachUnlockSet",
+      "description": "设置靠近解锁开启/关闭",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "查询入参",
+              "查询出参",
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "靠近解锁设置"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_control_Vehicle_AutoLockSet",
+      "description": "设置车门自动落锁开启/关闭",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "查询入参",
+              "查询出参",
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "车门自动落锁设置"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_control_Vehicle_DepartureLockSet",
+      "description": "设置远离闭锁开启/关闭",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "查询入参",
+              "查询出参",
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "远离闭锁设置"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_control_Vehicle_DriverDoorUnlockSet",
+      "description": "设置仅解锁驾驶员侧车门开启/关闭",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "查询入参",
+              "查询出参",
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "仅解锁驾驶员侧车门设置"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_control_Vehicle_LockSoundSet",
+      "description": "设置锁车提示音开启/关闭",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "查询入参",
+              "查询出参",
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "锁车提示音设置"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_door_state",
+      "description": "查询指定车门的开合状态",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "area": {
+            "type": "string",
+            "enum": [
+              "主驾车门",
+              "副驾车门",
+              "后排左侧车门",
+              "后排右侧车门",
+              "后排左右车门",
+              "全车车门",
+              "非主驾车门"
+            ],
+            "description": "车门区域属性"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_env_outdoorQuery",
+      "description": "查询车外环境信息（温度、天气等）",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_light_InteriorAutoOnDoorSet",
+      "description": "设置开门时自动点亮内饰灯",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "查询入参",
+              "查询出参",
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "车内照明开门自动点亮"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_lock_childLockStatus",
+      "description": "查询儿童锁状态",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "area": {
+            "type": "string",
+            "enum": [
+              "主驾车门",
+              "副驾车门",
+              "后排左侧车门",
+              "后排右侧车门",
+              "后排左右车门",
+              "全车车门",
+              "非主驾车门"
+            ],
+            "description": "车门区域属性"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "未知",
+              "开启",
+              "关闭"
+            ],
+            "description": "车门开合状态属性"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_control_Vehicle_HoodOpen",
+      "description": "打开前舱盖（无法UI关闭，只能手动关闭）",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "前舱盖开启"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_control_Vehicle_TrunkControl",
+      "description": "控制后备箱打开/关闭/暂停",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "后备箱控制"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_control_Vehicle_TrunkHeightLimitSet",
+      "description": "设置后备箱高度限制开启/关闭",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "查询入参",
+              "查询出参",
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "后备箱高度限制设置"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_hood_status",
+      "description": "查询和设置前机舱盖开合状态",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "开启",
+              "关闭"
+            ],
+            "description": "前机舱盖状态"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_trunk_openDuration",
+      "description": "设置后备箱自动关闭时间",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_trunk_status",
+      "description": "查询后备箱开启状态",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "开启",
+              "关闭"
+            ],
+            "description": "前机舱盖状态"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_light_AmbientSyncSet",
+      "description": "设置氛围灯多区同步开关",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "查询入参",
+              "查询出参",
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "多区同步开关"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_light_DelayLightSet",
+      "description": "设置车内外延时照明开启/关闭",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "查询入参",
+              "查询出参",
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "车内外延时照明开关"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_light_FrontLightSet",
+      "description": "设置车辆前部照明开启/关闭",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "查询入参",
+              "查询出参",
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "车辆前部照明开关"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_light_HeadlightModeSet",
+      "description": "设置近光灯模式为自动/左侧行驶/右侧行驶",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "查询入参",
+              "查询出参",
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "近光灯模式设置"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_light_InteriorAllOff",
+      "description": "将内饰灯+阅读灯全部熄灭",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "车内照明全关"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_light_InteriorAllOn",
+      "description": "将内饰灯+阅读灯全部点亮",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "车内照明全开"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_light_InteriorFrontLightSet",
+      "description": "设置前排车内照明开关",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "查询入参",
+              "查询出参",
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "车内照明前排开关"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_light_InteriorRearLightSet",
+      "description": "设置后排车内照明开关",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "查询入参",
+              "查询出参",
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "车内照明后排开关"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_light_PositionLightSet",
+      "description": "设置定位照明开启/关闭",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "查询入参",
+              "查询出参",
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "定位照明开关"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_light_ProjectionSet",
+      "description": "设置欢迎/再见投影模式",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "查询入参",
+              "查询出参",
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "欢迎再见投影设置"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_light_brightness",
+      "description": "设置车灯亮度",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "brightness": {
+            "type": "number",
+            "description": "亮度值"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_light_flashFreq",
+      "description": "设置转向灯闪烁频率",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_light_headlightStatus",
+      "description": "查询车辆大灯当前状态",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_light_ils_tourist_mode",
+      "description": "设置近光灯行驶侧模式（自动/左侧/右侧）",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "自动",
+              "左侧行驶",
+              "右侧行驶"
+            ],
+            "description": "近光灯设定"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_light_projection",
+      "description": "控制投影灯光功能",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_read_brightness",
+      "description": "设置车内阅读灯亮度",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "全开",
+              "全关"
+            ],
+            "description": "阅读灯"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_read_light",
+      "description": "设置车内阅读灯",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "全开",
+              "全关"
+            ],
+            "description": "阅读灯"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_control_Vehicle_MirrorFoldSet",
+      "description": "设置自动后视镜折叠开启/关闭",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "查询入参",
+              "查询出参",
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "自动后视镜折叠设置"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_rear_mirror_heat",
+      "description": "查询、设置、订阅后视镜加热",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "开启",
+              "关闭"
+            ],
+            "description": "后视镜加热"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_wiper_speed",
+      "description": "设置雨刮速度",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "speed": {
+            "type": "string",
+            "enum": [
+              "off",
+              "slow",
+              "normal",
+              "fast",
+              "auto"
+            ]
+          }
+        },
+        "required": [
+          "speed"
+        ]
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_drive_AirSpringSet",
+      "description": "空气悬架系统开启/关闭",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "查询入参",
+              "查询出参",
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "空气弹簧开关"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_drive_DescentControlSwitch",
+      "description": "陡坡缓降功能开启/关闭",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "查询入参",
+              "查询出参",
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "陡坡缓降开关"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_drive_DriveModeSoundSet",
+      "description": "设置驾驶模式切换音效开启/关闭",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "查询入参",
+              "查询出参",
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "驾驶模式音效开关"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_drive_DriveModeSwitch",
+      "description": "切换驾驶模式",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "查询入参",
+              "查询出参",
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "驾驶模式切换"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_drive_ESPSwitch",
+      "description": "ESP车身电子稳定系统开启/关闭",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "查询入参",
+              "查询出参",
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "ESP开关"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_drive_IndividualDriveSet",
+      "description": "设置个性化模式子系统配置",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "查询入参",
+              "查询出参",
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "个性化驾驶子系统设置"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_drive_ManualShiftSwitch",
+      "description": "手动换挡功能开启/关闭",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "查询入参",
+              "查询出参",
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "手动换挡开关"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_drive_RaiseSuspensionSwitch",
+      "description": "升高悬挂开启/关闭",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "查询入参",
+              "查询出参",
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "升高悬挂开关"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_drive_SnowChainModeSet",
+      "description": "防滑链模式开启/关闭（需二次确认）",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "查询入参",
+              "查询出参",
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "防滑链模式开关"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_drive_WinterTireSpeedSet",
+      "description": "设置冬季轮胎限速开关及限速值",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "查询入参",
+              "查询出参",
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "冬季轮胎限速设置"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_drive_mode",
+      "description": "查询、设置驾驶模式",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "舒适模式",
+              "节能模式",
+              "运动模式",
+              "运动增强模式",
+              "越野模式",
+              "个性化模式"
+            ],
+            "description": "驾驶模式"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "offroad_mode_control",
+      "description": "控制越野模式开关",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "开启",
+              "关闭"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_dvr_record_status",
+      "description": "查询行车记录仪录制状态",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_ic_indicator_status",
+      "description": "查询仪表盘指示灯状态",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_ic_ready_status",
+      "description": "查询车辆就绪状态",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_ic_rear_belt_status",
+      "description": "查询后排安全带状态",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_status_BrakeMaintenanceSet",
+      "description": "设置制动盘保养模式开启/关闭（仅电车，需二次确认）",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "查询入参",
+              "查询出参",
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "制动盘保养模式开关"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_status_OilLevelQuery",
+      "description": "查询发动机油液位（仅油车）",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "查询入参",
+              "查询出参"
+            ],
+            "description": "机油液位查询"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_status_RangeQuery",
+      "description": "查询车辆续航里程",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "查询入参",
+              "查询出参"
+            ],
+            "description": "续航里程查询"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_status_RangeReset",
+      "description": "复位续航里程历史记录（仅电车）",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "续航里程复位"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_status_TirePressureCalibrate",
+      "description": "将当前胎压设为系统基准",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "胎压校正"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_status_TirePressureQuery",
+      "description": "查询各轮胎胎压数值",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "查询入参",
+              "查询出参"
+            ],
+            "description": "胎压查询"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_status_TireStatusQuery",
+      "description": "查询轮胎健康状态",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "查询入参",
+              "查询出参"
+            ],
+            "description": "轮胎状态查询"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_status_TireTypeSet",
+      "description": "设置当前轮胎类型（仅电车）",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "查询入参",
+              "查询出参",
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "轮胎类型设置"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_status_TireWarning",
+      "description": "订阅轮胎告警通知",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "订阅入参",
+              "订阅出参"
+            ],
+            "description": "轮胎告警事件"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_status_TotalDistanceQuery",
+      "description": "查询车辆累计行驶里程",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "查询入参",
+              "查询出参"
+            ],
+            "description": "累计里程查询"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_status_TripReset",
+      "description": "复位行驶里程数据（从重置/从启动）",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "行驶数据复位"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_control_Vehicle_SeatbeltFeeder",
+      "description": "控制安全带递送器",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "开启",
+              "关闭"
+            ]
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_control_Vehicle_SeatbeltTightenSet",
+      "description": "设置安全带自动收紧功能开关",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "开启",
+              "关闭"
+            ]
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_wash_mode_disable",
+      "description": "关闭洗车模式",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_wash_mode_enable",
+      "description": "进入洗车模式",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "screen_clean_mode_disable",
+      "description": "关闭屏幕清洁模式",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "screen_clean_mode_enable",
+      "description": "打开屏幕清洁模式",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_control_Vehicle_WirelessChargeSwitch",
+      "description": "设置无线充电功能开启/关闭",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "查询入参",
+              "查询出参",
+              "设置入参",
+              "设置出参"
+            ],
+            "description": "无线充电开关"
+          }
+        }
+      },
+      "domain": "vehicle_control"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "car_weather_info",
+      "description": "查询天气预报详情（未来多天/分时预报）",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      },
+      "domain": "weather"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "audio_search",
+      "description": "搜索音乐/有声书/短视频/播客内容，支持关键词搜索和分类浏览",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "mediaType": {
+            "type": "string",
+            "enum": [
+              "music",
+              "audiobook",
+              "short_video",
+              "ktv",
+              "podcast",
+              "radio"
+            ],
+            "description": "搜索的媒体类型"
+          },
+          "keyword": {
+            "type": "string",
+            "description": "搜索关键词（keyword和category至少填一个）"
+          },
+          "category": {
+            "type": "string",
+            "description": "分类名称，按分类浏览内容（如：有声小说/儿童读物/音乐/曲艺等）"
+          },
+          "searchType": {
+            "type": "string",
+            "enum": [
+              "song",
+              "artist",
+              "album",
+              "playlist",
+              "content",
+              "creator"
+            ],
+            "description": "搜索维度"
+          },
+          "packageName": {
+            "type": "string",
+            "description": "指定在哪个应用内搜索"
+          },
+          "controlArea": {
+            "type": "string",
+            "enum": [
+              "csd",
+              "psd",
+              "rsd"
+            ],
+            "description": "控制区域"
+          }
+        },
+        "required": [
+          "mediaType"
+        ]
+      },
+      "domain": "media_audio"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "audio_query",
+      "description": "查询当前音频播放信息和播放状态",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "queryType": {
+            "type": "string",
+            "enum": [
+              "title",
+              "artist",
+              "album",
+              "progress",
+              "play_mode",
+              "favorite_status",
+              "source",
+              "history",
+              "detail",
+              "all"
+            ]
+          },
+          "mediaType": {
+            "type": "string",
+            "enum": [
+              "music",
+              "audiobook",
+              "short_video",
+              "ktv",
+              "podcast",
+              "radio"
+            ]
+          },
+          "controlArea": {
+            "type": "string",
+            "enum": [
+              "csd",
+              "psd",
+              "rsd"
+            ]
+          }
+        }
+      },
+      "domain": "media_audio"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "audio_favorite",
+      "description": "收藏或取消收藏当前正在播放的媒体项",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "add",
+              "remove"
+            ],
+            "description": "收藏操作：添加收藏/取消收藏"
+          },
+          "controlArea": {
+            "type": "string",
+            "enum": [
+              "csd",
+              "psd",
+              "rsd"
+            ],
+            "description": "控制区域"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "domain": "media_audio"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "audio_subscribe",
+      "description": "订阅或取消订阅音频内容（专辑/节目/电台），订阅后可接收内容更新推送",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "subscribe",
+              "unsubscribe",
+              "list"
+            ],
+            "description": "订阅操作：订阅/取消订阅/查看订阅列表"
+          },
+          "mediaType": {
+            "type": "string",
+            "enum": [
+              "audiobook",
+              "podcast",
+              "radio"
+            ],
+            "description": "媒体类型"
+          },
+          "itemId": {
+            "type": "string",
+            "description": "专辑/节目/电台ID"
+          },
+          "packageName": {
+            "type": "string",
+            "description": "指定应用包名"
+          },
+          "controlArea": {
+            "type": "string",
+            "enum": [
+              "csd",
+              "psd",
+              "rsd"
+            ],
+            "description": "控制区域"
+          }
+        },
+        "required": [
+          "action",
+          "mediaType"
+        ]
+      },
+      "domain": "media_audio"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "radio_tuner",
+      "description": "车载收音机硬件调谐：FM/AM切换、手动调频、自动搜台、频道收藏",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "set_frequency",
+              "auto_scan",
+              "switch_band",
+              "favorite_channel",
+              "unfavorite_channel"
+            ],
+            "description": "调谐操作"
+          },
+          "band": {
+            "type": "string",
+            "enum": [
+              "FM",
+              "AM"
+            ],
+            "description": "波段类型"
+          },
+          "frequency": {
+            "type": "number",
+            "description": "频率值：FM如88.7，AM如226"
+          },
+          "controlArea": {
+            "type": "string",
+            "enum": [
+              "csd",
+              "psd",
+              "rsd"
+            ],
+            "description": "控制区域"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "domain": "media_radio"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "radio_query",
+      "description": "查询电台信息：电台列表、节目单、收听历史、当前播放",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "queryType": {
+            "type": "string",
+            "enum": [
+              "station_list",
+              "programs",
+              "history",
+              "current_play"
+            ]
+          },
+          "region": {
+            "type": "string",
+            "description": "地区编码"
+          },
+          "stationId": {
+            "type": "string",
+            "description": "电台ID"
+          },
+          "date": {
+            "type": "string",
+            "enum": [
+              "today",
+              "yesterday",
+              "tomorrow"
+            ]
+          },
+          "controlArea": {
+            "type": "string",
+            "enum": [
+              "csd",
+              "psd",
+              "rsd"
+            ]
+          }
+        },
+        "required": [
+          "queryType"
+        ]
+      },
+      "domain": "media_radio"
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "radio_play_content",
+      "description": "播放在线电台内容，按节目名、城市、类型等播放",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "programName": {
+            "type": "string",
+            "description": "节目/电台名称"
+          },
+          "city": {
+            "type": "string",
+            "description": "城市/地区"
+          },
+          "programType": {
+            "type": "string",
+            "description": "节目类型：新闻/音乐/经济/体育等"
+          },
+          "specialPlaylist": {
+            "type": "string",
+            "enum": [
+              "my_favorite",
+              "recent",
+              "recommend"
+            ],
+            "description": "特殊列表"
+          },
+          "packageName": {
+            "type": "string",
+            "description": "指定电台应用包名"
+          },
+          "controlArea": {
+            "type": "string",
+            "enum": [
+              "csd",
+              "psd",
+              "rsd"
+            ],
+            "description": "控制区域"
+          }
+        }
+      },
+      "domain": "media_radio"
+    }
+  }
+]

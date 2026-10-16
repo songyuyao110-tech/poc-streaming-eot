@@ -31,7 +31,7 @@ def main():
                 return
             messages.append(json.loads(message))
 
-    ws.send(json.dumps({"cmd": "config", "tool_set": "navigation", "config": {"speculative_llm": True}}))
+    ws.send(json.dumps({"cmd": "config", "tool_set": "core_score", "config": {"speculative_llm": True}}))
     drain(1.0)
     print("ready:", json.dumps(messages[0] if messages else None, ensure_ascii=False))
 

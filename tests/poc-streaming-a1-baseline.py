@@ -9,10 +9,10 @@ VOLATILE = {"run_id", "result_path", "event_elapsed_ms", "ui_total_latency_ms", 
             "assembly_latency_ms", "decision_latency_ms", "kev_stage1", "kev_stage2_batches",
             "kev_stage2_concurrency", "kev_http_pool_size", "kev_stage2"}
 
-SAMPLES = [("导航回家", "navigation"),
-           ("我搬家了，先打开家庭地址设置页面，暂时不要开始导航。", "navigation"),
-           ("取消当前导航", "navigation"),
-           ("打开空调", "multidomain")]
+SAMPLES = [("导航回家", "core_score"),
+           ("我搬家了，先打开家庭地址设置页面，暂时不要开始导航。", "core_score"),
+           ("取消当前导航", "core_score"),
+           ("打开空调", "core_score")]
 
 
 def scrub(value):

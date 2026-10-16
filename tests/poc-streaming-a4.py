@@ -51,7 +51,7 @@ updates = [{"t_ms": 300, "text": "导", "final": False}, {"t_ms": 500, "text": "
            {"t_ms": 700, "text": "导航回", "final": False}, {"t_ms": 900, "text": "导航回家", "final": False},
            {"t_ms": 1050, "text": "导航回家。", "final": True}]
 vad = [{"t_ms": 0, "kind": "speech_start"}, {"t_ms": 1070, "kind": "speech_end"}]
-events = post({"updates": updates, "vad": vad, "tool_set": "navigation"})
+events = post({"updates": updates, "vad": vad, "tool_set": "core_score"})
 
 print("=" * 100)
 for event in events:
@@ -93,7 +93,7 @@ if path.is_file():
     results.append(check("A4 timeline.json structure", keys_ok, f"keys={sorted(timeline)}"))
     results.append(check("A4 timeline.json event count matches SSE", len(timeline["events"]) == len(events),
                          f"{len(timeline['events'])} vs {len(events)}"))
-    results.append(check("A4 timeline.json config round-trips", timeline["config"].get("tool_set") == "navigation"))
+    results.append(check("A4 timeline.json config round-trips", timeline["config"].get("tool_set") == "core_score"))
 
 def deterministic_reuse():
     """The same normalised text must not trigger a second tool-scoring round (injected fast callables)."""
@@ -107,12 +107,12 @@ def deterministic_reuse():
 
     def tools(text, tool_set, context):
         scored.append(text)
-        return {"scores": {"tool:navi_to_special_poi": 0.9}, "selected": ["navi_to_special_poi"],
-                "schemas": [{"name": "navi_to_special_poi", "description": "d", "parameters": {"type": "object"}}],
+        return {"scores": {"tool:car_navi_to_destination": 0.9}, "selected": ["car_navi_to_destination"],
+                "schemas": [{"name": "car_navi_to_destination", "description": "d", "parameters": {"type": "object"}}],
                 "native_schemas": None, "domains": None, "timing": {"total_ms": 1.0}}
 
     def decide(utterance, selected, schemas, tool_set, context, **kwargs):
-        return {"decision": {"kind": "tool_call", "tool": "navi_to_special_poi", "arguments": {}},
+        return {"decision": {"kind": "tool_call", "tool": "car_navi_to_destination", "arguments": {}},
                 "llm_ms": 1.0, "log_fields": {"decision_head": "stub"}}
 
     session = TurnSession(TurnConfig(debounce_ms=0), events.append, eot_fn=eot, select_tools_fn=tools,

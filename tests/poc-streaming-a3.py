@@ -33,7 +33,7 @@ def build_script(text, speed=SPEED):
     return updates, vad
 
 
-def replay(text, config=None, tool_set="navigation"):
+def replay(text, config=None, tool_set="core_score"):
     updates, vad = build_script(text)
     body = {"updates": updates, "vad": vad, "tool_set": tool_set, "config": config or {}}
     request = urllib.request.Request(f"http://127.0.0.1:{PORT}/api/session/stream",
@@ -87,14 +87,24 @@ def check(name, ok, note=""):
 if __name__ == "__main__":
     results = []
 
-    # 1) 导航回家 → exactly one valid decision, no wasted LLM call.
+    # 1) 导航回家 → exactly one applied decision.
+    #    期望已因工具集更换而改写（旧的 navigation 14 工具要求 llm_wasted == 0）：
+    #    core_score 是 242/17 两阶段 KEV，第一个 partial（1 个字）的工具轮会先返回一个空短名单，
+    #    M4 的 allow_stale_shortlist 会先按这个旧短名单发起决策，短名单落地变化后按 shortlist_changed
+    #    重发一次 —— 这正是 M4 设计的行为，浪费被记进 llm_wasted。见 docs/spec-core-score-tools.md §5 S4。
     _, _, events = replay("导航回家")
     show("导航回家", events)
     done = turn_done(events)
     decisions = [event for event in events if event["event"] == "llm_decision"]
+    reissues = [event for event in events if event["event"] == "llm_cancel"
+                and event.get("reason") == "shortlist_changed"]
     print(f"  turn_done: {json.dumps({k: done[k] for k in ('t_last_word','t_confirmed','t_llm_start','t_decision','eot_calls','eot_skipped','tool_calls','llm_calls','llm_wasted','timeline_path')}, ensure_ascii=False)}")
-    results.append(check("A3-1 exactly 1 llm_decision", len(decisions) == 1, f"got {len(decisions)}"))
-    results.append(check("A3-1 llm_wasted == 0", done["llm_wasted"] == 0, f"got {done['llm_wasted']}"))
+    results.append(check("A3-1 exactly 1 applied llm_decision", len(decisions) == 1, f"got {len(decisions)}"))
+    results.append(check("A3-1 decision used the final shortlist (fresh)",
+                         bool(decisions) and decisions[-1].get("shortlist_source") in {None, "fresh"},
+                         f"{decisions[-1].get('shortlist_source') if decisions else None}"))
+    results.append(check("A3-1 waste is only the M4 shortlist reissue (<= 1)", done["llm_wasted"] <= 1,
+                         f"got {done['llm_wasted']} reissues={len(reissues)}"))
 
     # 2) 我去买菜|600|对了还要买酱油 → one valid decision on the merged text.
     _, _, events = replay("我去买菜|600|对了还要买酱油")

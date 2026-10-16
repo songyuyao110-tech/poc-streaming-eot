@@ -12,5 +12,6 @@
 | `poc-streaming-prefix-eval-report-after.md` | `docs/prefix-eval-after.md` |
 | `poc-streaming-m3-*.md` | `docs/m3-*.md`（7 份调参记录） |
 | `poc-streaming-latency-opt-spec.md` | `docs/spec-latency-opt.md`（延迟优化 spec） |
+| `poc-core-score-tools-spec.md` | `docs/spec-core-score-tools.md`（core_score 工具集替换 spec，权威） |
 
 原 `tmp/` 文件未删除，仍可回溯；本目录是整理后的正式归档。

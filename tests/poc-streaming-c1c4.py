@@ -20,7 +20,7 @@ from turn_session import EVIDENCE_ROOT, TurnConfig, TurnSession, normalize
 # Acceptance-only overrides (spec §5); TurnConfig defaults are untouched.
 BASE = {"speculative_llm": False, "confirm_silence_ms": 300, "max_silence_ms": 1500,
         "debounce_ms": 0, "shortlist_reissue": False, "warm_llm": False, "eot_max_inflight": 1,
-        "tools_max_inflight": 1, "eot_policy": "argmax", "tool_set": "navigation"}
+        "tools_max_inflight": 1, "eot_policy": "argmax", "tool_set": "core_score"}
 SPEC = {**BASE, "speculative_llm": True, "spec_margin": 0.0}
 EOT_STUB = {"complete": 0.9, "cut": 0.05, "wait": 0.05, "label": "complete", "margin": 0.9,
             "wall_ms": 1.0, "kev_ms": 1.0}
@@ -40,14 +40,14 @@ class Harness:
 
     def _tools(self, text, tool_set, context):
         self.tool_inputs.append(text)
-        return {"scores": {"tool:navi_to_special_poi": 0.9}, "selected": ["navi_to_special_poi"],
-                "schemas": [{"name": "navi_to_special_poi", "description": "d",
+        return {"scores": {"tool:car_navi_to_destination": 0.9}, "selected": ["car_navi_to_destination"],
+                "schemas": [{"name": "car_navi_to_destination", "description": "d",
                              "parameters": {"type": "object"}}],
                 "native_schemas": None, "domains": None, "timing": {"total_ms": 1.0}}
 
     def _decide(self, utterance, selected, schemas, tool_set, context, **kwargs):
         self.decide_inputs.append(utterance)
-        return {"decision": {"kind": "tool_call", "tool": "navi_to_special_poi", "arguments": {}},
+        return {"decision": {"kind": "tool_call", "tool": "car_navi_to_destination", "arguments": {}},
                 "llm_ms": 1.0, "log_fields": {"decision_head": "stub"}}
 
     # -- driver (virtual clock; only this thread touches TurnSession state) --

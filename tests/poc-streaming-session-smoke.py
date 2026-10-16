@@ -53,16 +53,16 @@ def fake_eot(text):
 
 def fake_tools(text, tool_set, context):
     time.sleep(0.05)
-    return {"scores": {"tool:navi_to_special_poi": 0.9, "tool:navi_start_route": 0.7, "tool:navi_cancel_route": 0.1},
-            "selected": ["navi_to_special_poi", "navi_start_route"],
-            "schemas": [{"name": "navi_to_special_poi", "description": "d", "parameters": {"type": "object"}}],
+    return {"scores": {"tool:car_navi_to_destination": 0.9, "tool:car_navi_add_waypoint": 0.7, "tool:car_navi_cancel": 0.1},
+            "selected": ["car_navi_to_destination", "car_navi_add_waypoint"],
+            "schemas": [{"name": "car_navi_to_destination", "description": "d", "parameters": {"type": "object"}}],
             "native_schemas": None, "domains": None,
             "timing": {"stage1_ms": 50.0, "stage2_ms": 0.0, "total_ms": 50.0}}
 
 
 def fake_decide(utterance, selected, schemas, tool_set, context, **kwargs):
     time.sleep(0.1)
-    return {"decision": {"kind": "tool_call", "tool": "navi_to_special_poi", "arguments": {"poi_type": "home"}},
+    return {"decision": {"kind": "tool_call", "tool": "car_navi_to_destination", "arguments": {"poi_type": "home"}},
             "llm_ms": 100.0, "log_fields": {"decision_head": "mock"}}
 
 

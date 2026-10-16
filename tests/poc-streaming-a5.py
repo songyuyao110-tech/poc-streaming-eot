@@ -20,7 +20,7 @@ vad = [{"t_ms": 0, "kind": "speech_start"}, {"t_ms": 350, "kind": "speech_end"},
 
 
 def run():
-    body = {"updates": updates, "vad": vad, "tool_set": "navigation",
+    body = {"updates": updates, "vad": vad, "tool_set": "core_score",
             # max_silence must stay above the confirm window, otherwise it force-confirms before the reversal.
             # spec_margin=0 removes KEV score variance from the check: any MAYBE_DONE starts the
             # speculative call, so the acceptance tests cancellation, not the margin gate.

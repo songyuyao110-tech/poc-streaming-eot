@@ -22,7 +22,7 @@ import time
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.dont_write_bytecode = True
 
-from core_pipeline_run import POC_ROOT, decide, select_tools
+from core_pipeline_run import POC_ROOT, TOOL_SET, decide, select_tools
 from turn_eot import score_eot
 
 EVIDENCE_ROOT = POC_ROOT / "evidence/turn-session"
@@ -59,7 +59,11 @@ class TurnConfig:
     allow_stale_shortlist: bool = True
     shortlist_reissue: bool = True
     warm_llm: bool = True               # one tiny completion on the first partial (hides cold start)
-    tool_set: str = "navigation"        # navigation|multidomain
+    tool_set: str = TOOL_SET              # the PoC's only tool set: core_score (242 tools / 17 domains)
+
+    def __post_init__(self):
+        if self.tool_set != TOOL_SET:
+            raise ValueError("Unknown tool_set: only " + TOOL_SET + " is available")
 
     @classmethod
     def from_dict(cls, data):

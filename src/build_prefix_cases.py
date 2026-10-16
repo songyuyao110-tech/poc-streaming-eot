@@ -1,9 +1,12 @@
 """Build streaming prefix cases for the V1 replay evaluation.
 
-Sources: tools-multidomain.yaml sample_utterances (200 zh) + core-pipeline-corpus.jsonl (30 zh),
-pipecat-turn-eval-v2/cases.json (168 en). Prefixes grow 1-2 characters (zh) / one word (en) at a time.
-True prefixes default to gold=incomplete; prefixes that can stand alone are pre-labelled by DeepSeek
-and flagged `natural_complete` (reported separately, not counted as misjudgements).
+Sources: core-pipeline-corpus.jsonl (30 zh) + pipecat-turn-eval-v2/cases.json (168 en). Prefixes
+grow 1-2 characters (zh) / one word (en) at a time. True prefixes default to gold=incomplete;
+prefixes that can stand alone are pre-labelled by DeepSeek and flagged `natural_complete` (reported
+separately, not counted as misjudgements).
+
+Note: the 200 zh sample utterances of the retired `multidomain` tool set are gone with it; the
+already-committed src/fixtures/streaming-prefix-cases.jsonl keeps those rows.
 """
 from __future__ import annotations
 
@@ -23,7 +26,6 @@ import httpx2
 
 PIPECAT_CASES = Path(os.environ.get("POC_CASES", "/Users/YUYSONG/Work/tmp/pipecat-turn-eval-v2/cases.json"))
 OUTPUT = POC_ROOT / "src/fixtures/streaming-prefix-cases.jsonl"
-SAMPLE_COMMENT = re.compile(r"# sample_utterances: (\[.*\])")
 
 NATURAL_PROMPT = """下面是一个完整句子，以及它从开头开始的若干前缀（按顺序递增，最后一个是整句）。
 请挑出"本身已经是一个自然、可以独立结束的话轮"的前缀：用户说到那里停住，助手此时回应是合理的。
@@ -38,12 +40,7 @@ NATURAL_PROMPT = """下面是一个完整句子，以及它从开头开始的若
 
 
 def chinese_sentences():
-    text = (ROOT / "eval/fixtures/tools-multidomain.yaml").read_text()
     rows = []
-    for index, item in enumerate(SAMPLE_COMMENT.findall(text)):
-        for utterance in json.loads(item):
-            rows.append({"lang": "zh", "source": "tools-multidomain-sample", "text": utterance,
-                         "external_id": f"md-{index:03d}"})
     for line in (ROOT / "eval/fixtures/core-pipeline-corpus.jsonl").read_text().splitlines():
         if line.strip():
             case = json.loads(line)
