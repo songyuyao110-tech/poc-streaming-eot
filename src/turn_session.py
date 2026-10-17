@@ -108,6 +108,10 @@ class TurnSession:
         # unconsumed suffix is segments[consumed_segments:] + the in-use segment (see suffix_text()).
         self.consumed_version = 0
         self.consumed_segments = 0
+        # Dedup basis: the *whole* consumed text, not just the last sealed segment. Volcengine
+        # re-sends a whole utterance, so once several segments were consumed the re-send prefixes
+        # the full consumed text while `consumed_tail` (kept for compatibility/metrics) does not.
+        self.consumed_text = ""
         self.consumed_tail = None
         self.consumptions = []
         self.consumed_count = 0
@@ -155,19 +159,20 @@ class TurnSession:
                 return
             self._emit("barge_in", t_ms, why="asr_after_action", text=text)
             self._reset_turn(t_ms)
-        # Volcengine re-sends the whole sentence of an utterance: after a segment was consumed, an exact
-        # re-send is a duplicate and a re-send that continues the consumed text only contributes the tail.
-        if self.consumed_tail:
-            norm_text, norm_tail = normalize(text), normalize(self.consumed_tail)
-            if norm_text and norm_tail and norm_text.startswith(norm_tail):
-                if norm_text == norm_tail:
+        # Volcengine re-sends the whole sentence of an utterance: after one or more segments were
+        # consumed, an exact re-send is a duplicate and a re-send that continues the consumed text
+        # only contributes the tail. The judgement uses the *full* consumed text — with several
+        # consumptions the last sealed segment alone no longer prefixes the re-send (spec 问题 1).
+        if self.consumed_text:
+            norm_text = normalize(text)
+            if norm_text and norm_text.startswith(self.consumed_text):
+                if norm_text == self.consumed_text:
                     self.counters["eot_skipped"] += 1
                     self._emit("asr_update", t_ms, text=text, final=bool(final), segment=self.segment,
                                turn_text=self.turn_text(), changed=False)
                     self._emit("eot_skipped", t_ms, reason="consumed_duplicate", text=text)
                     return
-                if text.startswith(self.consumed_tail):
-                    text = text[len(self.consumed_tail):]
+                text = self._tail_after_consumed(text)
         if self.turn_start_ms is None:
             self.turn_start_ms = t_ms
         if self.segment_closed:
@@ -205,6 +210,21 @@ class TurnSession:
         self.eot_scores = None
         self.tick(t_ms)
 
+    def _tail_after_consumed(self, text: str) -> str:
+        """Raw tail left after the consumed prefix, aligned on normalized characters.
+
+        The re-send need not match byte-for-byte (Volcengine re-punctuates), so walk `text` counting
+        only characters that survive `normalize()` until the consumed text's length is reached.
+        """
+        seen = 0
+        for index, char in enumerate(text):
+            if _PUNCT.fullmatch(char):
+                continue
+            seen += 1
+            if seen == len(self.consumed_text):
+                return text[index + 1:]
+        return text
+
     def on_vad(self, t_ms: int, kind: str) -> None:
         self._emit("vad", t_ms, kind=kind)
         if kind == "speech_start":
@@ -231,7 +251,13 @@ class TurnSession:
             if silence >= self.cfg.think_wait_ms:
                 self._confirm(now_ms, "think_wait")
         elif self.state == "MAYBE_DONE":
-            if silence >= self.cfg.confirm_silence_ms:
+            if not normalize(self.suffix_text()):
+                # Nothing left to confirm: close the turn like the LISTENING empty-suffix branch
+                # instead of waiting for a _confirm() that can never act (spec 问题 2.2). This is the
+                # safety net for paths this fix does not change (e.g. a timed-out EOT still reporting).
+                if silence >= self.cfg.confirm_silence_ms:
+                    self._maybe_finish_session(now_ms)
+            elif silence >= self.cfg.confirm_silence_ms:
                 self._confirm(now_ms, "confirm_silence")
             elif silence >= self.cfg.max_silence_ms:
                 self._confirm(now_ms, "max_silence")
@@ -406,6 +432,14 @@ class TurnSession:
         if stale:
             self._emit("eot_skipped", now_ms, reason="stale", text=job["text"])
             return
+        if not normalize(self.suffix_text()):
+            # Everything this judgement could speak about is already consumed: keep the score and
+            # emit, but never drive the state machine. A late `complete` used to park the turn in
+            # MAYBE_DONE with an empty suffix, where _confirm() can never act (spec 问题 2.1).
+            self.counters["eot_skipped"] += 1
+            self._emit("eot_skipped", now_ms, reason="empty_suffix", text=job["text"],
+                       label=result["label"])
+            return
         if self.state == "CONFIRMED":
             return
         label = result["label"]
@@ -495,8 +529,10 @@ class TurnSession:
             self.segments.append(self.segment)
             self.segment = ""
         self.segment_closed = False
-        self.consumed_tail = self.segments[-1] if self.segments else None
         self.consumed_segments = len(self.segments)
+        self.consumed_text = normalize(self._join(self.segments[:self.consumed_segments]))
+        # Kept for compatibility (metrics, older tests); dedup is judged on `consumed_text`.
+        self.consumed_tail = self.segments[-1] if self.segments else None
 
     # ---------- state ----------
 
@@ -624,6 +660,7 @@ class TurnSession:
         self.t_decision_last = None
         self.consumed_version = 0
         self.consumed_segments = 0
+        self.consumed_text = ""
         self.consumed_tail = None
         self.consumptions = []
         self.consumed_count = 0

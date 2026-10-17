@@ -4,10 +4,15 @@ Deterministic on purpose: TurnSession is driven with a virtual clock and injecte
 (EOT always says "complete" with margin 0.9, tools and decide return immediately), so the expected
 LLM call count and the exact text handed to each decide() are not exposed to KEV/LLM variance.
 
+C5 + F2a/F2b extend the same harness to the two fixes in
+`tmp/poc-fix-consumed-tail-eot-spec.md`: whole-consumed-text dedup (F1) and late EOT on an empty
+suffix (F2).
+
     python tests/poc-streaming-c1c4.py
 """
 import json
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -28,15 +33,23 @@ STEP = 20
 
 
 class Harness:
-    def __init__(self, config, session_id, evidence_root=None):
+    def __init__(self, config, session_id, evidence_root=None, gate=None):
         self.now = 0.0
         self.events = []
         self.decide_inputs = []
         self.tool_inputs = []
+        # `gate` (an unset/set Event) lets a test hold an EOT worker until a chosen moment, i.e.
+        # reproduce a judgement that lands long after the text it describes was consumed.
+        self.gate = gate
         self.session = TurnSession(TurnConfig.from_dict(config), self.events.append,
-                                   eot_fn=lambda text: dict(EOT_STUB), select_tools_fn=self._tools,
+                                   eot_fn=self._eot, select_tools_fn=self._tools,
                                    decide_fn=self._decide, session_id=session_id,
                                    evidence_root=evidence_root)
+
+    def _eot(self, text):
+        if self.gate is not None:
+            self.gate.wait(5.0)
+        return dict(EOT_STUB)
 
     def _tools(self, text, tool_set, context):
         self.tool_inputs.append(text)
@@ -284,13 +297,145 @@ def c4():
     return results
 
 
+def c5():
+    print("=" * 100)
+    print("C5 · F1: a re-send of *all* consumed segments is deduped; re-send + new tail consumes only the tail")
+    h = Harness(BASE, "c5-resend-after-two-segments")
+    h.session.on_vad(0, "speech_start")
+    h.session.on_asr(100, "导航回家", True)
+    h.session.on_vad(120, "speech_end")
+    h.pump_until(lambda: h.session.consumed_count == 1, 1000)
+    h.pump(800)
+    h.session.on_vad(800, "speech_start")
+    h.session.on_asr(900, "顺便看看路况", True)
+    h.session.on_vad(920, "speech_end")
+    h.pump_until(lambda: h.session.consumed_count == 2, 5000)
+    calls_before = h.summary()["llm_calls"]
+    # Volcengine re-sends the whole utterance of the turn (both consumed segments, re-punctuated).
+    # The last segment alone ("顺便看看路况") does not prefix this text — only the full consumed
+    # text does, which is exactly what the old single-level `consumed_tail` check got wrong.
+    mark = len(h.events)
+    h.session.on_asr(1200, "导航回家。顺便看看路况！", True)
+    resend_events = h.events[mark:]
+    duplicate = [event for event in resend_events if event["event"] == "eot_skipped"
+                 and event.get("reason") == "consumed_duplicate"]
+    started = [event for event in resend_events
+               if event["event"] in ("eot_start", "tools_start", "llm_start")]
+    consumed_after_dup, calls_after_dup = h.summary()["consumed_count"], h.summary()["llm_calls"]
+    # A re-send that continues the consumed text contributes only the new tail.
+    h.session.on_asr(1300, "导航回家顺便看看路况把温度调到二十三度", True)
+    h.pump(6000)
+    consumed = h.named("segment_consumed")
+    ok_inv, note = invariant(h)
+    results = [
+        check("C5 the whole re-send (segment1+segment2) is reported as consumed_duplicate",
+              bool(duplicate),
+              json.dumps([{key: event.get(key) for key in ("t_ms", "reason", "text")}
+                          for event in duplicate], ensure_ascii=False)),
+        check("C5 the duplicate advances no segment and starts no eot/tools/llm",
+              consumed_after_dup == 2 and calls_after_dup == calls_before and not started,
+              f"consumed={consumed_after_dup} calls={calls_after_dup}/{calls_before} "
+              f"started={[event['event'] for event in started]}"),
+        check("C5 re-send + new tail consumes exactly the new tail once",
+              h.decide_inputs == ["导航回家", "顺便看看路况", "把温度调到二十三度"]
+              and bool(consumed) and consumed[-1]["text"] == "把温度调到二十三度",
+              f"inputs={h.decide_inputs} last={consumed[-1]['text'] if consumed else None!r}"),
+        check("C5 consumed_count=3 llm_calls=3 llm_wasted=0",
+              h.summary()["consumed_count"] == 3 and h.summary()["llm_calls"] == 3
+              and h.summary()["llm_wasted"] == 0,
+              f"consumed={h.summary()['consumed_count']} calls={h.summary()['llm_calls']} "
+              f"wasted={h.summary()['llm_wasted']}"),
+        check("C5 invariant llm_calls == consumed + wasted", ok_inv, note),
+        check("C5 turn_done emitted, state LISTENING",
+              bool(h.named("turn_done")) and h.session.state == "LISTENING", f"state={h.session.state}"),
+    ]
+    h.close()
+    return results
+
+
+def f2a():
+    print("=" * 100)
+    print("F2a · F2: a late EOT judgement on fully consumed text does not park the turn in MAYBE_DONE")
+    gate = threading.Event()
+    gate.set()
+    h = Harness(BASE, "f2-late-eot-empty-suffix", gate=gate)
+    h.session.on_vad(0, "speech_start")
+    h.session.on_asr(100, "导航回家", True)
+    h.session.on_vad(120, "speech_end")
+    h.pump_until(lambda: h.session.consumed_count == 1, 2000)
+    consumed = h.session.consumed_count == 1 and not normalize(h.session.suffix_text())
+    maybe_before = len([event for event in h.named("state_change") if event["to"] == "MAYBE_DONE"])
+    # A judgement fired for this very text that only lands now (KEV/ASR latency): same text_version,
+    # so it is NOT stale — the old code pushed MAYBE_DONE and _confirm() then never acted.
+    gate.clear()
+    h.session._eot_pending = {"version": h.session.version, "text": "导航回家", "due_ms": h.now}
+    h.pump(h.now + STEP)
+    fired = len(h.session._eot_jobs)
+    h.session.tick(h.now)
+    gate.set()
+    h.pump_until(lambda: any(event["event"] == "eot_skipped" and event.get("reason") == "empty_suffix"
+                             for event in h.events), 3000)
+    skipped = [event for event in h.events if event["event"] == "eot_skipped"
+               and event.get("reason") == "empty_suffix"]
+    late_maybe = [event for event in h.named("state_change")
+                  if event["to"] == "MAYBE_DONE"][maybe_before:]
+    state_after = h.session.state
+    h.pump(6000)
+    done = h.named("turn_done")
+    ok_inv, note = invariant(h)
+    results = [
+        check("F2a the consumed text left an empty suffix, and the late EOT job was fired",
+              consumed and fired == 1,
+              f"consumed={h.session.consumed_count} suffix={normalize(h.session.suffix_text())!r} fired={fired}"),
+        check("F2a the late EOT complete is recorded but moves no state",
+              bool(skipped) and state_after == "LISTENING" and not late_maybe,
+              f"skipped={len(skipped)} state={state_after} "
+              f"maybe_after={[(event['t_ms'], event['why']) for event in late_maybe]}"),
+        check("F2a the turn still finishes (turn_done, state LISTENING)",
+              bool(done) and h.session.state == "LISTENING",
+              f"done={bool(done)} state={h.session.state}"),
+        check("F2a invariant llm_calls == consumed + wasted", ok_inv, note),
+    ]
+    h.close()
+    return results
+
+
+def f2b():
+    print("=" * 100)
+    print("F2b · F2: MAYBE_DONE with an empty suffix still closes the turn on silence")
+    h = Harness(BASE, "f2-maybe-done-empty-suffix")
+    h.session.on_vad(0, "speech_start")
+    h.session.on_asr(100, "导航回家", True)
+    h.session.on_vad(120, "speech_end")
+    h.pump_until(lambda: h.session.consumed_count == 1, 2000)
+    # F2a's fix now prevents this state from arising on its own, so the tick-level safety net is
+    # exercised directly (it also covers the timed-out EOT path this round deliberately leaves alone).
+    h.session._to_state("MAYBE_DONE", h.now, "test_force")
+    forced = h.session.state
+    h.pump(h.now + BASE["confirm_silence_ms"] + 400)
+    done = h.named("turn_done")
+    ok_inv, note = invariant(h)
+    results = [
+        check("F2b the stuck state is MAYBE_DONE with an empty suffix",
+              forced == "MAYBE_DONE" and not normalize(h.session.suffix_text()),
+              f"state={forced} suffix={normalize(h.session.suffix_text())!r}"),
+        check("F2b enough silence finishes the turn (turn_done emitted)",
+              bool(done), f"done={bool(done)} state={h.session.state}"),
+        check("F2b exactly one turn and the invariant holds",
+              h.summary()["turns"] == 1 and ok_inv, note),
+    ]
+    h.close()
+    return results
+
+
 if __name__ == "__main__":
-    results = {"C1": c1(), "C2": c2(), "C3": c3(), "C4": c4()}
+    results = {"C1": c1(), "C2": c2(), "C3": c3(), "C4": c4(), "C5": c5(),
+               "F2a": f2a(), "F2b": f2b()}
     print("=" * 100)
     for name, items in results.items():
         print(f"{name}: {'PASS' if all(items) else 'FAIL'} ({sum(items)}/{len(items)})")
     passed = all(all(items) for items in results.values())
     total = sum(len(items) for items in results.values())
-    print(f"C1-C4 RESULT: {'PASS' if passed else 'FAIL'} "
+    print(f"C1-C5/F2 RESULT: {'PASS' if passed else 'FAIL'} "
           f"({sum(sum(items) for items in results.values())}/{total})")
     raise SystemExit(0 if passed else 1)
