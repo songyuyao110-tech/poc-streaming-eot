@@ -4,3 +4,15 @@ __pycache__/
 # 运行时产物（timeline / 评测明细），只有 sample/ 入库
 evidence/*
 !evidence/sample/
+
+# 真实麦克风样本（本人录音 + 逐字 ASR 文本）：只留本地，不入库
+cases/mic-*.jsonl
+
+# 临时脚本 / 探针草稿
+tmp/
+
+# 本地虚拟环境与凭据
+.venv/
+venv/
+.env
+.env.*

@@ -1,0 +1,10 @@
+# PoC 直接依赖（只列本仓库代码 import 的第三方包，不列传递依赖）。
+# 上游 navi-dual-system 自己也有 requirements.txt，两边的版本约束是兼容的、可以都装：
+#   pip install -r ../navi-dual-system/requirements.txt -r requirements.txt
+# 共同部分：httpx2 / PyYAML / jsonschema / Flask。PoC 额外需要 simple-websocket（麦克风 WS 模式）。
+# 版本按已验证环境（Python 3.13）固定下限。
+httpx2[socks]>=2.13,<3
+Flask>=3.1,<4
+PyYAML>=6.0,<7
+jsonschema>=4.0,<5
+simple-websocket>=1.1,<2
