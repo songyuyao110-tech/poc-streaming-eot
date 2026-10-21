@@ -53,23 +53,21 @@ cd navi-dual-system && git checkout poc-streaming-eot && cd ..
 
 需要 **Python 3.10+**（在 3.13 上验证；macOS 自带 3.9 不行）。
 
-```sh
-# 上游依赖（typesafe-sdk / httpx2 / flask / flask-socketio / PyYAML / jsonschema）
-cd navi-dual-system
-python3.13 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
-cd ..
+**一个 venv，装两个 `requirements.txt`**（PoC 会 import 上游模块，所以运行时同时需要
+两边的依赖；只装本仓那份会在 import 上游 `model_clients` 时缺 `typesafe-sdk`）：
 
-# 本 PoC 的依赖（httpx2 / Flask / PyYAML / jsonschema / simple-websocket）
+```sh
 cd poc-streaming-eot
 python3.13 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
-cd ..
+.venv/bin/python -m pip install -r ../navi-dual-system/requirements.txt -r requirements.txt
 ```
 
-两边版本约束兼容，也可以只建一个 venv 把两个 `requirements.txt` 一起装，
-再让两个仓库都用同一个解释器。本仓 `requirements.txt` 只列 **PoC 代码直接 import**
-的包，不列传递依赖；上游 `requirements.txt` 覆盖它自己那套（含 `typesafe-sdk`）。
+（`../navi-dual-system` 是第 1 步克隆出来的目录，按你的实际路径改。venv 建在哪个仓都行，
+下文命令假设它是 `poc-streaming-eot/.venv`。）
+
+两份依赖的关系：上游那份（`typesafe-sdk` / `httpx2[socks]` / `flask` / `flask-socketio` /
+`pyyaml` / `jsonschema`）是它自己的服务与 SDK 适配需要的；本仓那份只列 **PoC 代码直接
+import** 的包，与上游重叠的版本约束兼容，额外只多一个 `simple-websocket`（麦克风 WS 模式）。
 
 ### 3. 指向上游
 
@@ -97,11 +95,11 @@ export POC_UPSTREAM=/absolute/path/to/navi-dual-system
 
 ### 5. 没有外部服务时能跑什么
 
-不连 KEV / LLM / ASR 也能跑（纯 mock，**本次已在干净环境验证**）：
+不连 KEV / LLM / ASR 也能跑（纯 mock，**本次已在干净环境验证**）。
+下面假设你已经按第 2 步 `cd` 进了 `poc-streaming-eot`：
 
 ```sh
 export POC_UPSTREAM=/absolute/path/to/navi-dual-system
-cd poc-streaming-eot
 
 .venv/bin/python -B tests/test_confirm_gate.py    # 确认判据，53 项全过
 .venv/bin/python -B tests/poc_confirm_flow.py     # 确认编排，PASS
