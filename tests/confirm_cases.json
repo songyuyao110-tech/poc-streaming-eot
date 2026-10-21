@@ -1,0 +1,249 @@
+{
+  "_meta": {
+    "title": "对话式二次确认 · 二轮回用户回复 -> 预期意图 用例数据集",
+    "version": "1.0.1",
+    "doc": "docs/test-design-confirmation-v2.md",
+    "schema_version": "2026-10",
+    "layers": {
+      "L1_mock_heuristic": "score_confirm_reply(..., mock=True) 关键词启发式打分 -> judge_confirm_reply。可离线独立跑、确定、可复现，仅作基线，不是产品验收证据。",
+      "L2_judge_inject": "手工注入真实校准分(score_override) -> judge_confirm_reply。纯逻辑验收，验证裁决逻辑把'合理真实分'映射到正确分支，不依赖打分通道。",
+      "L3_kev_scored": "真实 KEV 三问打分(mock=False, 隧道 :8010) -> judge_confirm_reply。authoritative 语义验收，须对 kev_needed=true 的用例重点看。"
+    },
+    "output_intents": {
+      "agree": "明确同意执行待确认动作 -> execute",
+      "reject": "明确拒绝执行待确认动作 -> abandon",
+      "takeover": "转移话题/提出新诉求，不再回应本次确认 -> reroute",
+      "unknown": "含糊/无法判明 -> 安全优先 abandon，绝不默认执行"
+    },
+    "field_notes": {
+      "expected_kev_intent": "语义权威预期；L2 用（配合 score_override 校验 judge），L3 真实 KEV 的目标。",
+      "expected_mock_intent": "null 或分支名。null 表示 mock 关键词启发式无法表达该条真实语义（notes 说明），该条不参与 L1 硬通过；只走 L2/L3。",
+      "kev_needed": "true 表示产品验收必须依赖真实 KEV 打分（mock 基线/启发式证据不足），须拉隧道跑 L3。",
+      "score_override": "真实 KEV 校准的三问分样本（供 L2 精确校验 judge 把该分映射到 expected_kev_intent）。数值来自 probe/设计基准。"
+    }
+  },
+
+  "cases": [
+    {
+      "id": "agree-01", "category": "agree", "first_tool": "car_drive_ESPSwitch",
+      "user_reply": "好的，关吧", "expected_kev_intent": "agree", "expected_action": "execute",
+      "expected_mock_intent": "agree", "kev_needed": false,
+      "score_override": {"agree": 0.975, "reject": 0.01, "takeover": 0.015},
+      "notes": "规范 §6.1 场景1。明确肯定短句；真实 KEV~0.975，正差与绝对分(>0.75)均达标。"
+    },
+    {
+      "id": "agree-02", "category": "agree", "first_tool": "car_drive_ESPSwitch",
+      "user_reply": "确认", "expected_kev_intent": "agree", "expected_action": "execute",
+      "expected_mock_intent": "agree", "kev_needed": false,
+      "score_override": {"agree": 0.96, "reject": 0.02, "takeover": 0.02},
+      "notes": "极短明确同意词，无语境歧义。"
+    },
+    {
+      "id": "agree-03", "category": "agree", "first_tool": "car_drive_ESPSwitch",
+      "user_reply": "行，执行", "expected_kev_intent": "agree", "expected_action": "execute",
+      "expected_mock_intent": "agree", "kev_needed": false,
+      "score_override": {"agree": 0.955, "reject": 0.02, "takeover": 0.025},
+      "notes": "口语化同意+明确执行动词，双重肯定。"
+    },
+    {
+      "id": "agree-04", "category": "agree", "first_tool": "car_control_Vehicle_HoodOpen",
+      "user_reply": "打开吧", "expected_kev_intent": "agree", "expected_action": "execute",
+      "expected_mock_intent": "agree", "kev_needed": false,
+      "score_override": {"agree": 0.94, "reject": 0.02, "takeover": 0.04},
+      "notes": "呼应第一轮确认文案(开引擎盖)，明确同意执行。"
+    },
+    {
+      "id": "agree-05", "category": "agree", "first_tool": "car_drive_ESPSwitch",
+      "user_reply": "可以", "expected_kev_intent": "agree", "expected_action": "execute",
+      "expected_mock_intent": "agree", "kev_needed": false,
+      "score_override": {"agree": 0.95, "reject": 0.02, "takeover": 0.03},
+      "notes": "两字肯定。"
+    },
+    {
+      "id": "agree-06", "category": "agree", "first_tool": "car_drive_ESPSwitch",
+      "user_reply": "嗯", "expected_kev_intent": "agree", "expected_action": "execute",
+      "expected_mock_intent": null, "kev_needed": true,
+      "score_override": {"agree": 0.977, "reject": 0.005, "takeover": 0.018},
+      "notes": "规范 §5.2 单字肯定；真实 KEV~0.977 判 agree。mock 无响亮关键词落 unknown，mock 不足以验收；须真实 KEV 正控断言——防止含糊护栏把单字肯定误伤。"
+    },
+    {
+      "id": "agree-07", "category": "agree", "first_tool": "energy_stop_charging",
+      "user_reply": "嗯，好", "expected_kev_intent": "agree", "expected_action": "execute",
+      "expected_mock_intent": "agree", "kev_needed": false,
+      "score_override": {"agree": 0.90, "reject": 0.03, "takeover": 0.07},
+      "notes": "叹词开头+肯定尾，明确同意停止充电。"
+    },
+    {
+      "id": "agree-08", "category": "agree", "first_tool": "car_drive_ESPSwitch",
+      "user_reply": "关掉吧", "expected_kev_intent": "agree", "expected_action": "execute",
+      "expected_mock_intent": null, "kev_needed": true,
+      "score_override": {"agree": 0.90, "reject": 0.05, "takeover": 0.05},
+      "notes": "易错：第一轮是'我准备关闭ESP，确认执行吗？'，用户回'关掉吧'=明确同意(follow-up confirmation)。mock 因'关掉'是 reject 关键词误判 reject；真实 KEV 须结合 confirm_ask 上下文判 agree。这是'肯定动词在 mock 里撞上拒绝词'的代表性案例，须隧道验收。"
+    },
+
+    {
+      "id": "reject-01", "category": "reject", "first_tool": "car_control_Vehicle_HoodOpen",
+      "user_reply": "不要，别动", "expected_kev_intent": "reject", "expected_action": "abandon",
+      "expected_mock_intent": "reject", "kev_needed": false,
+      "score_override": {"agree": 0.02, "reject": 0.955, "takeover": 0.025},
+      "notes": "规范 §6.1 场景2。双重否定明确拒绝。"
+    },
+    {
+      "id": "reject-02", "category": "reject", "first_tool": "car_drive_ESPSwitch",
+      "user_reply": "别动", "expected_kev_intent": "reject", "expected_action": "abandon",
+      "expected_mock_intent": "reject", "kev_needed": false,
+      "score_override": {"agree": 0.02, "reject": 0.96, "takeover": 0.02},
+      "notes": "极短明确拒绝，命令式。"
+    },
+    {
+      "id": "reject-03", "category": "reject", "first_tool": "car_drive_DriveModeSwitch",
+      "user_reply": "取消", "expected_kev_intent": "reject", "expected_action": "abandon",
+      "expected_mock_intent": "reject", "kev_needed": false,
+      "score_override": {"agree": 0.02, "reject": 0.95, "takeover": 0.03},
+      "notes": "取消操作=放弃确认动作。"
+    },
+    {
+      "id": "reject-04", "category": "reject", "first_tool": "car_drive_ESPSwitch",
+      "user_reply": "算了", "expected_kev_intent": "reject", "expected_action": "abandon",
+      "expected_mock_intent": "reject", "kev_needed": false,
+      "score_override": {"agree": 0.03, "reject": 0.93, "takeover": 0.04},
+      "notes": "口语化放弃，撤销确认。"
+    },
+    {
+      "id": "reject-05", "category": "reject", "first_tool": "car_status_BrakeMaintenanceSet",
+      "user_reply": "你先别管这个", "expected_kev_intent": "reject", "expected_action": "abandon",
+      "expected_mock_intent": "reject", "kev_needed": false,
+      "score_override": {"agree": 0.03, "reject": 0.90, "takeover": 0.07},
+      "notes": "规范 §6.1 场景3 显式撤离确认。注：probe 实判为 takeover 且已获产品认可(可理解为转去办别的)。"
+    },
+    {
+      "id": "reject-06", "category": "reject", "first_tool": "car_drive_ESPSwitch",
+      "user_reply": "你今天先别管这个", "expected_kev_intent": "reject", "expected_action": "abandon",
+      "expected_mock_intent": "reject", "kev_needed": false,
+      "score_override": {"agree": 0.03, "reject": 0.89, "takeover": 0.08},
+      "notes": "明确'先别管'当前动作=撤回，语义 reject。"
+    },
+    {
+      "id": "reject-07", "category": "reject", "first_tool": "car_drive_ESPSwitch",
+      "user_reply": "你敢关试试", "expected_kev_intent": "reject", "expected_action": "abandon",
+      "expected_mock_intent": "reject", "kev_needed": false,
+      "score_override": {"agree": 0.02, "reject": 0.955, "takeover": 0.025},
+      "notes": "规范 §6.1 场景7 反讽/负情绪。KEV 借上下文判为反击拒绝而非同意。mock 靠'敢'关键词落 reject。"
+    },
+
+    {
+      "id": "unknown-01", "category": "unknown", "first_tool": "car_drive_ESPSwitch",
+      "user_reply": "嗯…随便吧", "expected_kev_intent": "unknown", "expected_action": "abandon",
+      "expected_mock_intent": "unknown", "kev_needed": false,
+      "score_override": {"agree": 0.539, "reject": 0.20, "takeover": 0.261},
+      "notes": "规范 §6.1 场景5。真实 KEV~0.539，绝对分<AGREE_FLOOR，落 unknown/safe-abandon。核心'含糊即拒'护栏用例。"
+    },
+    {
+      "id": "unknown-02", "category": "unknown", "first_tool": "energy_unlock_charge_cable",
+      "user_reply": "你看着办", "expected_kev_intent": "unknown", "expected_action": "abandon",
+      "expected_mock_intent": "unknown", "kev_needed": false,
+      "score_override": {"agree": 0.512, "reject": 0.20, "takeover": 0.288},
+      "notes": "推责给 agent，未明确同意。真实 KEV~0.512<0.75 -> unknown。不可逆的解锁绝不执行。"
+    },
+    {
+      "id": "unknown-03", "category": "unknown", "first_tool": "car_drive_SnowChainModeSet",
+      "user_reply": "随便你", "expected_kev_intent": "unknown", "expected_action": "abandon",
+      "expected_mock_intent": "unknown", "kev_needed": false,
+      "score_override": {"agree": 0.711, "reject": 0.174, "takeover": 0.334},
+      "notes": "把决定推回：非明确肯定。真实 KEV~0.711<0.75 -> unknown。对影响行车安全的动作，宁可不做。"
+    },
+    {
+      "id": "unknown-04", "category": "unknown", "first_tool": "car_adas_control",
+      "user_reply": "行吧", "expected_kev_intent": "unknown", "expected_action": "abandon",
+      "expected_mock_intent": "agree", "kev_needed": true,
+      "score_override": {"agree": 0.72, "reject": 0.10, "takeover": 0.18},
+      "notes": "勉强让步'行吧'非明确肯定(带'吧'的敷衍)。真实 KEV 应判 unknown 或低置信；mock 因'行'误判 agree。mock 在此条失效，须真实 KEV：若 KEV 也判 agree 需产品确认是否接受该风险。"
+    },
+    {
+      "id": "unknown-05", "category": "unknown", "first_tool": "car_adas_control",
+      "user_reply": "都行", "expected_kev_intent": "unknown", "expected_action": "abandon",
+      "expected_mock_intent": "agree", "kev_needed": true,
+      "score_override": {"agree": 0.70, "reject": 0.05, "takeover": 0.25},
+      "notes": "两可'都行'非明确同意，尤其对关闭辅助安全的高危动作。mock 因'行'误判 agree，须真实 KEV 判分确认。"
+    },
+
+    {
+      "id": "takeover-01", "category": "takeover", "first_tool": "car_control_Vehicle_HoodOpen",
+      "user_reply": "先看看空调，调到24度", "expected_kev_intent": "takeover", "expected_action": "reroute",
+      "expected_mock_intent": "takeover", "kev_needed": false,
+      "score_override": {"agree": 0.05, "reject": 0.10, "takeover": 0.85},
+      "notes": "规范 §6.1 场景4。转移到空调(hvac)，放弃开引擎盖，reroute 到 car_hav_temperature。"
+    },
+    {
+      "id": "takeover-02", "category": "takeover", "first_tool": "energy_stop_charging",
+      "user_reply": "导航去公司", "expected_kev_intent": "takeover", "expected_action": "reroute",
+      "expected_mock_intent": "takeover", "kev_needed": false,
+      "score_override": {"agree": 0.03, "reject": 0.10, "takeover": 0.87},
+      "notes": "完全偏离确认主题的新诉求 -> reroute 到 car_navi_to_destination。"
+    },
+    {
+      "id": "takeover-03", "category": "takeover", "first_tool": "car_drive_DriveModeSwitch",
+      "user_reply": "播放音乐", "expected_kev_intent": "takeover", "expected_action": "reroute",
+      "expected_mock_intent": "takeover", "kev_needed": false,
+      "score_override": {"agree": 0.05, "reject": 0.05, "takeover": 0.90},
+      "notes": "新诉求 -> reroute 到媒体(music_play 类)。"
+    },
+    {
+      "id": "takeover-04", "category": "takeover", "first_tool": "car_drive_ESPSwitch",
+      "user_reply": "我们先回家再说", "expected_kev_intent": "takeover", "expected_action": "reroute",
+      "expected_mock_intent": "takeover", "kev_needed": false,
+      "score_override": {"agree": 0.04, "reject": 0.15, "takeover": 0.81},
+      "notes": "提出新诉求'回家'(导航)，'再说'搁置当前确认。reroute 到 car_navi_to_destination。"
+    },
+
+    {
+      "id": "edge-negation-01", "category": "edge", "first_tool": "car_drive_ESPSwitch",
+      "user_reply": "不是，我说的是关掉它", "expected_kev_intent": "agree", "expected_action": "execute",
+      "expected_mock_intent": null, "kev_needed": true,
+      "score_override": {"agree": 0.82, "reject": 0.10, "takeover": 0.08},
+      "notes": "易错：句首'不是'是否定助词(纠正)，真正意图是重申'关掉它'(对'关闭ESP'=agree)。mock 把'不是'+'关掉'当 reject——语义误判。真实 KEV 需靠 confirm_ask 上下文区分'否定句首纠正'与'否定整个请求'。mock 最典型失败模式，须隧道验收。"
+    },
+    {
+      "id": "edge-negation-02", "category": "edge", "first_tool": "car_drive_ESPSwitch",
+      "user_reply": "不是别关，是要关", "expected_kev_intent": "agree", "expected_action": "execute",
+      "expected_mock_intent": "reject", "kev_needed": true,
+      "score_override": {"agree": 0.84, "reject": 0.09, "takeover": 0.07},
+      "notes": "双重否定'不是别关' -> 实为强调同意'要关'。mock 因'别关'/'不是'判 reject。真实 KEV 须解析后半句'要关'为 agree。"
+    },
+    {
+      "id": "edge-pronoun-01", "category": "edge", "first_tool": "car_control_Vehicle_HoodOpen",
+      "user_reply": "就那个吧", "expected_kev_intent": "unknown", "expected_action": "abandon",
+      "expected_mock_intent": "unknown", "kev_needed": false,
+      "score_override": {"agree": 0.40, "reject": 0.30, "takeover": 0.30},
+      "notes": "指代省略'就那个'，无法确定指哪个/是否同意。含糊即拒 -> unknown/safe-abandon。"
+    },
+    {
+      "id": "edge-interjection-01", "category": "edge", "first_tool": "car_drive_ESPSwitch",
+      "user_reply": "嗯，好", "expected_kev_intent": "agree", "expected_action": "execute",
+      "expected_mock_intent": "agree", "kev_needed": false,
+      "score_override": {"agree": 0.90, "reject": 0.03, "takeover": 0.07},
+      "notes": "叹词'嗯'开头后接明确'好'=同意。与 agree-06 单字'嗯'区分：'好'消除歧义。"
+    },
+    {
+      "id": "edge-multi-intent-01", "category": "edge", "first_tool": "car_drive_ESPSwitch",
+      "user_reply": "别关了先看一下行程", "expected_kev_intent": "takeover", "expected_action": "reroute",
+      "expected_mock_intent": null, "kev_needed": true,
+      "score_override": {"agree": 0.10, "reject": 0.30, "takeover": 0.60},
+      "notes": "多意图合读在一短句：先'别关'(放弃当前确认)+'看行程'(新诉求)。裁决优先级应取更富信息、更靠后的诉求 -> takeover/reroute。mock 落 unknown(关键词互相抵消)，语义需真实 KEV 确认应判 takeover 而非纯 reject。"
+    },
+    {
+      "id": "edge-followup-01", "category": "edge", "first_tool": "car_status_BrakeMaintenanceSet",
+      "user_reply": "今天先不弄了", "expected_kev_intent": "reject", "expected_action": "abandon",
+      "expected_mock_intent": null, "kev_needed": true,
+      "score_override": {"agree": 0.10, "reject": 0.78, "takeover": 0.12},
+      "notes": "'先不弄了'=暂缓/放弃；对制动保养高危动作应弃。mock 落 unknown(无不清晰关键词组合)，语义上应 reject，须真实 KEV 确认。"
+    },
+    {
+      "id": "edge-politeness-01", "category": "edge", "first_tool": "energy_unlock_charge_cable",
+      "user_reply": "嗯嗯好的谢谢你", "expected_kev_intent": "agree", "expected_action": "execute",
+      "expected_mock_intent": "agree", "kev_needed": false,
+      "score_override": {"agree": 0.93, "reject": 0.02, "takeover": 0.05},
+      "notes": "礼貌附加'谢谢你'不影响同意语义；仍判 agree(解锁不因客套被误伤成 unknown)。"
+    }
+  ]
+}

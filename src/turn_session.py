@@ -24,6 +24,8 @@ sys.dont_write_bytecode = True
 
 from core_pipeline_run import POC_ROOT, TOOL_SET, decide, select_tools
 from turn_eot import score_eot
+# 注意：TurnConfirmGate 在 turn_session 顶层就 import 会与 confirm_gate(→turn_session) 循环；
+# 因此在 __init__ 里惰性加载（见 _confirm_gate()）。
 
 EVIDENCE_ROOT = POC_ROOT / "evidence/turn-session"
 _PUNCT = re.compile(r"[\s，。！？、；：,.!?;:\"'“”‘’()（）\[\]【】\-—…~]+")
@@ -77,7 +79,7 @@ class TurnConfig:
 class TurnSession:
     def __init__(self, cfg: TurnConfig, on_event, *, clock=None, eot_fn=score_eot,
                  select_tools_fn=select_tools, decide_fn=decide, session_id=None,
-                 evidence_root=EVIDENCE_ROOT, warm_fn=None):
+                 evidence_root=EVIDENCE_ROOT, warm_fn=None, confirm_gate=None):
         self.cfg = cfg
         self.on_event = on_event
         self.clock = clock or (lambda: time.monotonic() * 1000.0)
@@ -85,6 +87,9 @@ class TurnSession:
         self.select_tools_fn = select_tools_fn
         self.decide_fn = decide_fn
         self.warm_fn = warm_fn
+        # 对话式二次确认编排器（默认 mock：不连真实 KEV）。TurnSession 只在第一轮决策
+        # 命中池内高危工具时启用它，叠加在主循环上，不改变既有分段/消费机制。
+        self.confirm_gate = confirm_gate if confirm_gate is not None else self._default_confirm_gate()
         self.session_id = session_id or ("s-" + str(int(time.time() * 1000)))
         self.evidence_root = Path(evidence_root) if evidence_root else None
         self._pool = ThreadPoolExecutor(max_workers=4 + max(0, max(cfg.eot_max_inflight, cfg.tools_max_inflight) - 1))
@@ -145,6 +150,15 @@ class TurnSession:
                          "llm_calls": 0, "llm_wasted": 0, "n_reissue": 0, "consumed": 0}
         self.eot_scores = None
         self.decision = None
+        # 对话式二次确认：挂起的第一轮决策 + 解析结果（CONFIRM_WAIT 期间保存）
+        self.confirm_pending = None
+        self.confirm_resolved = None
+
+    @staticmethod
+    def _default_confirm_gate():
+        """惰性加载 TurnConfirmGate，绕开 turn_session <-> confirm_gate 的循环 import。"""
+        from confirm_orchestrator import TurnConfirmGate
+        return TurnConfirmGate()
 
     # ---------- public API ----------
 
@@ -192,7 +206,7 @@ class TurnSession:
             self.counters["eot_skipped"] += 1
             self._emit("eot_skipped", t_ms, reason="unchanged", text=text)
             return
-        if self.state != "LISTENING":
+        if self.state not in ("LISTENING", "CONFIRM_WAIT"):
             self._to_listening(t_ms, "new_text")
         self.last_change_ms = t_ms
         self.t_last_word = t_ms
@@ -230,7 +244,7 @@ class TurnSession:
         if kind == "speech_start":
             if self.turn_done:
                 self._reset_turn(t_ms)
-            elif self.state != "LISTENING":
+            elif self.state not in ("LISTENING", "CONFIRM_WAIT"):
                 self._to_listening(t_ms, "speech_start")
             if self.segment:
                 self.segment_closed = True
@@ -266,6 +280,17 @@ class TurnSession:
                 self._confirm(now_ms, "cut_wait")
             elif silence >= self.cfg.max_silence_ms:
                 self._confirm(now_ms, "max_silence")
+        elif self.state == "CONFIRM_WAIT":
+            # 确认等待：只会在第二轮回复判停收敛后被 _resolve_confirm 移出。
+            # 若超时（默认沿用 think_wait_ms 作为确认等待窗）都没有二轮回，安全优先放弃，
+            # 绝不静默执行（spec §5.3 超时默认不执行）。
+            if self.confirm_pending is not None and silence >= self.cfg.think_wait_ms:
+                self._cancel_inflight_llm(now_ms, "confirm_timeout")
+                self._emit("confirm_resolve", now_ms, user_reply="", intent="timeout",
+                           action="abandon", message="确认超时，安全优先放弃，不执行",
+                           pending_tool=self.confirm_pending.get("tool"))
+                self.confirm_pending = None
+                self._to_state("LISTENING", now_ms, "confirm_timeout")
         elif self.state == "LISTENING" and silence >= self.cfg.max_silence_ms:
             if normalize(self.suffix_text()):
                 self._confirm(now_ms, "max_silence")
@@ -444,6 +469,17 @@ class TurnSession:
             return
         label = result["label"]
         margin = result["margin"]
+        # ---- 对话式二次确认：第二轮回（CONFIRM_WAIT 内）判停收敛后进意图判定 ----
+        if self.state == "CONFIRM_WAIT":
+            # 只在判"说完"(complete 且 margin 达标)时把当前未消费后缀当完整第二轮回；
+            # 没说完(cut/wait)就继续听（spec §3.2：先判说完，再说确认意图）。
+            if label == "complete" and not (self.cfg.eot_policy == "margin"
+                                            and margin < self.cfg.eot_margin):
+                self._resolve_confirm(now_ms, self.suffix_text())
+            else:
+                self._to_state("CUT_OFF_WAIT" if label == "cut" else "THINK_WAIT",
+                               now_ms, "confirm_wait_eot_" + label)
+            return
         if label == "complete":
             if self.cfg.eot_policy == "margin" and margin < self.cfg.eot_margin:
                 label = "cut" if result["cut"] >= result["wait"] else "wait"
@@ -518,10 +554,99 @@ class TurnSession:
                    decision_head=(result.get("log_fields") or {}).get("decision_head"))
         # `record["t_ms"]` is the same instant _emit stamps, so it is not passed twice.
         self._emit("segment_consumed", now_ms, **{key: value for key, value in record.items() if key != "t_ms"})
+        # 对话式二次确认：第一轮决策命中池内高危工具 -> 挂起该决策进 CONFIRM_WAIT，等用户二轮回。
+        # 不立即消费为普通执行；EOT 判停照常跑（用于判断二轮回"说完没"），但不再 advance decide()。
+        if self.confirm_gate.ready(result["decision"]):
+            self._begin_confirm(now_ms, result["decision"])
+            if self._stop_requested:
+                self._maybe_finish_session(now_ms, force=True)
+            return
         self._to_state("LISTENING", now_ms, "consumed")
         if self._stop_requested:
             # Explicit stop(): consume what was left, then close the turn.
             self._maybe_finish_session(now_ms, force=True)
+
+    def _begin_confirm(self, now_ms, decision):
+        """第一轮决策命中待确认池：挂起决策、发出确认请求、进入 CONFIRM_WAIT。
+
+        EOT 判停/选工具照常跑（为二轮回做准备、判断是否说完），但 decide() 被 gating：
+        因为 `_maybe_start_llm` 只在 CONFIRMED/MAYBE_DONE 下 advance，CONFIRM_WAIT 不在其中，
+        所以二轮回期间 agent 不会自作主张重复决策。
+        """
+        self.confirm_pending = dict(decision or {})
+        self.confirm_resolved = None
+        ask = self.confirm_gate.ask_for(decision)
+        self._emit("confirm_request", now_ms, tool=decision.get("tool"),
+                   arguments=decision.get("arguments"), ask=ask, **self.summary())
+        self._to_state("CONFIRM_WAIT", now_ms, "pooled_tool")
+        # 清掉上一轮的 LLM/工具中间态，避免挂起后误用
+        self._cancel_inflight_llm(now_ms, "confirm_wait")
+
+    def _resolve_confirm(self, now_ms, user_reply):
+        """第二轮用户回复（已由 EOT 判停判为"说完"）收敛 -> 判意图 -> 落四分支。
+
+        结束后 segment 已在 _seal_consumed 消费，回 LISTENING；takeover 分支把 user_reply
+        当新诉求再走 select_tools/decide 一轮（若再命中池内工具会再进 CONFIRM_WAIT）。
+        """
+        if self.confirm_pending is None:
+            self._to_state("LISTENING", now_ms, "no_pending")
+            return
+        pending = self.confirm_pending
+        resolved = self.confirm_gate.resolve(user_reply, pending)
+        self.confirm_resolved = resolved
+        # 第二轮回已被意图判定"消费"：封口该 segment，避免随后被 Listener 当新指令再决策。
+        self._consume_suffix(now_ms, "confirm_reply")
+        self._emit("confirm_scores", now_ms, **resolved.get("scores", {}), user_reply=user_reply,
+                   confirm_ask=resolved.get("confirm_ask"), pending_tool=resolved.get("pending_tool"))
+        intent = resolved["intent"]
+        self._emit("confirm_resolve", now_ms, user_reply=user_reply, intent=intent,
+                   action=resolved["action"], message=resolved["message"],
+                   pending_tool=resolved.get("pending_tool"), scores=resolved.get("scores"),
+                   confirm_ask=resolved.get("confirm_ask"))
+        # 先落地"放弃当前待确认动作"的底（except agree 会执行它）
+        self.confirm_pending = None
+        if intent == "takeover":
+            # 转新诉求：用用户回复重跑选工具+决策（注入链），不耗新 segment
+            self._emit("confirm_reroute", now_ms, request=user_reply,
+                       message=f"把第 {self.turn_index} 轮的新诉求交给 decide 处理")
+            self._run_takeover(now_ms, user_reply)
+            return
+        if intent == "agree":
+            # 已确认：记录 `executed`(mock)。不真实触发业务工具；可在 UI 端展示 mock 执行。
+            self._emit("confirm_exec", now_ms, tool=resolved.get("pending_tool"),
+                       mock_only=True, message="用户已确认，mock 执行 " + str(resolved.get("pending_tool")))
+        self._to_state("LISTENING", now_ms, "confirm_" + intent)
+
+    def _run_takeover(self, now_ms, request):
+        """takeover：把第二轮回文本当新诉求，走注入的 select_tools + decide。
+
+        供 mock/真实注入链复用的同一段异步落链：捞出短名单后交给 decide_fn，再把结果
+        以 `reroute_decision` 事件发出；若新决策也命中池内工具会再次进入 CONFIRM_WAIT。
+        """
+        context = self.context
+        try:
+            selection = self.select_tools_fn(request, self.cfg.tool_set, context)
+            self._emit("reroute_tools", now_ms, request=request,
+                       selected=selection.get("selected", []))
+            outcome = self.decide_fn(request, selection.get("selected", []),
+                                     selection.get("schemas", []), self.cfg.tool_set, context,
+                                     native_schemas=selection.get("native_schemas"),
+                                     available_domains=selection.get("domains"))
+            decision = outcome["decision"]
+        except Exception as error:  # PoC: 接管失败不执行旧动作即可, 报出但保持安全
+            self._emit("error", now_ms, stage="takeover", error_type=type(error).__name__,
+                       error=str(error))
+            self._to_state("LISTENING", now_ms, "takeover_error")
+            return
+        self._emit("reroute_decision", now_ms, request=request, decision=decision,
+                   message="接管：转去处理新诉求 " + str(request))
+        if self.confirm_gate.ready(decision):
+            # 新诉求又命中池内高危工具 -> 再进 CONFIRM_WAIT（可再确认一次）
+            self._begin_confirm(now_ms, decision)
+        else:
+            self._emit("confirm_exec", now_ms, tool=decision.get("tool"), request=request,
+                       mock_only=True, message="接管后直接执行(池外) " + str(decision.get("tool")))
+            self._to_state("LISTENING", now_ms, "reroute_done")
 
     def _seal_consumed(self):
         """Seal the in-use segment into `segments` so later partials can no longer rewrite it."""
@@ -533,6 +658,20 @@ class TurnSession:
         self.consumed_text = normalize(self._join(self.segments[:self.consumed_segments]))
         # Kept for compatibility (metrics, older tests); dedup is judged on `consumed_text`.
         self.consumed_tail = self.segments[-1] if self.segments else None
+
+    def _consume_suffix(self, now_ms, why):
+        """把当前未消费后缀当作"已处理完的消费"（确认轮第二轮回用）：封口 + 记账 + 发事件。
+
+        复用 _seal_consumed 的封口逻辑，避免该 segment 被当作新一轮待决策文本。
+        """
+        consumed_text = self.suffix_text()
+        self._seal_consumed()
+        self.consumed_version = self.version
+        self.t_last_consumed = now_ms
+        self.consumptable_count = self.consumed_count = self.consumed_count + 1
+        self.counters["consumed"] = self.consumed_count
+        self._emit("confirm_consumed", now_ms, index=self.consumed_count, text=consumed_text,
+                   why=why, consumed_segments=self.consumed_segments)
 
     # ---------- state ----------
 
@@ -683,6 +822,8 @@ class TurnSession:
         self._shortlist_age_ms = None
         self.eot_scores = None
         self.decision = None
+        self.confirm_pending = None
+        self.confirm_resolved = None
         self.counters = {"eot_calls": 0, "eot_skipped": 0, "eot_stale": 0, "tool_calls": 0,
                          "llm_calls": 0, "llm_wasted": 0, "n_reissue": 0, "consumed": 0}
 

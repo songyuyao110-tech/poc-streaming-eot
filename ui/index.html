@@ -111,7 +111,8 @@
     <select id="mode" aria-label="运行模式">
       <option value="single">单句（一次决策）</option>
       <option value="stream">流式模拟（KEV 判停）</option>
-      <option value="mic" selected>麦克风（真实流式 ASR）</option>
+      <option value="confirm" selected>确认轮（对话式二次确认）</option>
+      <option value="mic">麦克风（真实流式 ASR）</option>
     </select>
     <button id="send" type="submit">发送 ↵</button>
   </form>
@@ -132,6 +133,32 @@
       <span class="muted">停顿标记：<code>我去买菜|600|对了还要买酱油</code>（<code>|600|</code> 表示停顿 600ms，同时作为新的 ASR 段）</span>
     </div>
     <details><summary>TurnConfig（可改）</summary><div id="turn-config"></div></details>
+  </section>
+  <section id="confirm-controls" class="card" hidden>
+    <div class="row">
+      <label>第一轮指令 <input id="confirm-r1" value="关闭ESP" style="flex:1; min-width:220px"></label>
+      <label>二轮回(模拟) <input id="confirm-r2" value="好的，关吧" style="flex:1; min-width:220px"></label>
+      <button id="confirm-go" type="button">跑确认轮 ↵</button>
+    </div>
+    <div class="row">
+      <label>二轮回可预置：
+        <select id="confirm-preset">
+          <option value="好的，关吧">a 好的，关吧（同意→执行）</option>
+          <option value="你不要关，取消">c 你不要关，取消（拒绝→放弃）</option>
+          <option value="先看看空调，调到24度">d 先看看空调，调到24度（接管→转空调）</option>
+          <option value="嗯…随便吧">e 嗯…随便吧（含糊→默认放弃）</option>
+          <option value="">（无二轮回，只演示第一轮）</option>
+        </select>
+      </label>
+      <span class="muted">第一轮填"导航回家"等<strong>池外</strong>句走直接执行（b），不弹确认。演示用离线 mock 判定，不连真实 KEV/LLM。</span>
+    </div>
+    <details><summary>TurnConfig（可改）</summary><div id="turn-config-confirm"></div></details>
+  </section>
+  <section id="confirm-card" class="card" hidden>
+    <h2>确认轮（对话式二次确认）</h2>
+    <p id="confirm-summary" class="tl-legend"></p>
+    <div id="confirm-detail" class="tl-groups"></div>
+    <details><summary>确认事件 JSON</summary><pre id="confirm-raw"></pre></details>
   </section>
   <section id="mic-controls" class="card" hidden>
     <div class="row">
@@ -310,10 +337,19 @@
     llm_cancel: e => `LLM 作废 · ${e.reason}${e.speculative ? '（投机）' : ''}${e.prepared ? '（结果已就绪仍丢弃）' : ''}`,
     llm_decision: e => `决策 · ${e.decision?.kind} ${e.decision?.tool || ''}${e.utterance ? ' · 「' + e.utterance + '」' : ''}${e.consumed_index ? '（已消费第 ' + e.consumed_index + ' 段）' : ''}`,
     segment_consumed: e => `已消费第 ${e.index} 段 · 「${e.text || ''}」 · 游标 ${e.segments} 段${e.speculative ? '（投机命中）' : ''}`,
+    confirm_request: e => `确认请求${e.tool ? ' · ' + e.tool : ''}：${e.ask || ''}`,
+    confirm_scores: e => `确认三问 → agree ${e.agree?.toFixed?.(3) ?? e.agree} · reject ${e.reject?.toFixed?.(3) ?? e.reject} · takeover ${e.takeover?.toFixed?.(3) ?? e.takeover}（${e.mode || 'kev'}）${e.user_reply ? ' · 「' + e.user_reply + '」' : ''}`,
+    confirm_resolve: e => `确认判定 intent=${e.intent} action=${e.action}${e.user_reply ? ' · 「' + e.user_reply + '」' : ''}${e.message ? ' · ' + e.message : ''}`,
+    confirm_exec: e => `执行(mock) ${e.tool || ''}${e.request ? ' · 「' + e.request + '」' : ''}`,
+    confirm_consumed: e => `二轮回已消费 · ${e.text || ''}`,
+    reroute_tools: e => `接管选工具 · ${(e.selected || []).join('、')}`,
+    reroute_decision: e => `接管决策 · ${e.decision?.tool || ''} · ${e.message || ''}`,
     barge_in: e => `打断 · ${e.why || ''}`,
     error: e => `错误 · ${e.error_type || ''} ${e.error || ''}`
   };
-  const EVENT_CLASS = {llm_start: 'llm', llm_cancel: 'cancel', llm_decision: 'decision', segment_consumed: 'ok', state_change: 'state', error: 'error', vad_end: 'vad'};
+  const EVENT_CLASS = {llm_start: 'llm', llm_cancel: 'cancel', llm_decision: 'decision', segment_consumed: 'ok',
+    confirm_request: 'confirm', confirm_scores: 'state', confirm_resolve: 'decision', confirm_exec: 'ok',
+    confirm_consumed: 'ok', reroute_tools: 'llm', reroute_decision: 'decision', state_change: 'state', error: 'error', vad_end: 'vad'};
 
   function createTimeline() {
     const groups = new Map();
@@ -772,11 +808,14 @@
     const mode = byId('mode').value;
     byId('stream-controls').hidden = mode !== 'stream';
     byId('mic-controls').hidden = mode !== 'mic';
+    byId('confirm-controls').hidden = mode !== 'confirm';
+    byId('confirm-card').hidden = true;
     byId('stream-card').hidden = mode === 'single';
     byId('results').hidden = true;
     byId('error').hidden = true;
     timeline.reset();
     byId('status').textContent = mode === 'stream' ? '流式模拟：输入文本（可用 |600| 停顿）后发送'
+      : mode === 'confirm' ? '确认轮：填第一轮指令与二轮回（模拟），点「跑确认轮」'
       : mode === 'mic' ? '麦克风模式：点「开始说话」' : '准备就绪 · Enter 发送';
     // 开始按钮不因为"还有旧连接"而禁用：新一轮会自己把旧连接收掉（旧轮用例已在服务端登记，仍可保存）
     if (mode === 'mic') { byId('mic-start').disabled = false; if (!mic.context) byId('mic-stop').disabled = true; }
@@ -786,12 +825,95 @@
   byId('preset').addEventListener('change', () => {
     if (byId('preset').value) byId('utterance').value = byId('preset').value;
   });
+
+  // ---------- 确认轮演示：第一轮 + 模拟二轮回 -> /api/session/stream (confirm_rounds) ----------
   buildTurnConfig('turn-config');
   buildTurnConfig('turn-config-mic');
+  buildTurnConfig('turn-config-confirm');
+
+  function confirmApplyPreset() {
+    if (byId('confirm-preset').value) byId('confirm-r2').value = byId('confirm-preset').value;
+  }
+  byId('confirm-preset').addEventListener('change', confirmApplyPreset);
+
+  async function confirmSubmit() {
+    const round1 = byId('confirm-r1').value.trim();
+    const round2 = byId('confirm-r2').value.trim();
+    if (!round1) { byId('error').hidden = false; byId('error').textContent = '先填第一轮指令'; return; }
+    byId('confirm-go').disabled = true;
+    byId('error').hidden = true;
+    byId('confirm-card').hidden = false;
+    byId('stream-card').hidden = false;
+    timeline.reset(collectTurnConfig('turn-config-confirm'));
+    byId('confirm-summary').textContent = `第一轮=${round1}  二轮回=${round2 || '（无，走第一轮）'}`;
+    const show = byId('confirm-detail'), raw = byId('confirm-raw');
+    show.replaceChildren();
+    raw.textContent = '';
+    byId('confirm-detail').replaceChildren();
+    const result = {round1, round2, confirmed: null, intent: null, action: null, exec: null, reroute: null};
+    function line(text, tone) {
+      const item = document.createElement('li');
+      item.className = 'tl-events';
+      const b = document.createElement('span');
+      b.className = 'tl-badge ' + (tone || '');
+      b.textContent = text;
+      item.append(b);
+      return item;
+    }
+    const list = document.createElement('ul'); list.className = 'tl-card'; list.style.listStyle='none';
+    list.append(line('（等待确认事件…）'));
+    show.append(list);
+    byId('status').textContent = '回放确认轮…';
+    try {
+      const response = await fetch('/api/session/stream', {method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({confirm_rounds: {round1, round2}, tool_set: byId('tool-set').value, config: collectTurnConfig('turn-config-confirm')})});
+      if (!response.ok) throw new Error(`HTTP ${response.status} ${await response.text()}`);
+      for await (const {type, data} of readEvents(response)) {
+        raw.textContent += JSON.stringify({event: type, ...data}) + '\n';
+        let text = null, tone = '';
+        if (type === 'llm_decision') { text = `第一轮决策：${data.decision?.kind} / ${data.decision?.tool || ''}`; result.decision = data.decision?.tool; }
+        else if (type === 'confirm_request') { text = `⚠ 确认请求：${data.ask || ''}`; tone = 'warn'; result.confirmed = data.tool; result.ask = data.ask; }
+        else if (type === 'confirm_scores') {
+          text = `KEV 确认三问：agree ${Number(data.agree).toFixed(3)} · reject ${Number(data.reject).toFixed(3)} · takeover ${Number(data.takeover).toFixed(3)}（${data.mode}）`;
+          result.scores = [Number(data.agree), Number(data.reject), Number(data.takeover)];
+        }
+        else if (type === 'confirm_resolve') {
+          text = `✔ 意图 ${data.intent} · 动作 ${data.action} · 二轮回「${data.user_reply || ''}」 · ${data.message || ''}`;
+          tone = 'decision'; result.intent = data.intent; result.action = data.action;
+        }
+        else if (type === 'confirm_exec') { text = `→ 执行(mock) ${data.tool || ''}${data.request ? ' · 「' + data.request + '」' : ''}`; tone = 'ok'; result.exec = data.tool; }
+        else if (type === 'reroute_decision') { text = `↪ 接管 → 「${data.request || ''}」 新决策 ${data.decision?.tool || ''}`; tone = 'llm'; result.reroute = data.decision?.tool; }
+        else if (type === 'turn_done') { text = '本轮完成（turn_done）'; }
+        if (text) { list.append(line(text, tone)); }
+        if (type === 'asr_update') timeline.asr(data);
+        else if (type === 'turn_done') timeline.done(data);
+        else timeline.event({...data, event: type});
+      }
+      const summary = [`第一轮=「${round1}」`,
+        result.confirmed ? `→ 需确认（${result.confirmed}）` : '→ 池外/直接执行，未弹确认'];
+      if (result.confirmed) {
+        summary.push(`二轮回「${round2 || ''}」 → KEV 三问 ${result.scores ? result.scores.map(s => s.toFixed(2)).join('/') : '—'}`);
+        const actionText = result.action === 'execute' ? '已确认执行'
+          : result.action === 'reroute' ? `接管转去处理「${round2}」`
+          : result.action === 'abandon' ? '放弃（不执行）' : (result.action || '—');
+        summary.push(`意图 ${result.intent || '—'} → ${actionText}`);
+      }
+      byId('confirm-summary').textContent = summary.join('　·　');
+      byId('status').textContent = '确认轮回放完成';
+    } catch (error) {
+      byId('error').hidden = false;
+      byId('error').textContent = `确认轮失败：${error.message}`;
+    } finally {
+      byId('confirm-go').disabled = false;
+    }
+  }
+  byId('confirm-go').addEventListener('click', confirmSubmit);
+
   byId('query-form').addEventListener('submit', async event => {
     event.preventDefault();
     if (byId('mode').value === 'stream') return streamSubmit();
     if (byId('mode').value === 'mic') return micStart();
+    if (byId('mode').value === 'confirm') return confirmSubmit();
     const tool_set = byId('tool-set').value;
     byId('send').disabled = true;
     byId('tool-set').disabled = true;

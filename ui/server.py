@@ -88,17 +88,108 @@ def stream_query():
                     headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
+def _build_confirm_timeline(confirm_rounds):
+    """把"第一轮 + 二轮回"展开成两段 ASR 时间线（确认轮演示用）。
+
+    第一轮立即吐出并判停确认，二轮回在确认等待窗内到达。返回 (updates, vad)。
+    """
+    round1 = (confirm_rounds.get("round1") or "").strip()
+    round2 = (confirm_rounds.get("round2") or "").strip()
+    if not round1:
+        raise ValueError("confirm_rounds.round1 需要一句第一轮指令")
+
+    def chunk(text, base):
+        updates = [{"t_ms": base + 120, "text": text, "final": True}]
+        vad = [{"t_ms": base, "kind": "speech_start"},
+               {"t_ms": base + 140, "kind": "speech_end"}]
+        return updates, vad, base
+
+    u1, v1, base = chunk(round1, 0)
+    updates = list(u1)
+    vad = list(v1)
+    if round2:
+        base2 = base + 900          # 确认请求发出后，二轮回在 CONFIRM_WAIT 内到达
+        u2, v2, _ = chunk(round2, base2)
+        updates += u2
+        vad += v2
+    return updates, vad
+
+
+def _confirm_mock_chain(round1_text, round2_text):
+    """确认轮演示的离线 mock 注入链（不连真实 KEV/LLM/工具）。
+
+    返回 (eot_fn, tools_fn, decide_fn, confirm_gate)：
+      - 用关键词判断第一轮是否"高危"：是 -> 池内工具 car_drive_ESPSwitch 触发确认；
+        否（如"导航回家"）-> 池外导航工具，直接执行、永不确认。
+      - 二轮回若含转折词（空调/导航等）则接管为池外 hvac；否则仍回 ESP。
+      - 确认打分/裁决走 confirm_orchestrator 的 mock 通道（复用 confirm_gate 稳定 mock）。
+    """
+    from confirm_orchestrator import TurnConfirmGate
+
+    def eot(text):
+        return {"complete": 0.8, "cut": 0.15, "wait": 0.05, "label": "complete",
+                "margin": 0.65, "wall_ms": 5.0, "kev_ms": 5.0}
+
+    def tools(text, tool_set, context):
+        if tool_set != "core_score":
+            raise ValueError("confirm demo uses " + TOOL_SET)
+        takeover = bool(round2_text) and any(k in text for k in ("空调", "导航", "音乐", "媒体"))
+        if takeover:
+            return {"scores": {"tool:car_hvac_set_temp": 0.9},
+                    "selected": ["car_hvac_set_temp"],
+                    "schemas": [{"name": "car_hvac_set_temp", "description": "d", "parameters": {"type": "object"}}],
+                    "native_schemas": None, "domains": None,
+                    "timing": {"stage1_ms": 5.0, "stage2_ms": 0.0, "total_ms": 5.0}}
+        risk = any(k in text for k in ("ESP", "关", "引擎盖", "防滑", "充电", "刹车"))
+        if risk:
+            return {"scores": {"tool:car_drive_ESPSwitch": 0.9, "tool:car_hvac_set_temp": 0.2},
+                    "selected": ["car_drive_ESPSwitch", "car_hvac_set_temp"],
+                    "schemas": [{"name": "car_drive_ESPSwitch", "description": "d", "parameters": {"type": "object"}}],
+                    "native_schemas": None, "domains": None,
+                    "timing": {"stage1_ms": 5.0, "stage2_ms": 0.0, "total_ms": 5.0}}
+        # 池外：导航/普通指令直接执行
+        return {"scores": {"tool:car_navi_to_destination": 0.9},
+                "selected": ["car_navi_to_destination"],
+                "schemas": [{"name": "car_navi_to_destination", "description": "d", "parameters": {"type": "object"}}],
+                "native_schemas": None, "domains": None,
+                "timing": {"stage1_ms": 5.0, "stage2_ms": 0.0, "total_ms": 5.0}}
+
+    def decide(utterance, selected, schemas, tool_set, context, **kwargs):
+        # tools() 已决定候选；直接把第一个入选作为决策（池内或接管后的池外都由此表达）。
+        tool = selected[0] if selected else "car_drive_ESPSwitch"
+        return {"decision": {"kind": "tool_call", "tool": tool, "arguments": {}},
+                "llm_ms": 5.0, "log_fields": {"decision_head": "mock_confirm_demo"}}
+
+    return eot, tools, decide, TurnConfirmGate(mock=True)
+
+
 @app.post("/api/session/stream")
 def session_stream():
-    """Replay scripted ASR updates in real time through TurnSession; one event per SSE message."""
+    """Replay scripted ASR updates in real time through TurnSession; one event per SSE message.
+
+    也接受 `confirm_rounds={"round1": "...", "round2": "..."}`（对话式二次确认演示用）：
+    在服务端把它展开成"第一轮 + 二轮回"的 ASR 时间线回放，二轮回在 CONFIRM_WAIT 内到达。
+    """
     from turn_session import TurnConfig, TurnSession
     body = request.get_json()
     updates = body.get("updates") or []
     if not isinstance(updates, list) or not updates:
-        return jsonify({"error": "updates required"}), 400
+        updates = []
+    confirm_rounds = body.get("confirm_rounds")
+    if confirm_rounds:
+        updates, vad = _build_confirm_timeline(confirm_rounds)
+    else:
+        vad = body.get("vad") or []
+    if not updates:
+        return jsonify({"error": "updates or confirm_rounds required"}), 400
     config = dict(body.get("config") or {})
     if "tool_set" in body:
         config["tool_set"] = body["tool_set"]
+    if confirm_rounds:
+        # 确认轮演示走离线 mock 链，判停后要留足等二轮回的窗口，避免超时兜底抢跑。
+        config.setdefault("think_wait_ms", 20000)
+        config.setdefault("max_silence_ms", 800)
+        config.setdefault("confirm_silence_ms", 200)
     try:
         cfg = TurnConfig.from_dict(config)
     except (TypeError, ValueError) as error:
@@ -106,11 +197,19 @@ def session_stream():
     timeline = sorted([{"t_ms": item["t_ms"], "type": "asr", "text": item["text"],
                         "final": item.get("final", False)} for item in updates] +
                       [{"t_ms": item["t_ms"], "type": "vad", "vad_kind": item["kind"]}
-                       for item in (body.get("vad") or [])],
+                       for item in vad],
                       key=lambda item: item["t_ms"])
     queue = Queue()
     session_id = "ui-" + str(int(time.time() * 1000))
-    session = TurnSession(cfg, queue.put, session_id=session_id, warm_fn=warm_slow_model)
+    kwargs = {"session_id": session_id, "warm_fn": warm_slow_model}
+    if confirm_rounds:
+        # 确认轮演示用离线 mock 注入链：判定稳定、不依赖真实 KEV/LLM
+        round1_text = (confirm_rounds.get("round1") or "").strip()
+        round2_text = (confirm_rounds.get("round2") or "").strip()
+        eot, tools, decide, gate = _confirm_mock_chain(round1_text, round2_text)
+        kwargs.update(eot_fn=eot, select_tools_fn=tools, decide_fn=decide, confirm_gate=gate,
+                      warm_fn=None)
+    session = TurnSession(cfg, queue.put, **kwargs)
 
     def produce():
         try:

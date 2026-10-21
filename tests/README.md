@@ -8,6 +8,11 @@
 | 脚本 | 验证内容 | 期望 |
 |---|---|---|
 | `poc-streaming-c1c4.py` | 多轮消费核心 + F1/F2：单/双段消费、投机作废、整句重发去重（已消费全文前缀）、迟到 EOT 空后缀 | 49/49 |
+| `test_confirm_gate.py` | 对话式二次确认闸门：`judge_confirm_reply` 纯裁决（6 验收场+边界）、`score_confirm_reply` mock 稳定、CONFIRM_POOL/文案（离线，不连 KEV/LLM） | 45/45 |
+| `poc_confirm_flow.py` | 二次确认端到端（纯本地 mock）：一轮选中池内工具 → 二轮 intent → 执行/放弃/接管；池外直接执行 | PASS |
+| `poc_confirm_e2e.py` | **确认闸门长进 TurnSession 主循环的全链路端到端**：第一轮 decide 命中池内工具 → CONFIRM_WAIT → 发确认请求 → 二轮回 EOT 判停收敛 → score_confirm_reply(mock)+judge → 四分支（a-e 五条路径） | PASS |
+| `confirm_cases.json` + `run_confirm_cases.py` | **交互层用例集（31 条二轮回→意图）**：L1 mock 启发式 / L2 judge 注入 / L3 真实 KEV 三层验收。L2 纯逻辑主证据须 31/31，L3 需隧道按 §（docs/test-design-confirmation-v2.md）判中率门槛 | L2 31/31，L1 26+5N/A |
+| `probe_confirm_kev_real.py` | 真实 KEV 三问打分探针：验收表 6 样例落在哪侧（需 EOT 隧道 :8010，用于校准阈值） | 命中数打表 |
 | `poc-streaming-s1s3-core-score.py` | S1–S3：core_score（242/17）两阶段召回、短名单家族、一轮一次决策、执行保持 mock（需 KEV + LLM） | 21/21 |
 | `poc-streaming-a3.py PORT` | 脚本化 ASR 回放 → SSE：判停/状态迁移/四类脚本用例（需 UI 在跑） | 10/10 |
 | `poc-streaming-a4.py PORT [--with-reuse]` | 停顿分段、工具复用、barge-in | 8/8（+reuse 11/11） |
