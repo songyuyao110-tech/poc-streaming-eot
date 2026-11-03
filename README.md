@@ -13,7 +13,7 @@ docs/                全部文字资产（输入 spec、设计稿、进度、报
 src/                 PoC 核心代码（上游 eval/ 的副本 + 本 PoC 新增模块）
   bootstrap.py       运行时路径装配（上游依赖注入）
   turn_session.py    五状态回合状态机（判停/选工具/投机 LLM/取消）
-  turn_eot.py        KEV 判停三问打分（complete / cut / wait + margin）
+  turn_eot.py        判停模型调用（eot-judge-api 单 choice 问题 + complete/confidence 双阈值）
   asr_stream.py      火山豆包流式 ASR 适配（帧协议 + 推流式 ASRStream）
   core_pipeline_run.py  单句核心链路（含 KEV_BASE / KEV_EOT_BASE / on_start 改动）
   build_prefix_cases.py / streaming_prefix_eval.py   前缀回放评测（M2 覆盖率/误判率）
@@ -173,7 +173,7 @@ $PY -u -B src/streaming_prefix_eval.py --langs zh,en --report docs/prefix-eval-a
 ## 已知边界（PoC 取舍）
 
 - 工具集只有 `core_score`（242/17）；旧的 `navigation`(14) 与 `multidomain`(200) 工具集与 UI 选项已移除，上游 `tools.yaml` / `tools-multidomain.yaml` 物理保留但 PoC 不再加载（见 `docs/spec-core-score-tools.md`）。
-- 判停策略固定为 `eot_policy=margin`，`eot_margin=0.2`；`spec_margin=0.3` 控制投机启动。
+- 判停策略默认 `eot_policy=score`：`probabilities.complete ≥ eot_complete_min(0.80)` 才算「说完」，`confidence ≥ eot_confidence_min(0.70)` 才抢跑；两个阈值可用 `EOT_COMPLETE_MIN_SCORE` / `EOT_CONFIDENCE_MIN` 覆盖。`margin`(`eot_margin=0.2`) / `argmax` 只作 A/B，默认关。判停端点 `EOT_JUDGE_BASE`（默认 `http://127.0.0.1:8009`，SSH 隧道到远程 GPU）。单席 20 轮「最后一字→CONFIRMED」基线 p50 858.7ms / p90 861.5ms（2026-11-03，`tests/poc-streaming-eot-baseline.py`）。
 - 麦克风模式的"VAD 结束"用 ASR 断句 `end_time` 代理，仅用于展示，不参与状态机。
 - 语法上不追求异常完备：KEV 失效/超时回退 `max_silence` 兜底；预热失败静默。
 - 音频静音 → 文本定稿仍有 0.3–1.3s（ASR 侧），是感知链路最大的一块，见 `docs/spec-latency-opt.md`。

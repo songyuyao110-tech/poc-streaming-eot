@@ -14,6 +14,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, fields
 import json
+import os
 from pathlib import Path
 import re
 import sys
@@ -35,13 +36,27 @@ def normalize(text: str) -> str:
     return _PUNCT.sub("", text or "")
 
 
+def _env_float(name: str, default: float) -> float:
+    """start.sh 风格的阈值覆盖，import 时读一次；值不合法就回默认值。"""
+    try:
+        return float(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return default
+
+
 @dataclass
 class TurnConfig:
-    # M3 recommended defaults: margin 0.2 + a 700 ms confirm window is the only measured setting that
-    # drives premature LLM starts to 0%; see tmp/poc-streaming-final-report.md for the tradeoff table.
-    eot_policy: str = "margin"          # argmax|margin
+    # 判停策略（`eot-judge-api` 文档，2026-11-03 用户拍板「整包替换」）。`score` 是文档的规则：
+    # `probabilities.complete >= eot_complete_min` 才算「说完了」，抢跑（提前起决策）还要求
+    # `confidence >= eot_confidence_min`。低于 complete 门槛时按 cut/wait 的计时器等；complete 但
+    # 置信度不够时只由静音确认收口，决策串行跑在确认之后。
+    # `margin` 是 PoC 实测的旧规则（margin 0.2 + 700ms 确认窗，0% 误启动，见 final-report），
+    # `argmax` 只看模型标签。三者都保留，好让回放在同一份 score 上做 A/B；默认只走 `score`。
+    eot_policy: str = "score"            # score|argmax|margin
     eot_margin: float = 0.2
     spec_margin: float = 0.3
+    eot_complete_min: float = _env_float("EOT_COMPLETE_MIN_SCORE", 0.80)
+    eot_confidence_min: float = _env_float("EOT_CONFIDENCE_MIN", 0.70)
     speculative_llm: bool = True     # intentional: start the decision early, cancel it on reversal
     eot_input: str = "last_segment"     # last_segment|turn_text
     confirm_silence_ms: int = 700
@@ -66,6 +81,8 @@ class TurnConfig:
     def __post_init__(self):
         if self.tool_set != TOOL_SET:
             raise ValueError("Unknown tool_set: only " + TOOL_SET + " is available")
+        if self.eot_policy not in ("score", "argmax", "margin"):
+            raise ValueError("Unknown eot_policy: " + str(self.eot_policy))
 
     @classmethod
     def from_dict(cls, data):
@@ -445,6 +462,32 @@ class TurnSession:
             else:
                 self._on_llm_result(now_ms, job, result)
 
+    def _eot_verdict(self, scores: dict) -> tuple:
+        """`eot_policy` 下的 (生效标签, 能否确认, 能否抢跑)。
+
+        三套策略只在这里判一次：状态机（`_on_eot_result`）与二次确认（CONFIRM_WAIT 分支）
+        必须用同一条规则，否则会出现「状态机认为说完了、确认闸门认为没说完」的双口径。
+        「能确认但不能抢跑」就是文档里「判 complete 但不抢跑」那条分支。
+        """
+        label = scores["label"]
+        if self.cfg.eot_policy == "argmax":
+            # 改动前的 argmax 口径：label 决定「说完」，抢跑仍看 margin。
+            return (label, label == "complete",
+                    label == "complete" and (scores.get("margin") or 0.0) >= self.cfg.spec_margin)
+        if self.cfg.eot_policy == "margin":
+            if label != "complete":
+                return label, False, False
+            margin = scores.get("margin") or 0.0
+            if margin < self.cfg.eot_margin:
+                return ("cut" if (scores.get("cut") or 0.0) >= (scores.get("wait") or 0.0)
+                        else "wait"), False, False
+            return "complete", True, margin >= self.cfg.spec_margin
+        # score：文档的两阈值规则（EOT_COMPLETE_MIN_SCORE / EOT_CONFIDENCE_MIN）。
+        if (scores.get("complete") or 0.0) >= self.cfg.eot_complete_min:
+            return "complete", True, (scores.get("confidence") or 0.0) >= self.cfg.eot_confidence_min
+        return ("cut" if (scores.get("cut") or 0.0) >= (scores.get("wait") or 0.0) else "wait",
+                False, False)
+
     def _on_eot_result(self, now_ms, job, result):
         stale = job["version"] != self.version
         if stale:
@@ -453,7 +496,10 @@ class TurnSession:
             self.counters["eot_skipped"] += 1
             self.counters["eot_stale"] += 1
         self.eot_scores = result if not stale else self.eot_scores
-        self._emit("eot_scores", now_ms, stale=stale, text=job["text"], **result)
+        label, may_confirm, may_start_early = self._eot_verdict(result)
+        self._emit("eot_scores", now_ms, stale=stale, text=job["text"],
+                   applied_label=label, may_confirm=may_confirm, may_start_early=may_start_early,
+                   **result)
         if stale:
             self._emit("eot_skipped", now_ms, reason="stale", text=job["text"])
             return
@@ -467,28 +513,34 @@ class TurnSession:
             return
         if self.state == "CONFIRMED":
             return
-        label = result["label"]
-        margin = result["margin"]
         # ---- 对话式二次确认：第二轮回（CONFIRM_WAIT 内）判停收敛后进意图判定 ----
         if self.state == "CONFIRM_WAIT":
-            # 只在判"说完"(complete 且 margin 达标)时把当前未消费后缀当完整第二轮回；
-            # 没说完(cut/wait)就继续听（spec §3.2：先判说完，再说确认意图）。
-            if label == "complete" and not (self.cfg.eot_policy == "margin"
-                                            and margin < self.cfg.eot_margin):
+            # 只有「能确认」的判停（同一套 `_eot_verdict`）才把当前未消费后缀当完整第二轮回；
+            # 没说完就继续听（spec §3.2：先判说完，再说确认意图）。
+            if may_confirm:
                 self._resolve_confirm(now_ms, self.suffix_text())
             else:
                 self._to_state("CUT_OFF_WAIT" if label == "cut" else "THINK_WAIT",
                                now_ms, "confirm_wait_eot_" + label)
             return
         if label == "complete":
-            if self.cfg.eot_policy == "margin" and margin < self.cfg.eot_margin:
-                label = "cut" if result["cut"] >= result["wait"] else "wait"
-            else:
-                self._to_state("MAYBE_DONE", now_ms, "eot_complete")
-                if self.cfg.speculative_llm and margin >= self.cfg.spec_margin:
-                    self._maybe_start_llm(now_ms, speculative=True)
-                return
+            self._to_state("MAYBE_DONE", now_ms, "eot_complete")
+            if self.cfg.speculative_llm and may_start_early:
+                self._maybe_start_llm(now_ms, speculative=True)
+            return
         self._to_state("CUT_OFF_WAIT" if label == "cut" else "THINK_WAIT", now_ms, "eot_" + label)
+
+    def _may_start_early_now(self) -> bool:
+        """工具短名单到位时的抢跑许可：`score` 口径必须由判停的 confidence 门槛点头。
+
+        改动前 `argmax` / `margin` 两套策略里，工具短名单回来本身就是一次独立的抢跑触发器
+        （`spec_margin` 只管判停触发的那次），这里保留原样做 A/B；`score` 口径下文档把抢跑
+        交给 `confidence >= EOT_CONFIDENCE_MIN`，工具链路不能绕过它。
+        """
+        scores = self.eot_scores
+        if self.cfg.eot_policy != "score" or not isinstance(scores, dict):
+            return True
+        return self._eot_verdict(scores)[2]
 
     def _on_tools_result(self, now_ms, job, result):
         newest = self._tools_cache is None or job["version"] >= self._tools_cache["version"]
@@ -512,7 +564,8 @@ class TurnSession:
                 and llm_job["version"] == self.version and self.state in ("MAYBE_DONE", "CONFIRMED")):
             self._cancel_inflight_llm(now_ms, "shortlist_changed")
             self.counters["n_reissue"] += 1
-        self._maybe_start_llm(now_ms, speculative=self.cfg.speculative_llm and self.state == "MAYBE_DONE")
+        self._maybe_start_llm(now_ms, speculative=self.cfg.speculative_llm
+                              and self.state == "MAYBE_DONE" and self._may_start_early_now())
 
     def _on_llm_result(self, now_ms, job, result):
         if job["canceled"]:

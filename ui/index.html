@@ -221,10 +221,14 @@
 
   // ---------- 流式模拟：TurnConfig 表单 + 脚本化 ASR 回放 ----------
   const TURN_FIELDS = [
-    {key: 'eot_policy', type: 'select', options: ['argmax', 'margin'],
-     hint: '判"说完了"的策略：argmax=三项取最大；margin=complete 必须领先 max(cut,wait) 超过 eot_margin'},
+    {key: 'eot_policy', type: 'select', options: ['score', 'margin', 'argmax'],
+     hint: '判"说完了"的策略：score=文档双阈值（complete≥complete_min 才算说完、confidence≥confidence_min 才抢跑）；margin=旧规则，complete 必须领先 max(cut,wait) 超过 eot_margin；argmax=三项取最大'},
+    {key: 'eot_complete_min', type: 'number', step: '0.05',
+     hint: 'score 策略的"说完"门槛（recommend 0.8）：probabilities.complete ≥ 此值才判 complete'},
+    {key: 'eot_confidence_min', type: 'number', step: '0.05',
+     hint: 'score 策略的抢跑门槛（recommend 0.7）：confidence ≥ 此值才提前调 LLM，否则等静音确认后串行处理'},
     {key: 'eot_margin', type: 'number', step: '0.05',
-     hint: 'margin 策略要求的领先幅度（推荐 0.2）：越大越不容易误判说完，但会漏判'},
+     hint: 'margin 策略（A/B 用）要求的领先幅度（推荐 0.2）：越大越不容易误判说完，但会漏判'},
     {key: 'spec_margin', type: 'number', step: '0.05',
      hint: '进入"可能说完"且 margin ≥ 此值时才投机调 LLM（0=只要可能说完就投机）'},
     {key: 'speculative_llm', type: 'checkbox',
@@ -254,7 +258,8 @@
     {key: 'warm_llm', type: 'checkbox',
      hint: '本轮第一个 ASR 更新就发一次 1-token 预热请求，把模型冷启动与建连藏在用户说话期间'}
   ];
-  const TURN_DEFAULTS = {eot_policy: 'margin', eot_margin: 0.2, spec_margin: 0.3, speculative_llm: true,
+  const TURN_DEFAULTS = {eot_policy: 'score', eot_complete_min: 0.8, eot_confidence_min: 0.7,
+    eot_margin: 0.2, spec_margin: 0.3, speculative_llm: true,
     eot_input: 'last_segment', confirm_silence_ms: 700, cut_wait_ms: 1500, think_wait_ms: 3000,
     max_silence_ms: 2000, eot_timeout_ms: 900, debounce_ms: 80, eot_max_inflight: 3, reuse_tools_if_text_unchanged: true,
     tools_max_inflight: 1, allow_stale_shortlist: true, warm_llm: true};
@@ -354,7 +359,7 @@
   function createTimeline() {
     const groups = new Map();
     let current = null, sequence = 0, live = null;
-    let policy = {eot_policy: 'margin', eot_margin: 0.2};
+    let policy = {eot_policy: 'score', eot_complete_min: 0.8, eot_confidence_min: 0.7, eot_margin: 0.2};
     let vadEndMs = null, firstToolMs = null, vadChip = null, pendingVad = null;
     const rawEvents = [], pending = [], byText = new Map();
     const node = (tag, cls, text) => { const element = document.createElement(tag); if (cls) element.className = cls;
@@ -362,7 +367,9 @@
     const chip = (label, cls) => node('span', 'tl-chip' + (cls ? ' ' + cls : ''), label);
 
     function reset(config) {
-      if (config) policy = {eot_policy: config.eot_policy, eot_margin: Number(config.eot_margin)};
+      if (config) policy = {eot_policy: config.eot_policy, eot_margin: Number(config.eot_margin),
+                            eot_complete_min: Number(config.eot_complete_min ?? 0.80),
+                            eot_confidence_min: Number(config.eot_confidence_min ?? 0.70)};
       groups.clear(); byText.clear(); current = null; sequence = 0; rawEvents.length = 0; pending.length = 0;
       vadEndMs = null; firstToolMs = null; vadChip = null; pendingVad = null;
       byId('tl-groups').replaceChildren();
@@ -377,7 +384,24 @@
       live.classList.toggle('ok', !!data.final);
     }
     function marginVerdict(data) {
-      // 「策略先不动」：这里只把既有规则的结果标出来，不改判定。
+      // 服务端已按生效策略算好 `may_confirm` / `may_start_early`，这里只展示、不重算；
+      // 只有老事件（没有这两个字段）才回落到下面的 margin 口径。
+      if (typeof data.may_confirm === 'boolean') {
+        const floor = fixed(policy.eot_complete_min);
+        const gate = fixed(policy.eot_confidence_min);
+        if (data.may_confirm) {
+          return {
+            accepted: true,
+            text: data.may_start_early
+              ? `说完（complete ${fixed(data.complete)} ≥ ${floor} 且 confidence ${fixed(data.confidence)} ≥ ${gate}）→ 判停 + 抢跑`
+              : `说完但不抢跑（confidence ${fixed(data.confidence)} < ${gate}）→ 静音确认后串行决策`,
+          };
+        }
+        return {
+          accepted: false,
+          text: `未说完（complete ${fixed(data.complete)} < ${floor}，判 ${data.applied_label}）→ 继续听`,
+        };
+      }
       const threshold = policy.eot_margin;
       const accepted = data.label === 'complete'
         && (policy.eot_policy !== 'margin' || data.margin >= threshold);

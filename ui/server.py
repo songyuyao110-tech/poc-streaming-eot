@@ -127,8 +127,10 @@ def _confirm_mock_chain(round1_text, round2_text):
     from confirm_orchestrator import TurnConfirmGate
 
     def eot(text):
-        return {"complete": 0.8, "cut": 0.15, "wait": 0.05, "label": "complete",
-                "margin": 0.65, "wall_ms": 5.0, "kev_ms": 5.0}
+        # 形状对齐 eot-judge-api（complete/cut/wait + confidence + label + margin）：
+        # score 口径下 complete≥0.80 才算说完，confidence≥0.70 才抢跑。
+        return {"complete": 0.9, "cut": 0.08, "wait": 0.02, "label": "complete",
+                "confidence": 0.95, "margin": 0.65, "wall_ms": 5.0, "kev_ms": 5.0}
 
     def tools(text, tool_set, context):
         if tool_set != "core_score":

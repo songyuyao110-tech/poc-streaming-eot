@@ -9,6 +9,9 @@
 |---|---|---|
 | `poc-streaming-c1c4.py` | 多轮消费核心 + F1/F2：单/双段消费、投机作废、整句重发去重（已消费全文前缀）、迟到 EOT 空后缀 | 49/49 |
 | `test_confirm_gate.py` | 对话式二次确认闸门：`judge_confirm_reply` 纯裁决（6 验收场+边界）、`score_confirm_reply` mock 稳定、CONFIRM_POOL/文案（离线，不连 KEV/LLM） | 53/53 |
+| `test_eot_judge.py` | 判停调用契约（eot-judge-api 单 choice 问题 / 响应强校验 / 重复键）+ `score` 四分支：强 complete 抢跑、弱 complete 等静默串行、cut、wait；`argmax`/`margin` A/B 保留；env 覆盖（离线，假客户端） | 24/24 |
+| `poc-streaming-eot-baseline.py [--smoke]` | **A0 基线**：单席 20 轮「最后一字→CONFIRMED」，真判停 + 假工具/决策（需判停隧道） | 20/20 确认、0 判停错误，登记 p50/p90 |
+| `poc-streaming-eot-quality.py [--smoke] [--skip-en]` | **A0 质量回归**：中文 230 句 / 2068 前缀（整句召回、非末前缀误判）+ 英文 heldout 56 句（argmax / 0.80 阈值），真判停 | 中召回 ≥97.8%、非末 ≤75.7%；英 87.5% / 80.4%（不与旧 94.6% 混比） |
 | `poc_confirm_flow.py` | 二次确认端到端（纯本地 mock）：一轮选中池内工具 → 二轮 intent → 执行/放弃/接管；池外直接执行 | PASS |
 | `poc_confirm_e2e.py` | **确认闸门长进 TurnSession 主循环的全链路端到端**：第一轮 decide 命中池内工具 → CONFIRM_WAIT → 发确认请求 → 二轮回 EOT 判停收敛 → score_confirm_reply(mock)+judge → 四分支（a-e 五条路径） | PASS |
 | `confirm_cases.json` + `run_confirm_cases.py` | **交互层用例集（31 条二轮回→意图）**：L1 mock 启发式 / L2 judge 注入 / L3 真实 KEV 三层验收。L2 纯逻辑主证据须 31/31，L3 需隧道按 §（docs/test-design-confirmation-v2.md）判中率门槛 | L2 31/31，L1 26+5N/A |

@@ -384,6 +384,7 @@ def main():
         print(f"detail: {folder}/detail.jsonl ({len(rows)} rows)", file=sys.stderr)
 
     config = {"eot_policy": cfg.eot_policy, "eot_margin": cfg.eot_margin, "spec_margin": cfg.spec_margin,
+              "eot_complete_min": cfg.eot_complete_min, "eot_confidence_min": cfg.eot_confidence_min,
               "speculative_llm": cfg.speculative_llm, "eot_input": cfg.eot_input,
               "confirm_silence_ms": cfg.confirm_silence_ms, "cut_wait_ms": cfg.cut_wait_ms,
               "think_wait_ms": cfg.think_wait_ms, "max_silence_ms": cfg.max_silence_ms,
