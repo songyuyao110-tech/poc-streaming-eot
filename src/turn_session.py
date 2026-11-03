@@ -96,7 +96,8 @@ class TurnConfig:
 class TurnSession:
     def __init__(self, cfg: TurnConfig, on_event, *, clock=None, eot_fn=score_eot,
                  select_tools_fn=select_tools, decide_fn=decide, session_id=None,
-                 evidence_root=EVIDENCE_ROOT, warm_fn=None, confirm_gate=None):
+                 evidence_root=EVIDENCE_ROOT, warm_fn=None, confirm_gate=None,
+                 seat_id=None, mic_id=None):
         self.cfg = cfg
         self.on_event = on_event
         self.clock = clock or (lambda: time.monotonic() * 1000.0)
@@ -104,6 +105,11 @@ class TurnSession:
         self.select_tools_fn = select_tools_fn
         self.decide_fn = decide_fn
         self.warm_fn = warm_fn
+        # 双席（C1）：一席 = 一份 TurnSession，状态机/锚点/版本/消费游标都是本席私有的。
+        # `seat_id` / `mic_id` 只作标记（单席调用保持 None，事件形状不变）；串话去重不在本卡
+        # 范围（用户 2026-11-03 拍板：前端各自给出干净的两路 ASR，Agent 侧只保证不串席）。
+        self.seat_id = seat_id
+        self.mic_id = mic_id
         # 对话式二次确认编排器（默认 mock：不连真实 KEV）。TurnSession 只在第一轮决策
         # 命中池内高危工具时启用它，叠加在主循环上，不改变既有分段/消费机制。
         self.confirm_gate = confirm_gate if confirm_gate is not None else self._default_confirm_gate()
@@ -344,7 +350,8 @@ class TurnSession:
                 and not self._eot_pending and not self._tools_pending)
 
     def summary(self) -> dict:
-        return {"session_id": self.session_id, "turns": self.turn_index,
+        return {"session_id": self.session_id, "seat_id": self.seat_id, "mic_id": self.mic_id,
+                "turns": self.turn_index,
                 "t_last_word": self.t_last_word, "t_confirmed": self.t_confirmed,
                 "t_llm_start": self.t_llm_start, "t_decision": self.t_decision,
                 # t_* keep their "first time in this turn" meaning; t_last_* are the latest occurrence
@@ -883,7 +890,12 @@ class TurnSession:
     # ---------- events / evidence ----------
 
     def _emit(self, name, t_ms, **payload):
-        event = {"event": name, "t_ms": t_ms, "text_version": self.version, **payload}
+        event = {"event": name, "t_ms": t_ms, "text_version": self.version}
+        if self.seat_id is not None:
+            event["seat_id"] = self.seat_id
+        if self.mic_id is not None:
+            event["mic_id"] = self.mic_id
+        event.update(payload)
         self.events.append(event)
         if self.on_event:
             self.on_event(event)
