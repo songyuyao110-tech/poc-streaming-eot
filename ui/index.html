@@ -37,9 +37,9 @@
     .row label { display: flex; gap: 6px; align-items: center; font-size: 13px; color: #637187; }
     .row input[type=number] { width: 76px; padding: 6px 8px; border: 1px solid #bbc7d9; border-radius: 6px; font: inherit; }
     .row select { padding: 6px 8px; }
-    #turn-config, #turn-config-mic { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    #turn-config, #turn-config-mic, #turn-config-dual { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
                                    gap: 10px 16px; margin-top: 10px; align-items: start; }
-    #turn-config label { justify-content: space-between; }
+    #turn-config label, #turn-config-dual label { justify-content: space-between; }
     code { background: #eef2f9; padding: 1px 5px; border-radius: 4px; }
     #stream-table td { font-variant-numeric: tabular-nums; vertical-align: top; }
     #stream-table td:last-child { text-align: left; }
@@ -94,6 +94,16 @@
     .tl-events li { display: flex; gap: 8px; overflow-wrap: anywhere; }
     .tl-events .et { font: 11.5px/1.6 ui-monospace, monospace; color: #8b95a6; min-width: 60px; }
     .tl-empty { color: #8b95a6; font-size: 12.5px; }
+    /* ---------- 双席（两路 ASR 各进各席） ---------- */
+    .duo-grid { margin-top: 12px; }
+    .duo-seat { border: 1px solid #dce3ed; border-radius: 12px; padding: 12px; background: #fbfcfe; }
+    .duo-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; margin-bottom: 8px; }
+    .duo-state { font-size: 11.5px; padding: 1px 8px; border-radius: 999px; background: #eef2f9; color: #33415c; }
+    .duo-state.ok { background: #e6f7ec; color: #1f6b3d; font-weight: 600; }
+    .duo-state.done { background: #e6f0ff; color: #174dbb; font-weight: 600; }
+    .duo-asr { font-weight: 600; min-height: 24px; overflow-wrap: anywhere; }
+    .duo-seat .tl-events { max-height: 280px; overflow: auto; }
+    #dual-verdict { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
     .cfg { display: flex; flex-direction: column; gap: 3px; align-items: stretch; }
     .cfg .cfg-key { font-size: 12.5px; color: #33415c; font-weight: 600; }
     .cfg .cfg-hint { font-size: 11.5px; color: #7b8496; line-height: 1.35; }
@@ -113,6 +123,7 @@
       <option value="stream">流式模拟（KEV 判停）</option>
       <option value="confirm" selected>确认轮（对话式二次确认）</option>
       <option value="mic">麦克风（真实流式 ASR）</option>
+      <option value="dual">双席（两路 ASR 各进各席）</option>
     </select>
     <button id="send" type="submit">发送 ↵</button>
   </form>
@@ -160,6 +171,20 @@
     <div id="confirm-detail" class="tl-groups"></div>
     <details><summary>确认事件 JSON</summary><pre id="confirm-raw"></pre></details>
   </section>
+  <section id="dual-controls" class="card" hidden>
+    <div class="row">
+      <label>席 D（mic-D）<input id="dual-d" value="导航回家" style="flex:1; min-width:200px"></label>
+      <label>席 P（mic-P）<input id="dual-p" value="把空调调到24度" style="flex:1; min-width:200px"></label>
+      <label>语速 <input id="dual-speed" type="number" value="6" min="1" max="20" step="0.5" aria-label="每秒字数"> 字/秒</label>
+      <label><input id="dual-mock" type="checkbox"> 离线 mock（不连 KEV/LLM）</label>
+      <button id="dual-go" type="button">跑双席 ↵</button>
+    </div>
+    <div class="row">
+      <label>样例 <select id="dual-preset" aria-label="双席样例脚本"></select></label>
+      <span class="muted">两个输入框各是<b>一路干净 ASR</b>（前端先验，Agent 不做去重/分离）；<code>|600|</code> 表示停顿 600ms 并切一个新 ASR 段。默认走真 KEV/LLM，勾 mock 走离线判定。</span>
+    </div>
+    <details><summary>TurnConfig（两席共用）</summary><div id="turn-config-dual"></div></details>
+  </section>
   <section id="mic-controls" class="card" hidden>
     <div class="row">
       <button id="mic-start" type="button">🎤 开始说话</button>
@@ -175,6 +200,29 @@
     </div>
     <details><summary>TurnConfig（可改）</summary><div id="turn-config-mic"></div></details>
     <p class="muted">麦克风需要 localhost 或 https，本页 http://127.0.0.1:8765 满足；用例存到 <code>Work/tmp/poc-streaming-mic-cases/</code>。</p>
+  </section>
+  <section id="dual-card" class="card" hidden>
+    <h2>双席（两路干净 ASR → 两席各自判停 / 状态机 / 决策）</h2>
+    <p class="tl-legend">
+      <span><b>通道先验</b>：mic-D → 席 D（主驾）· mic-P → 席 P（副驾）</span>
+      <span><b>单写者</b>：两路 ASR 先进队列，只由驱动线程按 FIFO 派给本席</span>
+      <span><b>不串席</b>：cross_cancel / cross_reset / 串席文本必须为 0</span>
+    </p>
+    <div id="dual-metrics" class="tl-metrics"></div>
+    <div class="grid duo-grid">
+      <div class="duo-seat" id="dual-seat-D">
+        <div class="duo-head"><strong>席 D · 主驾</strong><span class="duo-state" data-state>待开始</span><span class="muted">mic-D</span></div>
+        <div class="duo-asr" data-asr>—</div>
+        <ul class="tl-events" data-events></ul>
+      </div>
+      <div class="duo-seat" id="dual-seat-P">
+        <div class="duo-head"><strong>席 P · 副驾</strong><span class="duo-state" data-state>待开始</span><span class="muted">mic-P</span></div>
+        <div class="duo-asr" data-asr>—</div>
+        <ul class="tl-events" data-events></ul>
+      </div>
+    </div>
+    <div id="dual-verdict"></div>
+    <details><summary>双席原始事件 JSON（调试用）</summary><pre id="dual-raw"></pre></details>
   </section>
   <section id="stream-card" class="card" hidden>
     <h2>流式时间线（ASR → KEV 判停 / 选工具 → DeepSeek）</h2>
@@ -790,7 +838,7 @@
     byId('kev-time').textContent = ms(data.kev_latency_ms);
     byId('llm-time').textContent = ms(data.decision_latency_ms);
     byId('e2e-time').textContent = ms(data.latency_ms);
-    byId('score-info').textContent = `模型 ${data.kev_model || 'kev-latest'} · 阈值 ${data.tool_threshold ?? 0.5} · top-k ${data.top_k ?? 3}`;
+    byId('score-info').textContent = `模型 ${data.kev_model || 'StartLux-Decision'} · 阈值 ${data.tool_threshold ?? 0.5} · top-k ${data.top_k ?? 3}`;
     byId('stage-info').hidden = data.kev_stage1_ms == null && data.kev_stage2_ms == null;
     byId('stage-info').textContent = `阶段1 ${ms(data.kev_stage1_ms)} · 阶段2 ${ms(data.kev_stage2_ms)} · 召回域 ${(data.recalled_domains || []).map(domain => `${domain.name} ${Number(domain.score).toFixed(4)}`).join('、') || '—'} · 已评分工具 ${data.scored_tool_count ?? '—'}`;
     const selected = new Set(data.selected_tools || []);
@@ -833,13 +881,16 @@
     byId('stream-controls').hidden = mode !== 'stream';
     byId('mic-controls').hidden = mode !== 'mic';
     byId('confirm-controls').hidden = mode !== 'confirm';
+    byId('dual-controls').hidden = mode !== 'dual';
     byId('confirm-card').hidden = true;
-    byId('stream-card').hidden = mode === 'single';
+    byId('dual-card').hidden = true;
+    byId('stream-card').hidden = mode === 'single' || mode === 'dual';
     byId('results').hidden = true;
     byId('error').hidden = true;
     timeline.reset();
     byId('status').textContent = mode === 'stream' ? '流式模拟：输入文本（可用 |600| 停顿）后发送'
       : mode === 'confirm' ? '确认轮：填第一轮指令与二轮回（模拟），点「跑确认轮」'
+      : mode === 'dual' ? '双席：两路各填一句（|600| = 停顿并切段），点「跑双席」'
       : mode === 'mic' ? '麦克风模式：点「开始说话」' : '准备就绪 · Enter 发送';
     // 开始按钮不因为"还有旧连接"而禁用：新一轮会自己把旧连接收掉（旧轮用例已在服务端登记，仍可保存）
     if (mode === 'mic') { byId('mic-start').disabled = false; if (!mic.context) byId('mic-stop').disabled = true; }
@@ -933,11 +984,216 @@
   }
   byId('confirm-go').addEventListener('click', confirmSubmit);
 
+  // ---------- 双席：两路干净 ASR -> DualSeatSession -> /api/session/dual/stream ----------
+  const DUAL_SEAT_IDS = ['D', 'P'];
+  const DUAL_PRESETS = [
+    {label: 'D 导航回家 / P 把空调调到24度', d: '导航回家', p: '把空调调到24度'},
+    {label: 'D 帮我导航到|1500|人民广场 / P 放首歌', d: '帮我导航到|1500|人民广场', p: '放首歌'},
+    {label: 'D 我有点冷，开个座椅加热 / P 导航去公司', d: '我有点冷，开个座椅加热', p: '导航去公司'}
+  ];
+  const dualSeatState = {D: {}, P: {}};
+  let dualRaw = [];
+
+  function dualNode(seat, selector) { return byId('dual-seat-' + seat).querySelector(selector); }
+  function dualSetState(seat, value) {
+    const node = dualNode(seat, '[data-state]');
+    node.textContent = value;
+    node.className = 'duo-state' + (value === 'CONFIRMED' ? ' ok' : value === 'DONE' ? ' done' : '');
+  }
+  function dualLine(seat, text, tone) {
+    const list = dualNode(seat, '[data-events]');
+    const item = document.createElement('li');
+    const badge = document.createElement('span');
+    badge.className = 'tl-badge ' + (tone || '');
+    badge.textContent = text;
+    item.append(badge);
+    list.append(item);
+    while (list.children.length > 40) list.firstElementChild.remove();
+    list.scrollTop = list.scrollHeight;
+  }
+  function dualReset() {
+    dualRaw = [];
+    for (const seat of DUAL_SEAT_IDS) {
+      dualNode(seat, '[data-state]').textContent = '待开始';
+      dualNode(seat, '[data-state]').className = 'duo-state';
+      dualNode(seat, '[data-asr]').textContent = '—';
+      dualNode(seat, '[data-events]').replaceChildren();
+      dualSeatState[seat] = {text: '', decision: null, confirmMs: null};
+    }
+    byId('dual-metrics').replaceChildren();
+    byId('dual-verdict').replaceChildren();
+    byId('dual-raw').textContent = '';
+  }
+  function dualApply(type, data) {
+    const seat = data.seat_id;
+    if (!seat || !dualSeatState[seat]) return;              // 跨席事件不该出现；出现了也不画错席
+    if (type === 'asr_update') {
+      byId('dual-seat-' + seat).querySelector('[data-asr]').textContent = data.text || '—';
+      dualSeatState[seat].text = data.text || '';
+      if (data.final) dualLine(seat, 'ASR 最终句（final）', 'final');
+      return;
+    }
+    if (type === 'vad') { dualLine(seat, 'VAD · ' + (data.kind || ''), 'vad'); return; }
+    if (type === 'state_change') {
+      dualSetState(seat, data.to);
+      const latency = data.confirm_latency_ms === undefined || data.confirm_latency_ms === null
+        ? '' : ` · 确认 +${Math.round(data.confirm_latency_ms)}ms`;
+      dualLine(seat, `状态 ${data.from} → ${data.to}（${data.why}）${latency}`, 'state');
+      if (data.to === 'CONFIRMED') dualSeatState[seat].confirmMs = data.confirm_latency_ms ?? null;
+      return;
+    }
+    if (type === 'eot_scores') {
+      const pct = value => (typeof value === 'number' ? value.toFixed(2) : '—');
+      dualLine(seat, `判停 ${data.label} · c ${pct(data.complete)} / cut ${pct(data.cut)} / wait ${pct(data.wait)} · conf ${pct(data.confidence)}`,
+        data.may_confirm ? 'pass' : 'hold');
+      return;
+    }
+    if (type === 'tools_scores') { dualLine(seat, `选工具 ${(data.selected || []).join('、') || '无候选'}`, 'llm'); return; }
+    if (type === 'llm_start') { dualLine(seat, `LLM 启动${data.speculative ? '（投机）' : ''} · 「${data.utterance || ''}」`, 'llm'); return; }
+    if (type === 'llm_cancel') { dualLine(seat, `LLM 作废 · ${data.reason || ''}`, 'cancel'); return; }
+    if (type === 'llm_decision') {
+      dualSeatState[seat].decision = data.decision || null;
+      dualLine(seat, `决策 ${data.decision?.kind || ''} ${data.decision?.tool || ''}`, 'decision');
+      return;
+    }
+    if (type === 'segment_consumed') { dualLine(seat, `已消费第 ${data.index} 段 · 「${data.text || ''}」`, 'ok'); return; }
+    if (type === 'confirm_request') { dualLine(seat, `确认请求：${data.ask || ''}`, 'warn'); return; }
+    if (type === 'confirm_scores') {
+      dualLine(seat, `确认三问 agree ${Number(data.agree).toFixed(2)} / reject ${Number(data.reject).toFixed(2)} / takeover ${Number(data.takeover).toFixed(2)}`, 'state');
+      return;
+    }
+    if (type === 'confirm_resolve') { dualLine(seat, `确认判定 ${data.intent} → ${data.action}`, 'decision'); return; }
+    if (type === 'barge_in') { dualLine(seat, `打断 · ${data.why || ''}`, 'cancel'); return; }
+    if (type === 'turn_done') {
+      dualSetState(seat, 'DONE');
+      const ms = data.t_confirm_latency_ms === undefined ? '—' : Math.round(data.t_confirm_latency_ms) + 'ms';
+      dualLine(seat, `本轮完成 · 确认 ${ms} · 消费 ${data.consumed_count ?? 0} 段`, 'done');
+      return;
+    }
+    if (type === 'error') { dualLine(seat, `错误 · ${data.error_type || ''} ${data.error || ''}`, 'error'); }
+  }
+  function dualChip(box, label, tone) {
+    const chip = document.createElement('span');
+    chip.className = 'tl-chip' + (tone ? ' ' + tone : '');
+    chip.textContent = label;
+    box.append(chip);
+  }
+  function dualFillVerdict(data) {
+    const summary = data.summary || {};
+    const texts = summary.seat_texts || {};
+    const plan = data.plan || {};
+    const norm = value => String(value || '').replace(/[\s，。！？、；：,.!?;:]/g, '');
+    const crossed = [];
+    for (const seat of DUAL_SEAT_IDS) {
+      const own = norm((plan[seat] || {}).script || '');
+      for (const text of (texts[seat] || [])) {
+        if (own && !own.includes(norm(text))) crossed.push(`席 ${seat}：「${text}」`);
+      }
+    }
+    const box = byId('dual-metrics');
+    box.replaceChildren();
+    dualChip(box, data.timed_out ? '有席未在期限内收口' : '两席均已收口', data.timed_out ? 'warn' : 'ok');
+    dualChip(box, `合并输入 ${summary.inputs ?? 0} 条`);
+    dualChip(box, `own_reset ${summary.own_reset ?? 0} / own_cancel ${summary.own_cancel ?? 0}`);
+    dualChip(box, `cross_reset ${summary.cross_reset ?? 0} / cross_cancel ${summary.cross_cancel ?? 0}`,
+      (summary.cross_reset || summary.cross_cancel) ? 'warn' : 'ok');
+    dualChip(box, `串席文本 ${crossed.length ? crossed.length : 0}`, crossed.length ? 'warn' : 'ok');
+    dualChip(box, `决策 ${summary.actions ?? 0} 次 · 消费 ${summary.deposits ?? 0} 段`);
+    if (summary.unattributed_events) dualChip(box, `无来源事件 ${summary.unattributed_events}`, 'warn');
+    if (summary.errors) dualChip(box, `错误 ${summary.errors}`, 'warn');
+    for (const seat of DUAL_SEAT_IDS) {
+      const values = (summary.confirm_latency_ms || {})[seat] || [];
+      dualChip(box, `席 ${seat} 确认 ${values.length ? values.map(value => Math.round(value)).join('/') + 'ms' : '—'}`,
+        values.length ? 'ok' : '');
+    }
+    const verdict = byId('dual-verdict');
+    verdict.replaceChildren();
+    for (const seat of DUAL_SEAT_IDS) {
+      const row = document.createElement('div');
+      const decision = dualSeatState[seat].decision;
+      const consumed = (texts[seat] || []).join(' / ') || '无';
+      row.textContent = `席 ${seat}：决策 ${decision ? `${decision.kind || ''} ${decision.tool || ''}` : '未产生'}`
+        + ` · 已消费「${consumed}」`
+        + (dualSeatState[seat].text ? ` · 最后 ASR「${dualSeatState[seat].text}」` : '')
+        + (!plan[seat] ? ' · 本席无输入' : '');
+      verdict.append(row);
+    }
+    if (crossed.length) {
+      const warn = document.createElement('div');
+      warn.style.color = '#a61f32';
+      warn.textContent = '串席告警：' + crossed.join('；');
+      verdict.append(warn);
+    }
+  }
+  function dualPresetOptions() {
+    const select = byId('dual-preset');
+    select.append(new Option('（用上面两个输入框）', ''));
+    DUAL_PRESETS.forEach((preset, index) => select.append(new Option(preset.label, String(index))));
+    select.addEventListener('change', () => {
+      const preset = DUAL_PRESETS[Number(select.value)];
+      if (!preset) return;
+      byId('dual-d').value = preset.d;
+      byId('dual-p').value = preset.p;
+    });
+  }
+  async function dualSubmit() {
+    const speed = Math.max(1, Number(byId('dual-speed').value) || 6);
+    const seats = {
+      D: {script: byId('dual-d').value.trim(), speed},
+      P: {script: byId('dual-p').value.trim(), speed}
+    };
+    if (!seats.D.script && !seats.P.script) {
+      byId('error').hidden = false;
+      byId('error').textContent = '至少一路要有文本（席 D 或席 P）';
+      return;
+    }
+    byId('dual-go').disabled = true;
+    byId('error').hidden = true;
+    byId('dual-card').hidden = false;
+    dualReset();
+    byId('status').textContent = '双席回放中：两路 ASR 各进各席，各自判停…';
+    try {
+      const response = await fetch('/api/session/dual/stream', {method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({seats, mock: byId('dual-mock').checked, tool_set: byId('tool-set').value,
+                              config: collectTurnConfig('turn-config-dual')})});
+      if (!response.ok) throw new Error(`HTTP ${response.status} ${await response.text()}`);
+      for await (const {type, data} of readEvents(response)) {
+        dualRaw.push({event: type, ...data});
+        byId('dual-raw').textContent = pretty(dualRaw);
+        if (type === 'duo_accepted') {
+          const names = Object.keys(data.plan || {}).map(seat => `${seat}（${data.plan[seat].mic_id}，${data.plan[seat].updates} 条 ASR）`);
+          byId('status').textContent = `双席开始：${names.join(' + ')}${data.mock ? ' · 离线 mock' : ' · 真 KEV/LLM'} · ${data.session_id}`;
+          continue;
+        }
+        if (type === 'duo_done') {
+          dualFillVerdict(data);
+          byId('status').textContent = data.timed_out ? '双席结束：有席未在期限内收口（见标黄项）' : '双席回放完成';
+          continue;
+        }
+        if (type === 'error' && !data.seat_id) {
+          byId('error').hidden = false;
+          byId('error').textContent = `双席失败：${data.error_type || ''} ${data.error || ''}`;
+          continue;
+        }
+        dualApply(type, data);
+      }
+    } catch (error) {
+      byId('error').hidden = false;
+      byId('error').textContent = `双席回放失败：${error.message}`;
+    } finally {
+      byId('dual-go').disabled = false;
+    }
+  }
+  byId('dual-go').addEventListener('click', dualSubmit);
+  dualPresetOptions();
+  buildTurnConfig('turn-config-dual');
+
   byId('query-form').addEventListener('submit', async event => {
     event.preventDefault();
     if (byId('mode').value === 'stream') return streamSubmit();
     if (byId('mode').value === 'mic') return micStart();
     if (byId('mode').value === 'confirm') return confirmSubmit();
+    if (byId('mode').value === 'dual') return dualSubmit();
     const tool_set = byId('tool-set').value;
     byId('send').disabled = true;
     byId('tool-set').disabled = true;
@@ -952,7 +1208,7 @@
       events.push({event: type, data});
       const labels = {
         accepted: `已接受：${data.utterance || ''}`,
-        kev_start: 'KEV 开始评分（kev-latest / 127.0.0.1:8009）',
+        kev_start: 'KEV 开始评分（StartLux-Decision / 127.0.0.1:8009）',
         kev_scores: `KEV 分数已到达：${Object.keys(data.scores || {}).length} 个分数，候选 ${(data.selected_tools || []).join('、')}`,
         llm_start: 'LLM 开始决策，分数与候选已可查看',
         llm_decision: `决策已到达：${data.decision?.kind || ''} / ${data.decision?.tool || ''} · ${data.decision_head || ''}`,

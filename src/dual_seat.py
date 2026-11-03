@@ -40,7 +40,7 @@ class DualSeatSession:
 
     def __init__(self, cfg: "TurnConfig | None" = None, on_event=None, *, seat_cfg: "TurnConfig | None" = None,
                  eot_fn=None, select_tools_fn=None, decide_fn=None, session_id=None,
-                 evidence_root=None, clock=None):
+                 evidence_root=None, clock=None, confirm_gate=None, warm_fn=None):
         self.cfg = cfg or seat_cfg or TurnConfig()
         self.on_event = on_event
         self.session_id = session_id or ("duo-" + str(int(time.time() * 1000)))
@@ -63,6 +63,12 @@ class DualSeatSession:
             overrides["select_tools_fn"] = select_tools_fn
         if decide_fn is not None:
             overrides["decide_fn"] = decide_fn
+        # UI 双席演示需要与单席一致的注入面：离线 mock 时给每席一份 mock 确认闸门、
+        # 不预热（不连真实 KEV/LLM）；真实模式每席各自预热各自的模型连接。
+        if confirm_gate is not None:
+            overrides["confirm_gate"] = confirm_gate
+        if warm_fn is not None:
+            overrides["warm_fn"] = warm_fn
         self.seats = {}
         for seat in SEAT_ORDER:
             self.seats[seat] = TurnSession(

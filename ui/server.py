@@ -1,6 +1,7 @@
 """Loopback-only PoC UI; reuse the existing single-utterance pipeline."""
 import json
 import os
+import re
 from pathlib import Path
 from queue import Empty, Queue
 import sys
@@ -257,6 +258,216 @@ def session_stream():
 MIC_CASE_HELP = "整轮（ASR 文本更新 + 时间戳 + 是否说完标注）保存到 " + str(MIC_CASES)
 MIC_SESSIONS = {}          # session_id -> {session, asr_log, tool_set}: keeps save working after close
 MIC_SESSION_KEEP = 8
+
+
+# ---------- 双席（C1：两路干净 ASR → 两席各自判停/状态机 → 各自一次决策） ----------
+
+DUAL_SEATS = ("D", "P")
+DUAL_MIC_OF_SEAT = {"D": "mic-D", "P": "mic-P"}
+DUAL_SEAT_NAME = {"D": "席 D · 主驾", "P": "席 P · 副驾"}
+
+
+def _script_timeline(text, speed=6.0):
+    """`文本|600|文本` → (ASR 更新, VAD)；停顿标记同时切一个 ASR 段。
+
+    与前端旧 buildScript 同一规则，但只保留这一份实现（服务端展开脚本，UI 只发原文）。
+    """
+    updates, vad = [], [{"t_ms": 0, "kind": "speech_start"}]
+    plain, t = "", 0.0
+    for chunk in re.split(r"\|(\d+)\|", text):
+        if re.fullmatch(r"\d+", chunk or ""):
+            vad.append({"t_ms": round(t), "kind": "speech_end"})
+            t += float(chunk)
+            vad.append({"t_ms": round(t), "kind": "speech_start"})
+            plain = ""
+            continue
+        for char in chunk:
+            t += 1000.0 / speed
+            plain += char
+            updates.append({"t_ms": round(t), "text": plain, "final": False})
+    if updates:
+        updates[-1]["final"] = True
+        vad.append({"t_ms": updates[-1]["t_ms"] + 20, "kind": "speech_end"})
+    return updates, vad
+
+
+def _dual_timeline(payload):
+    """把 `seats` 归一成合并时间线（同刻 D 在前）+ 每席计划，供 /api/session/dual/stream 回放。
+
+    seats 支持三种写法（可混用）：
+      {"D": "导航回家"}                                  # 脚本简写
+      {"D": {"script": "导航回家", "speed": 6}}           # 脚本 + 语速
+      {"D": {"updates": [...], "vad": [...]}}            # 与单席 /api/session/stream 同形状
+    """
+    seats = payload.get("seats")
+    if not isinstance(seats, dict) or not seats:
+        raise ValueError('seats required: {"D": {"script": "…"}, "P": {"script": "…"}}')
+    unknown = sorted(key for key in seats if key not in DUAL_SEATS)
+    if unknown:
+        raise ValueError("unknown seat id: " + ", ".join(unknown) + "（只有 D / P 两席）")
+    timeline, plan = [], {}
+    for seat in DUAL_SEATS:
+        item = seats.get(seat)
+        if item is None:
+            continue
+        if isinstance(item, str):
+            item = {"script": item}
+        if not isinstance(item, dict):
+            raise ValueError("seat " + seat + " 需要是字符串或对象")
+        if "script" in item:
+            speed = float(item.get("speed") or payload.get("speed") or 6.0)
+            if not 1 <= speed <= 20:
+                raise ValueError("speed 需要在 1–20 字/秒")
+            script = str(item.get("script") or "").strip()
+            if not script:
+                continue                       # 空文本 = 本席没有输入（不是「说了一句空话」）
+            updates, vad = _script_timeline(script, speed)
+        else:
+            updates, vad = item.get("updates") or [], item.get("vad") or []
+            if not isinstance(updates, list) or not isinstance(vad, list):
+                raise ValueError("seat " + seat + " 的 updates/vad 需要是数组")
+        rows = []
+        for update in updates:
+            rows.append({"t_ms": int(update["t_ms"]), "type": "asr", "seat": seat,
+                         "text": str(update.get("text") or ""), "final": bool(update.get("final"))})
+        for mark in vad:
+            rows.append({"t_ms": int(mark["t_ms"]), "type": "vad", "seat": seat,
+                         "kind": str(mark["kind"])})
+        if not rows:
+            continue
+        timeline.extend(rows)
+        plan[seat] = {"name": DUAL_SEAT_NAME[seat], "mic_id": DUAL_MIC_OF_SEAT[seat],
+                      "script": item.get("script").strip() if isinstance(item.get("script"), str) else item.get("script"),
+                      "updates": len(updates), "vad": len(vad)}
+    if not plan:
+        raise ValueError("seats 里没有任何 ASR 更新：至少一路要有文本")
+    # 同刻（t_ms 相同）按 D→P 顺序派发：单写者队列里主驾席先入席（与 C1「同刻取主驾席」一致）
+    timeline.sort(key=lambda row: (row["t_ms"], DUAL_SEATS.index(row["seat"])))
+    return timeline, plan
+
+
+def _dual_mock_chain():
+    """双席演示的离线注入口：判停恒 complete、选工具按关键词、决策恒 tool_call。
+
+    与确认轮 demo 同一条思路（不连真实 KEV/LLM），只为把「两席并行且互不串席」演示稳定。
+    """
+    from confirm_orchestrator import TurnConfirmGate
+
+    def eot(text):
+        return {"complete": 0.9, "cut": 0.08, "wait": 0.02, "label": "complete",
+                "confidence": 0.95, "margin": 0.65, "wall_ms": 5.0, "kev_ms": 5.0}
+
+    def tools(text, tool_set, context):
+        if tool_set != TOOL_SET:
+            raise ValueError("dual demo uses " + TOOL_SET)
+        if any(key in text for key in ("空调", "温度", "冷", "热")):
+            name = "car_hvac_set_temp"
+        elif any(key in text for key in ("音乐", "歌", "媒体", "音量")):
+            name = "car_sound_media_volume"
+        else:
+            name = "car_navi_to_destination"
+        return {"scores": {"tool:" + name: 0.9}, "selected": [name],
+                "schemas": [{"name": name, "description": "d", "parameters": {"type": "object"}}],
+                "native_schemas": None, "domains": None,
+                "timing": {"stage1_ms": 5.0, "stage2_ms": 0.0, "total_ms": 5.0}}
+
+    def decide(utterance, selected, schemas, tool_set, context, **kwargs):
+        tool = selected[0] if selected else "car_navi_to_destination"
+        return {"decision": {"kind": "tool_call", "tool": tool, "arguments": {}},
+                "llm_ms": 5.0, "log_fields": {"decision_head": "mock_dual_demo"}}
+
+    return eot, tools, decide, TurnConfirmGate(mock=True)
+
+
+@app.post("/api/session/dual/stream")
+def dual_stream():
+    """双席回放：两路 ASR 各进各席，单写者派发，事件逐条 SSE 吐回（带 seat_id / mic_id）。
+
+    请求体：
+      seats   同 _dual_timeline（必填，至少一路有内容）
+      config  TurnConfig 覆盖（与单席同字段）
+      mock    true = 离线判停/选工具/决策（不连 KEV/LLM）
+      deadline_ms  等两席收口的上限（默认 30000；超时也发 duo_done，timed_out=true）
+    """
+    from dual_seat import DualSeatSession
+    from turn_session import EVIDENCE_ROOT, TurnConfig
+
+    body = request.get_json(silent=True) or {}
+    try:
+        timeline, plan = _dual_timeline(body)
+        config = dict(body.get("config") or {})
+        if "tool_set" in body:
+            config["tool_set"] = body["tool_set"]
+        cfg = TurnConfig.from_dict(config)
+        mock = bool(body.get("mock"))
+        deadline_ms = int(body.get("deadline_ms") or 30000)
+    except (TypeError, ValueError) as error:
+        return jsonify({"error": type(error).__name__ + ": " + str(error)}), 400
+    session_id = "duo-ui-" + time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:6]
+    queue = Queue()
+    kwargs = {"seat_cfg": cfg, "on_event": queue.put, "session_id": session_id,
+              "evidence_root": EVIDENCE_ROOT}
+    if mock:
+        eot, tools, decide, gate = _dual_mock_chain()
+        kwargs.update(eot_fn=eot, select_tools_fn=tools, decide_fn=decide, confirm_gate=gate)
+    else:
+        kwargs.update(warm_fn=warm_slow_model)
+    session = DualSeatSession(**kwargs)
+    active = tuple(plan)
+
+    def all_done():
+        return all(session.seats[seat].turn_done for seat in active)
+
+    def produce():
+        began = time.monotonic() * 1000
+        timed_out = False
+        try:
+            for row in timeline:
+                while True:
+                    now = time.monotonic() * 1000 - began
+                    if now >= row["t_ms"] or all_done():
+                        break
+                    session.tick(int(now))
+                    time.sleep(0.005)
+                if all_done():
+                    break
+                mic_id = DUAL_MIC_OF_SEAT[row["seat"]]
+                if row["type"] == "asr":
+                    session.on_asr(row["t_ms"], mic_id, row["text"], row["final"])
+                else:
+                    session.on_vad(row["t_ms"], mic_id, row["kind"])
+            deadline = began + deadline_ms
+            while not all_done() and time.monotonic() * 1000 < deadline:
+                session.tick(int(time.monotonic() * 1000 - began))
+                time.sleep(0.005)
+            timed_out = not all_done()
+        except Exception as error:
+            queue.put({"event": "error", "t_ms": time.monotonic() * 1000 - began, "seat_id": None,
+                       "error_type": type(error).__name__, "error": str(error)})
+        finally:
+            queue.put({"event": "duo_done", "t_ms": round(time.monotonic() * 1000 - began, 1),
+                       "timed_out": timed_out, "mock": mock, "plan": plan,
+                       "summary": session.summary()})
+            try:
+                session.close()
+            except Exception:
+                pass
+            queue.put(None)
+
+    def events():
+        yield "event: duo_accepted\ndata: " + json.dumps(
+            {"session_id": session_id, "mock": mock, "tool_set": cfg.tool_set, "plan": plan},
+            ensure_ascii=False, allow_nan=False) + "\n\n"
+        Thread(target=produce, daemon=True).start()
+        while True:
+            event = queue.get()
+            if event is None:
+                break
+            yield f"event: {event.get('event', 'seat_event')}\ndata: " + json.dumps(
+                event, ensure_ascii=False, allow_nan=False) + "\n\n"
+
+    return Response(stream_with_context(events()), mimetype="text/event-stream",
+                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 def register_mic_session(session_id, session, asr_log, tool_set):
