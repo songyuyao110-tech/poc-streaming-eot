@@ -18,6 +18,10 @@
   的对照（本席自己的续句会正常触发），用来证明计数链路是活的而不是恒 0 的摆设。
 
 不做：同句去重（用户已拍「不做」，前端保证两路干净）、两套决策、第 3 席、判停阈值改动。
+
+C2 起多挂一个可选的**会话脑**（`brain=SessionBrain(...)`，见 `orchestra.py`）：两席的
+`decide_fn` 槽改成「先经编排层一个入口」，席的事件回填脑的账（IU/AU），`tick()` 顺带推进
+脑的归并窗。不传 `brain` 时行为与 C1 完全一致（默认关，单席/旧双席回放不受影响）。
 """
 from __future__ import annotations
 
@@ -40,7 +44,8 @@ class DualSeatSession:
 
     def __init__(self, cfg: "TurnConfig | None" = None, on_event=None, *, seat_cfg: "TurnConfig | None" = None,
                  eot_fn=None, select_tools_fn=None, decide_fn=None, session_id=None,
-                 evidence_root=None, clock=None, confirm_gate=None, warm_fn=None):
+                 evidence_root=None, clock=None, confirm_gate=None, warm_fn=None,
+                 brain=None):
         self.cfg = cfg or seat_cfg or TurnConfig()
         self.on_event = on_event
         self.session_id = session_id or ("duo-" + str(int(time.time() * 1000)))
@@ -69,12 +74,23 @@ class DualSeatSession:
             overrides["confirm_gate"] = confirm_gate
         if warm_fn is not None:
             overrides["warm_fn"] = warm_fn
+        # C2 会话脑（可选）：决策单一入口 + 会话级台账/IU。不传就还是 C1 的两席各自决策。
+        self.brain = brain
+        if brain is not None:
+            brain.on_event = self._on_brain_event
+
+        def seat_overrides(seat):
+            slots = dict(overrides)
+            if brain is not None:
+                slots["decide_fn"] = brain.decide_fn_for(seat)
+            return slots
+
         self.seats = {}
         for seat in SEAT_ORDER:
             self.seats[seat] = TurnSession(
                 self.cfg, lambda event, s=seat: self._on_seat_event(s, event), clock=clock,
                 session_id=self.session_id + "-" + seat, evidence_root=evidence_root,
-                seat_id=seat, mic_id=MIC_OF_SEAT[seat], **overrides)
+                seat_id=seat, mic_id=MIC_OF_SEAT[seat], **seat_overrides(seat))
 
     # ---------- 入口（单写者队列） ----------
 
@@ -86,15 +102,23 @@ class DualSeatSession:
 
     def tick(self, now_ms: int) -> None:
         self._drain()
+        if self.brain is not None:
+            self.brain.mark_now(now_ms)
         for seat in SEAT_ORDER:
             self.seats[seat].tick(now_ms)
+        if self.brain is not None:
+            self.brain.tick(now_ms)      # 归并窗到期 → 该落地的落地，不漏执行
 
     def stop(self, now_ms: int) -> None:
         self._drain()
         for seat in SEAT_ORDER:
             self.seats[seat].stop(now_ms)
+        if self.brain is not None:
+            self.brain.settle(now_ms)
 
     def close(self) -> None:
+        if self.brain is not None:
+            self.brain.settle()
         for session in self.seats.values():
             session.close()
 
@@ -142,6 +166,15 @@ class DualSeatSession:
             self.counters["deposits"] += 1
         elif name == "error":
             self.counters["errors"] += 1
+        self.events.append(event)
+        if self.on_event:
+            self.on_event(event)
+        if self.brain is not None:
+            # 会话脑按席事件回填账（asr → 指代候选；llm_decision → AU 应用；llm_cancel → 作废）
+            self.brain.observe(event)
+
+    def _on_brain_event(self, event: dict) -> None:
+        """编排层事件（iu_* / au_* / receipt）与席事件同流，回放和断言面都读得到。"""
         self.events.append(event)
         if self.on_event:
             self.on_event(event)
