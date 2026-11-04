@@ -105,25 +105,27 @@ complete 且 (complete − max(cut,wait)) ≥ eot_margin(0.2)  →  真的算说
 
 `eot_margin` 的产品含义：**越大越不容易误判说完（少打扰、少浪费决策），但会漏判、启动更晚**。这就是 §1.6 里"提前触发 vs 启动延迟"那根绳的一头。
 
+> **口径更新（2026-11-04 用户拍板，落在 `docs/no-confirm-window.md`）**：判停之后不再「一律等 700ms」。改成三态——**说完 → 立刻往后**（不等）；**可能说完 → 约 0.7s**；**没说完 → 继续听**；**任何一态上限 2s**。下表里 `confirm_silence_ms` 的「判 `complete` 后再确认 0.7s」是**旧口径**：新口径下它只该挂在「可能说完」那一档，撤掉的是「判完无条件整段等」的窗。本表描述的是**当时的实现**（截至 2026-11-04 本单，代码仍是旧语义），实现改动归独立 Dev 单（去窗单）。
+
 ### 1.4.4 判完之后还要等多久：四个计时器
 
 | 计时器 | 默认 | 作用 | 产品语义 |
 |---|---|---|---|
-| `confirm_silence_ms` | **700** | 判 `complete` 后再确认 0.7s 文本没变才算数 | "给你一个改口的窗口" |
+| `confirm_silence_ms` | **700** | 旧口径：判 `complete` 后再确认 0.7s 文本没变才算数；新口径：**只作用于「可能说完」一档**（说完不等、上限 2s） | 旧："给你一个改口的窗口"；新："只在没听准时收敛一下" |
 | `cut_wait_ms` | 1500 | 判 `cut` 后最多再等 1.5s，到点强制确认 | 不让会话卡死；必要时由决策去 `ask_user` |
 | `think_wait_ms` | 3000 | 判 `wait` 后最多等 3s，**期间绝不调 LLM** | "你想，我不催" |
 | `max_silence_ms` | 2000 | 任何状态静音到 2s 直接确认（KEV 挂了/超时也走这条） | 最后一道兜底 |
 
 **静音从哪算起**：取「最后一次文本变化 / VAD `speech_end` / `speech_start` / 本轮开始 / **最近一次已消费决策**」中**最晚**的那个。最后一项只在「回合保持打开」的口径下有意义（`close_turn_on_decision=False`，见下）；默认口径下决策落地就把回合关了。
 
-**回合怎么收口（2026-11-03 用户拍板改）**：决策一落地、未消费后缀为空 → **立刻 `turn_done`**（`close_turn_on_decision=True`，默认）。改之前是「空后缀 + 静默 2000ms」才收口，那一段实测恒 **2002–2035ms**，纯等待、对用户没有任何信息量。代价：用户在这之后补一句会变成**新一轮**（`on_asr` → `barge_in` → 新一轮，也就拿不到上一轮的上下文），前端要按"新一轮"渲染而不是"同一轮追加"。
+**回合怎么收口（2026-11-03 用户拍板改）**：决策一落地、未消费后缀为空 → **立刻 `turn_done`**（`close_turn_on_decision=True`，默认）。改之前是「空后缀 + 静默 2000ms」才收口，那一段实测恒 **2002–2035ms**，纯等待、对用户没有任何信息量。代价：用户在这之后补一句会变成**新一轮**（`on_asr` → `turn_reopen` → 新一轮，也就拿不到上一轮的上下文），前端要按"新一轮"渲染而不是"同一轮追加"。⚠️ 事件名 `turn_reopen`（原 `barge_in`，2026-11-04 改名，避免与打断 TTS 播报（barge-in）撞名），语义不变：落地后再开口 → 开新一轮（口径见 `docs/no-confirm-window.md` §4）。
 
 `close_turn_on_decision=False` 保留旧口径（最后一次消费后再撑 `max_silence_ms`，这期间补的话并进同一轮），多段消费引擎的验收用例（`tests/poc-streaming-c1c4.py` 的 C2/C4/C5）仍跑这个口径。
 
 实测（真链路，`tests/measure_turn_tail.py`，"导航回家"一句话）：旧口径 **2018 / 2024 / 2035ms**，新默认 **0 / 0 / 0ms**（`turn_done.turn_tail_ms`，证据 `evidence/turn-tail/`）。
 
 **两条容易踩的坑（已写进代码注释）**：
-- `confirm_silence_ms` 必须 < `max_silence_ms`，否则确认窗永远被兜底抢先；
+- `confirm_silence_ms` 必须 < `max_silence_ms`，否则确认窗永远被兜底抢先（**新口径下这条只对「可能说完」那一档成立**：说完不等，也就没有"被兜底抢先"这回事）；
 - `THINK_WAIT` **只**用 `think_wait_ms`，不能被 `max_silence_ms` 抢（否则"等一下我想想"3s 的话会失败）。
 
 ---
@@ -167,7 +169,7 @@ complete 且 (complete − max(cut,wait)) ≥ eot_margin(0.2)  →  真的算说
 | **判停并行化** | 每个 ASR 前缀都发一次判停，最多 3 个在途 | 判停覆盖率 **3.3% → 95.0%**（中）、2.5% → 89.2%（英） | 判停调用 4.46 → 8.83 次/句；**97% 的结果落地即过期** | `eot_max_inflight=3` |
 | **选工具预选** | partial 上就选；去掉 debounce；最终文本归一化后不变则**直接复用** | 把"等短名单 378ms"从关键路径上拿掉；零额外 LLM 成本 | 选工具调用 3.97–14.35 次/句（随韵律） | `reuse_tools_if_text_unchanged` |
 | **不等短名单** | 短名单没就绪也先发 LLM（用本轮稍旧的短名单，`shortlist_source=stale`）；短名单变了再重发 | LLM 启动 p50 **849ms → 501ms（−41%）** | `llm_wasted` 15 → 5 次（重发条件收敛到"top-k 真变了"后）；`n_reissue` 上升 | `allow_stale_shortlist` / `shortlist_reissue` |
-| **投机 LLM** | 进入 MAYBE_DONE 且 `margin ≥ spec_margin(0.3)` 就发，不等 700ms 确认窗 | 确认窗被隐藏；LLM 与选工具的尾巴重叠 | 用户继续说 → 作废并记 `llm_wasted`；浪费率随韵律升高（600ms 韵律中文 75.9%） | `speculative_llm=true` |
+| **投机 LLM** | 进入 MAYBE_DONE 且 `margin ≥ spec_margin(0.3)` 就发，不等 700ms 确认窗（新口径：这 700ms 只剩「可能说完」档，投机变成与生成重叠） | 确认窗被隐藏；LLM 与选工具的尾巴重叠 | 用户继续说 → 作废并记 `llm_wasted`；浪费率随韵律升高（600ms 韵律中文 75.9%） | `speculative_llm=true` |
 | **预热**（延迟优化） | 本轮第一次文本变化就发一个 1-token 请求 | 把 0.8–1.3s 的冷启动移出关键路径 | 一次极小调用（配额/计费未知，按可忽略处理） | `warm_llm=true` |
 
 ### 1.6.1 必须讲清的产品判断
@@ -192,7 +194,7 @@ complete 且 (complete − max(cut,wait)) ≥ eot_margin(0.2)  →  真的算说
 
 用户说：**"帮我导航回家…（停顿 3s）…顺便看看路况"**。
 
-旧行为：第一段说完 → 决策 → **本轮收尾**；用户接着说 → 触发 `barge_in` + 清空历史，第二段变成全新一轮（第一段的上下文丢了）。
+旧行为：第一段说完 → 决策 → **本轮收尾**；用户接着说 → 触发 `turn_reopen` + 清空历史，第二段变成全新一轮（第一段的上下文丢了）。
 
 目标行为：第一段说完 → 决策 → **只把这段封存为"已消费"**，继续听；第二段只对**未消费后缀**判停、选工具、决策。
 
@@ -364,7 +366,7 @@ close() -> None                                      # 关线程池
 | 状态 | 含义 | 出口 |
 |---|---|---|
 | `LISTENING` | 在听；后缀可能为空 | 判停结果进入 → MAYBE_DONE / CUT_OFF_WAIT / THINK_WAIT |
-| `MAYBE_DONE` | 判"说完了"，等确认窗 | 静音 ≥ `confirm_silence_ms` → CONFIRMED；新文本/speech_start → LISTENING |
+| `MAYBE_DONE` | 判"说完了"；旧口径：等确认窗。新口径（2026-11-04 拍板，见 `docs/no-confirm-window.md`）：**说完立刻往后走，不停在这里** | 旧：静音 ≥ `confirm_silence_ms` → CONFIRMED。新：`MAYBE_DONE` 只剩「可能说完」档（约 0.7s 收敛，上限 2s）；强 complete 直接 CONFIRMED；新文本/speech_start → LISTENING |
 | `CUT_OFF_WAIT` | 判"说一半"，再等一会儿 | 静音 ≥ `cut_wait_ms`（或 `max_silence`）→ CONFIRMED |
 | `THINK_WAIT` | 判"让我想想" | 静音 ≥ `think_wait_ms` → CONFIRMED（期间不调 LLM） |
 | `CONFIRMED` | 已确认；这是**中转态**不是终态 | 决策落地 → 消费一段 → 回 LISTENING |
@@ -396,7 +398,7 @@ LISTENING       : silence >= max_silence -> 后缀非空? _confirm("max_silence"
 | 新文本（版本前进） | 在途/已完成的决策统一作废：`llm_cancel(reason=new_text)` + `llm_wasted++`；回 LISTENING 重判 |
 | `speech_start` | 同上，`reason=speech_start`；并重置静音锚点（否则会被 `max_silence` 立刻确认） |
 | 短名单入选 top-k 变化 | `llm_cancel(reason=shortlist_changed)` + `n_reissue++`，用新短名单重发 |
-| 本轮已 `turn_done` 后又说 | `barge_in` + `_reset_turn()` 开新轮（唯一的"清历史"入口） |
+| 本轮已 `turn_done` 后又说 | `turn_reopen` + `_reset_turn()` 开新轮（唯一的"清历史"入口） |
 | 显式 `stop()` | 先决策剩余后缀，落地后 `turn_done`；后缀为空则直接收尾 |
 
 "取消"的实现口径：**放弃该线程结果，token 照常消耗**，不改模型客户端（PoC 明确不做真正的请求中断）。
@@ -479,7 +481,7 @@ normalize(text).startswith(consumed_text)               → 只取增量作为�
 | `llm_cancel` | `reason` ∈ `new_text` / `speech_start` / `shortlist_changed` / `stale_text` / `confirm_wait` / `confirm_timeout`, `speculative, prepared` | 作废 |
 | `llm_decision` | `decision, llm_ms, utterance, consumed_index, consumed_version, consumed_segments, decision_head` | 决策落地 |
 | `segment_consumed` | `index, version, segments, text, asr_t_ms, speculative, llm_ms, decision_kind, shortlist_source` | 游标推进（多段消费的核心埋点） |
-| `barge_in` | `why, text` | 动作后又说 |
+| `turn_reopen` | `why, text` | 动作落地后再开口 → 开新一轮 |
 | `stop_requested` | `text, consumed_segments` | 显式停止 |
 | `turn_done` | 全量 `summary` + `timeline_path` | 本轮结束 |
 | `error` | `stage` ∈ `eot`/`tools`/`llm`/`takeover`, `error_type, error` | PoC 口径：报出来，不重试（UI 侧另有 `asr`/`socket`/`config`/`save` 阶段） |
@@ -636,7 +638,7 @@ normalize(text).startswith(consumed_text)               → 只取增量作为�
 4. `speech_start` 未重置静音锚点 → 重新开口被 `max_silence` 立刻确认；
 5. CONFIRMED 后在途 LLM 未被登记作废就被覆盖（`llm_wasted` 丢失、无事件）；
 6. 归一化未变的更新把 CONFIRMED 打回 LISTENING（真实 ASR 路径多花约 1.4s）；
-7. turn 结束后重复到达的同文本 final 被当成 `barge_in` 开新轮。
+7. turn 结束后重复到达的同文本 final 被当成 `turn_reopen` 开新轮。
 
 ### 2.10.3 多段消费期修掉的 spec 内部矛盾
 

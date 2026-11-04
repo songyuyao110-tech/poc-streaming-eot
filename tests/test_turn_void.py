@@ -2,7 +2,7 @@
 
 范围（wave-2 P0-2/P0-5，2026-11-04 收口）：
 - 生成期本席再开口 → 打断在途决策 → 发一次 `turn_void`（本轮决策作废、继续听本席），
-  与「落地后再开口 → barge_in 开新一轮」「判停前改口/未说完」都分开计数。
+  与「落地后再开口 → turn_reopen 开新一轮」「判停前改口/未说完」都分开计数。
 - 承接：作废的是本轮决策，不是用户的话；半截 + 新话合起来再送，不丢弃重来。
 - CONFIRM_WAIT 二轮回不是「作废本轮」，不得发 turn_void（reason 白名单 + 状态门双重保护）。
 - 三硬复核（P0-5）：互不取消 / 不清对方上下文 / 不串席，对本条「生成中打断」源复核。
@@ -196,16 +196,16 @@ def test_both_seats_interrupt_no_cross():
     duo.close()
 
 
-def test_post_landing_barge_in_no_void():
-    print("[4] 落地后再开口 → barge_in 开新一轮，不是 turn_void")
+def test_post_landing_turn_reopen_no_void():
+    print("[4] 落地后再开口 → turn_reopen 开新一轮，不是 turn_void")
     duo = run_plan([(0, "asr", "mic-D", "打开座椅加热", False),
                     (200, "vad", "mic-D", "speech_end"),
                     (500, "asr", "mic-D", "打开座椅通风", False),
                     (700, "vad", "mic-D", "speech_end")],
                    until=2000, eot=eot_complete, decide=decide_fast)
-    barge_ins = [e for e in duo.events if e.get("event") == "barge_in"]
-    check("触发 barge_in（why=asr_after_action）",
-          bool(barge_ins) and all(e["why"] == "asr_after_action" for e in barge_ins), str(barge_ins))
+    reopens = [e for e in duo.events if e.get("event") == "turn_reopen"]
+    check("触发 turn_reopen（why=asr_after_action）",
+          bool(reopens) and all(e["why"] == "asr_after_action" for e in reopens), str(reopens))
     check("全程 0 次 turn_void", not voids(duo), str(voids(duo)))
     check("开新一轮（turn_index == 2）", duo.seats["D"].turn_index == 2,
           str(duo.seats["D"].turn_index))
@@ -257,7 +257,7 @@ def test_interrupt_preserves_text():
 
 
 CASES = [test_mid_generation_interrupt_voids_turn, test_confirm_wait_no_void,
-         test_both_seats_interrupt_no_cross, test_post_landing_barge_in_no_void,
+         test_both_seats_interrupt_no_cross, test_post_landing_turn_reopen_no_void,
          test_invariant_llm_calls_eq, test_interrupt_preserves_text]
 
 

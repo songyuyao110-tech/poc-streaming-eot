@@ -232,6 +232,11 @@
       <span><b>状态</b>：LISTENING → MAYBE_DONE → CONFIRMED，或 CUT_OFF_WAIT / THINK_WAIT</span>
       <span><b>颜色</b>：蓝=LLM 启动 · 橙=作废 · 绿=决策 · 灰=过期/未变</span>
     </p>
+    <p class="tl-legend">
+      <span><b>口径（2026-11-04 拍板）</b>：<b>说完 → 立刻往后</b>（不等）· <b>可能说完 → 约 0.7s</b> 收敛 · <b>没说完 → 继续听</b> · <b>上限 2s</b></span>
+      <span>「判完一律等 700ms」是旧口径；`confirm_silence_ms` 只该作用于「可能说完」一档（调成整段等待＝回退旧口径，仅调试）</span>
+      <span>生成期间本席再开口 = <b>打断本轮、作废本轮决策</b>（话不丢：半截+新话一起再送）；<b>非 TTS 播报打断</b></span>
+    </p>
     <div id="tl-metrics" class="tl-metrics"></div>
     <div id="tl-groups" class="tl-groups"></div>
     <details id="tl-raw-details"><summary>原始事件 JSON（调试用）</summary><pre id="tl-raw"></pre></details>
@@ -274,17 +279,17 @@
     {key: 'eot_complete_min', type: 'number', step: '0.05',
      hint: 'score 策略的"说完"门槛（recommend 0.8）：probabilities.complete ≥ 此值才判 complete'},
     {key: 'eot_confidence_min', type: 'number', step: '0.05',
-     hint: 'score 策略的抢跑门槛（recommend 0.7）：confidence ≥ 此值才提前调 LLM，否则等静音确认后串行处理'},
+     hint: 'score 策略的抢跑门槛（recommend 0.7）：confidence ≥ 此值才提前调 LLM；不够则进「可能说完」一档、约 0.7s 收敛后再串行处理（不再是整段静默确认）'},
     {key: 'eot_margin', type: 'number', step: '0.05',
      hint: 'margin 策略（A/B 用）要求的领先幅度（推荐 0.2）：越大越不容易误判说完，但会漏判'},
     {key: 'spec_margin', type: 'number', step: '0.05',
      hint: '进入"可能说完"且 margin ≥ 此值时才投机调 LLM（0=只要可能说完就投机）'},
     {key: 'speculative_llm', type: 'checkbox',
-     hint: '投机启动 DeepSeek：确认前就调，被推翻时作废并计入 llm_wasted（省确认窗）'},
+     hint: '投机启动 DeepSeek：判停还没收敛就调，被推翻时作废并计入 llm_wasted。2026-11-04 去窗后它不再"省整段确认窗"，收益改成与生成重叠'},
     {key: 'eot_input', type: 'select', options: ['last_segment', 'turn_text'],
      hint: '判停送什么文本：last_segment=当前 ASR 段（<4 字时拼上一段）；turn_text=本轮累计全文'},
     {key: 'confirm_silence_ms', type: 'number', step: '50',
-     hint: '判 complete 后要连续静音多久才确认（必须小于 max_silence_ms，否则被兜底抢先）'},
+     hint: '【调试口径】收敛窗：只该作用于「可能说完」一档（约 0.7s），说完不等、上限 2s。旧口径「判完一律等这么久」= 2026-11-04 前的主路径，已撤；把它调回整段等待等于回退旧口径，不得当作主路径的后门或验收口径。取值还必须小于 max_silence_ms，否则会被兜底抢先'},
     {key: 'cut_wait_ms', type: 'number', step: '100',
      hint: '判 cut（话说一半）后再等多久强制确认，避免会话卡住'},
     {key: 'think_wait_ms', type: 'number', step: '100',
@@ -313,6 +318,14 @@
     tools_max_inflight: 1, allow_stale_shortlist: true, warm_llm: true};
   function buildTurnConfig(hostId = 'turn-config') {
     const host = byId(hostId);
+    // 口径基准（docs/no-confirm-window.md）：三态挂窗。confirm_silence_ms 只是「可能说完」一档的收敛窗，
+    // 面板保留可改值＝调试用；调成「判完一律等」＝回退 2026-11-04 前的旧口径，不是主路径后门。
+    const note = document.createElement('p');
+    note.className = 'muted';
+    note.style.cssText = 'grid-column: 1 / -1; margin: 0 0 4px; font-size: 12px;';
+    note.textContent = '口径（2026-11-04 拍板）：说完 → 立刻往后；可能说完 → 约 0.7s；没说完 → 继续听；上限 2s。'
+      + 'confirm_silence_ms 只该挂在「可能说完」一档——调成整段等待＝回退旧口径（仅调试，不进验收）。';
+    host.append(note);
     for (const field of TURN_FIELDS) {
       const label = document.createElement('label');
       label.className = 'cfg';
@@ -397,7 +410,9 @@
     confirm_consumed: e => `二轮回已消费 · ${e.text || ''}`,
     reroute_tools: e => `接管选工具 · ${(e.selected || []).join('、')}`,
     reroute_decision: e => `接管决策 · ${e.decision?.tool || ''} · ${e.message || ''}`,
-    barge_in: e => `打断 · ${e.why || ''}`,
+    // 事件名 barge_in → turn_reopen（2026-11-04 改名，语义不变：动作落地后再开口 → 开新一轮），
+    // 与"打断 TTS 播报"（barge-in）的撞名随改名消解；口径见 docs/no-confirm-window.md §4。
+    turn_reopen: e => `再开口 · 开新一轮（落地后再开口，非生成中打断）· ${e.why || ''}`,
     error: e => `错误 · ${e.error_type || ''} ${e.error || ''}`
   };
   const EVENT_CLASS = {llm_start: 'llm', llm_cancel: 'cancel', llm_decision: 'decision', segment_consumed: 'ok',
@@ -605,7 +620,7 @@
       box.replaceChildren(live || chip('最新识别：—', 'live'), vadChip || chip('VAD 结束 —', 'vad'));
       updateVadChip();
       box.append(chip(`最后一字 ${Math.round(data.t_last_word)}ms`),
-                 chip(`判停确认 +${Math.round(data.t_confirm_latency_ms)}ms`),
+                 chip(`判停→往后走 +${Math.round(data.t_confirm_latency_ms)}ms`),
                  chip(`LLM 启动 +${Math.round(data.t_llm_start_latency_ms)}ms`, 'ok'),
                  chip(`决策 +${Math.round(data.t_decision_latency_ms)}ms`, 'ok'),
                  chip(`判停 ${data.eot_calls} 次（跳过 ${data.eot_skipped}）`),
@@ -622,7 +637,7 @@
         part.title = `${label} +${Math.round(value || 0)}ms`;
         waterfall.append(part);
       };
-      segment('判停确认', data.t_confirm_latency_ms, 'confirm');
+      segment('判停收敛（→往后走）', data.t_confirm_latency_ms, 'confirm');
       segment('LLM 启动', (data.t_llm_start_latency_ms || 0) - (data.t_confirm_latency_ms || 0), 'llm');
       segment('决策', (data.t_decision_latency_ms || 0) - (data.t_llm_start_latency_ms || 0), 'decide');
       box.append(waterfall);
@@ -1063,11 +1078,11 @@
       return;
     }
     if (type === 'confirm_resolve') { dualLine(seat, `确认判定 ${data.intent} → ${data.action}`, 'decision'); return; }
-    if (type === 'barge_in') { dualLine(seat, `打断 · ${data.why || ''}`, 'cancel'); return; }
+    if (type === 'turn_reopen') { dualLine(seat, `再开口 · 开新一轮（落地后再开口）· ${data.why || ''}`, 'cancel'); return; }
     if (type === 'turn_done') {
       dualSetState(seat, 'DONE');
       const ms = data.t_confirm_latency_ms === undefined ? '—' : Math.round(data.t_confirm_latency_ms) + 'ms';
-      dualLine(seat, `本轮完成 · 确认 ${ms} · 消费 ${data.consumed_count ?? 0} 段`, 'done');
+      dualLine(seat, `本轮完成 · 判停→往后走 ${ms} · 消费 ${data.consumed_count ?? 0} 段`, 'done');
       return;
     }
     if (type === 'error') { dualLine(seat, `错误 · ${data.error_type || ''} ${data.error || ''}`, 'error'); }
@@ -1103,7 +1118,7 @@
     if (summary.errors) dualChip(box, `错误 ${summary.errors}`, 'warn');
     for (const seat of DUAL_SEAT_IDS) {
       const values = (summary.confirm_latency_ms || {})[seat] || [];
-      dualChip(box, `席 ${seat} 确认 ${values.length ? values.map(value => Math.round(value)).join('/') + 'ms' : '—'}`,
+      dualChip(box, `席 ${seat} 判停→往后走 ${values.length ? values.map(value => Math.round(value)).join('/') + 'ms' : '—'}`,
         values.length ? 'ok' : '');
     }
     const verdict = byId('dual-verdict');

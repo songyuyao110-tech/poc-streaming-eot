@@ -148,7 +148,7 @@ def analyse(sentence, events, session, meta, cfg):
             "tools_times": [event["t_ms"] for event in events if event["event"] == "tools_start"],
             "premature_llm": any(event["event"] == "llm_start" and event["t_ms"] < last_update for event in events),
             "llm_decisions": sum(event["event"] == "llm_decision" for event in events),
-            "barge_ins": sum(event["event"] == "barge_in" for event in events),
+            "turn_reopens": sum(event["event"] == "turn_reopen" for event in events),
             "tool_reuse_events": sum(event["event"] == "tools_scores" and not event.get("reused") for event in events),
             "states": [event["to"] for event in events if event["event"] == "state_change"]}
 
@@ -376,7 +376,7 @@ def main():
         columns = ["id", "lang", "source", "text", "prefix_count", "pause_at", "pause_ms", "turn_done",
                    "t_last_word", "t_confirmed", "t_llm_start", "t_decision", "confirm_latency_ms",
                    "llm_start_latency_ms", "decision_latency_ms", "eot_calls", "eot_skipped", "tool_calls",
-                   "llm_calls", "llm_wasted", "llm_decisions", "premature_llm", "barge_ins"]
+                   "llm_calls", "llm_wasted", "llm_decisions", "premature_llm", "turn_reopens"]
         with (folder / "detail.csv").open("w", newline="") as stream:
             writer = csv.DictWriter(stream, fieldnames=columns, extrasaction="ignore")
             writer.writeheader()

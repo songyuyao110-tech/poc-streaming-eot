@@ -21,7 +21,7 @@
 | 阶段 | 现状 |
 |---|---|
 | 决策落地 | `_apply_llm()`（L401-406）→ `_finish_turn()` → `turn_done=True`、`turns.append(summary)`、落 timeline（L472-478）；此后 `tick` 只在 `CONFIRMED` 调 `_maybe_start_llm`（L226-227），所以一轮只有 1 次决策 |
-| 决策后的 ASR | 同归一化文本的 final → 忽略（L125-132）；**不同文本 → `barge_in` + `_reset_turn()`（L133-134）**，清空 `segments`/`segment`（L486-487）、`turn_index+1`，新决策只看到新文本（历史丢失） |
+| 决策后的 ASR | 同归一化文本的 final → 忽略（L125-132）；**不同文本 → `turn_reopen` + `_reset_turn()`（L133-134）**，清空 `segments`/`segment`（L486-487）、`turn_index+1`，新决策只看到新文本（历史丢失） |
 | LLM 输入 | `self.turn_text()` = 全部段拼接（L306） |
 | 判停输入 | `eot_input()`：`last_segment`，当前段 <4 字时拼上一段（L257-262） |
 | 选工具输入 | `turn_text()`（L166） |
@@ -32,12 +32,12 @@
 | 阶段 | 目标 |
 |---|---|
 | 决策落地 | 推进**消费游标**（`consumed_version` / `consumed_segments`），发 `segment_consumed`，状态回 `LISTENING`，**不收尾** |
-| 决策后的 ASR | 并入**未消费后缀**，自动重新判停；**不触发 `barge_in`、不重置 turn、不清历史** |
+| 决策后的 ASR | 并入**未消费后缀**，自动重新判停；**不触发 `turn_reopen`、不重置 turn、不清历史** |
 | LLM 输入 | `suffix_text()` = 未消费后缀 |
 | 判停 / 选工具输入 | 同样只看未消费后缀（后缀段视图） |
 | 每轮决策数 | 等于已消费段数 `N`（N ≥ 0），每个已消费段恰好 1 次有效决策 |
 | 收尾 | 后缀为空 + 静音 ≥ `max_silence_ms` + 无在途工作（或显式 `stop()`）→ 整轮 `turn_done` 一次 |
-| `barge_in` | 只保留"`turn_done` 之后用户又开口"这一种（开新 turn，语义不变） |
+| `turn_reopen` | 只保留"`turn_done` 之后用户又开口"这一种（开新 turn，语义不变） |
 
 ---
 
@@ -143,9 +143,9 @@ if self.consumed_tail and normalize(text).startswith(normalize(self.consumed_tai
 | # | 场景 | 目标行为 |
 |---|---|---|
 | A | **消费前**打断（决策还没落地）：新文本、`speech_start`、版本前进 | 复用现有 `_cancel_inflight_llm()`（L442-454）：在途 job 置 `canceled`、`_llm_prepared` 丢弃，各记 1 次 `llm_wasted` + `llm_cancel(reason=new_text/speech_start)`；**游标不动**，该段文本留在未消费后缀，和新增文本一起重判 |
-| B | **消费后**继续说话 | 不撤销已消费决策（动作已 mock 执行，PoC 不做回滚）；不 `barge_in`、不 `_reset_turn`；新文本成为后缀，重新走判停→确认→决策 |
+| B | **消费后**继续说话 | 不撤销已消费决策（动作已 mock 执行，PoC 不做回滚）；不 `turn_reopen`、不 `_reset_turn`；新文本成为后缀，重新走判停→确认→决策 |
 | C | 消费后的**同句重发 / 整句重发** | §3.3 的去重：完全重发忽略（`consumed_duplicate`），前缀重叠只取增量 |
-| D | 本轮已 `turn_done`，用户又开口 | 保持现状：`barge_in` + `_reset_turn()` 开新 turn（L133-134 不变） |
+| D | 本轮已 `turn_done`，用户又开口 | 保持现状：`turn_reopen` + `_reset_turn()` 开新 turn（L133-134 不变） |
 
 - 未消费后缀**永不因打断被丢弃**：它只被"重新判停"，不重置文本。唯一会丢文本的情形是 `_reset_turn`（D，整轮已结束）。
 - 已消费段的文本是封段（进 `segments`），后续任何 partial 都改写不到它。
@@ -235,7 +235,7 @@ elif self.state == "LISTENING" and silence >= self.cfg.max_silence_ms:
 
 - 输入：`speech_start@0`；`asr "导航回家"@100 (final)`；`speech_end@120`；`speech_start@800`；`asr "顺便看看路况"@900 (final)`；`speech_end@920`
 - 期望 LLM 调用：**2** 次；输入文本依次为 `"导航回家"`、`"顺便看看路况"`（第 2 次**不含**已消费前缀）
-- 期望事件：`segment_consumed(1)` 出现在 `speech_start@800` **之前**；`segment_consumed(2, text="顺便看看路况")`；全程**无** `barge_in`、**无** `turn_done` 在两段之间
+- 期望事件：`segment_consumed(1)` 出现在 `speech_start@800` **之前**；`segment_consumed(2, text="顺便看看路况")`；全程**无** `turn_reopen`、**无** `turn_done` 在两段之间
 - 期望最终状态：`turn_done` 已发，`state == "LISTENING"`；`consumed_count == 2`、`llm_calls == 2`、`llm_wasted == 0`；`consumptions[*].segments` 依次为 `1, 2`（说明后缀视图逐段推进）
 
 ### C3 · 消费后继续说话，且未消费后缀的投机被作废
@@ -273,7 +273,7 @@ elif self.state == "LISTENING" and silence >= self.cfg.max_silence_ms:
 - **LLM 流式解析**：`decide()` 仍是同步、非流式的单次调用（沿用 `docs/spec-latency-opt.md` §5 的排除项）。
 - **多工具并发 / 真实执行**：动作仍是 mock，不做并发工具、不做真实业务调用。
 - **跨决策上下文**：决策 #2 只拿到未消费后缀，拿不到决策 #1 的文本与结果（不做 context 传递、不做对话历史）。
-- **动作回滚**：消费后的 `barge_in` 不撤销已执行动作，不做"纠正上一轮"。
+- **动作回滚**：消费后的 `turn_reopen` 不撤销已执行动作，不做"纠正上一轮"。
 - **ASR 对已消费段的纠正**：同句重发但文本不同（如 `"导航回家"` → `"导航回老家"`）按 §3.3 的前缀规则处理，不回溯改写已消费文本。
 - **跨 session / 跨 turn 恢复**：游标不持久化、不做断线重连、不做多会话并发、不做鉴权。
 - **判停策略与模型**：`eot_policy / eot_margin / spec_margin` 语义不动；不接音频/韵律判停模型（Smart Turn）；不换中文专用 prompt。
@@ -341,7 +341,7 @@ elif self.state == "LISTENING" and silence >= self.cfg.max_silence_ms:
 ## 附录 C · 未决问题（实现前需确认）
 
 1. 段间是否需要上下文：决策 #2 是否应带上已消费文本/上一决策结果（PoC 暂定不带）。
-2. 消费后 `barge_in` 是否需要"撤销/纠正"能力（PoC 暂定不做，动作不可回滚）。
+2. 消费后 `turn_reopen` 是否需要"撤销/纠正"能力（PoC 暂定不做，动作不可回滚）。
 3. 现有 `t_last_word / t_confirmed / t_llm_start / t_decision` 在多段下取"首次"还是"最后一次"（本 spec 暂定：保留首次语义 + 新增 `t_last_*`）。
 4. 收尾入口：只靠静音 `max_silence_ms` 自动收尾是否够，还是必须把 `stop(now_ms)` 接进 `ui/server.py` 的「停止」按钮（本 spec 暂定两者都要）。
 5. ASR 对已消费段的"纠正"（同句重发但文本不同）按前缀去重是否可接受为 PoC 行为。

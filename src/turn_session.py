@@ -71,7 +71,7 @@ class TurnConfig:
     max_silence_ms: int = 2000
     # 用户 2026-11-03 拍板「去掉回合 2s 尾巴」：决策一落地（后缀已空、没有在途决策）就当回合结束，
     # 不再等「空后缀 + 静音 max_silence_ms」才收口（实测那一段恒 ~2002ms，纯等待）。
-    # 代价：用户紧接着补一句会变成新一轮（on_asr → barge_in → _reset_turn），前端要按新一轮渲染。
+    # 代价：用户紧接着补一句会变成新一轮（on_asr → turn_reopen → _reset_turn），前端要按新一轮渲染。
     # False 保留改动前的行为（最后一次消费后再撑 max_silence_ms，这期间补一句并进同一轮），
     # 多段消费引擎的验收用例（tests/poc-streaming-c1c4.py C2/C4/C5）仍跑这个口径。
     close_turn_on_decision: bool = True
@@ -203,13 +203,13 @@ class TurnSession:
     def on_asr(self, t_ms: int, text: str, final: bool) -> None:
         if self.turn_done:
             if normalize(text) == normalize(self.turn_text()):
-                # A repeated/duplicate final update after the decision is not a barge-in.
+                # A repeated/duplicate final update after the decision is not a turn reopen.
                 self.counters["eot_skipped"] += 1
                 self._emit("asr_update", t_ms, text=text, final=bool(final), segment=self.segment,
                            turn_text=self.turn_text(), changed=False)
                 self._emit("eot_skipped", t_ms, reason="unchanged_after_turn_done", text=text)
                 return
-            self._emit("barge_in", t_ms, why="asr_after_action", text=text)
+            self._emit("turn_reopen", t_ms, why="asr_after_action", text=text)
             self._reset_turn(t_ms)
         # Volcengine re-sends the whole sentence of an utterance: after one or more segments were
         # consumed, an exact re-send is a duplicate and a re-send that continues the consumed text
@@ -648,7 +648,7 @@ class TurnSession:
         if self.cfg.close_turn_on_decision:
             # 用户 2026-11-03 拍板：决策落地即收口，不再等 max_silence_ms 的 2s 尾巴。
             # 后缀已空、在途决策已应用，`_maybe_finish_session` 只会成功；用户紧接着补一句
-            # 会走 on_asr 的 barge_in 分支 → _reset_turn，变成新一轮（前端按新一轮渲染）。
+            # 会走 on_asr 的 turn_reopen 分支 → _reset_turn，变成新一轮（前端按新一轮渲染）。
             self._maybe_finish_session(now_ms)
         if self._stop_requested:
             # Explicit stop(): consume what was left, then close the turn.
@@ -810,7 +810,7 @@ class TurnSession:
 
         P0-2 生成中打断 = 一等动作：当取消确由本席再开口触发（reason∈{speech_start,new_text}）且
         真的有东西被作废（在途 job 或已备好的 speculative 结果），发一次 `turn_void` —— 本轮决策
-        作废、继续听本席。与 `barge_in`（动作已落地后再开口 → 开新一轮）分开。
+        作废、继续听本席。与 `turn_reopen`（动作已落地后再开口 → 开新一轮）分开。
         CONFIRM_WAIT 下的同因取消发生在二次确认收口路径上（状态机不回 LISTENING），
         不算打断作废，同样不发 turn_void。
         """

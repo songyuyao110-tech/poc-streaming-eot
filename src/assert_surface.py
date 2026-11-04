@@ -81,7 +81,7 @@ REGISTRY: dict[str, dict] = {
     "own_void": {"layer": "seat", "type": "int/seat",
                  "owner": "-",
                  "semantics": "该席 turn_void 次数（生成中打断=作废本轮；与判停前改口/未说完分开，"
-                              "与落地后再开口的 barge_in→新一轮也分开）",
+                              "与落地后再开口的 turn_reopen→新一轮也分开）",
                  "source": "duo.seats[seat].events: turn_void 计数"},
     "ask_user": {"layer": "seat", "type": "int",
                  "owner": "-",

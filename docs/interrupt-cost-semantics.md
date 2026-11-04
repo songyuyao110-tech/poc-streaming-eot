@@ -59,4 +59,4 @@ max_workers = 4 + max(0, max(eot_max_inflight, tools_max_inflight) - 1)
 - 实现：`src/turn_session.py`（`_cancel_inflight_llm` 的 `_VOID_REASONS` 白名单 + `turn_void` 事件
   + `turn_voids` 计数器）、`src/dual_seat.py`（`own_void`/`cross_void` 归因）、
   `src/assert_surface.py`（断言面 `own_void`）。
-- 验证：`tests/test_turn_void.py`（生成中打断 / CONFIRM_WAIT 不 void / 三硬 / barge_in / 不变式 / 承接）。
+- 验证：`tests/test_turn_void.py`（生成中打断 / CONFIRM_WAIT 不 void / 三硬 / turn_reopen / 不变式 / 承接）。
