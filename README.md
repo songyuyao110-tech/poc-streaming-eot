@@ -84,14 +84,14 @@ export POC_UPSTREAM=/absolute/path/to/navi-dual-system
 
 | 依赖 | 是什么 | 默认地址 / 变量名 | 没有时的后果 |
 |---|---|---|---|
-| KEV 选工具隧道 | 指向远程 KEV 服务（管"这句话该用哪些工具"的两阶段打分） | `http://127.0.0.1:8009`，变量 `KEV_BASE` | 选工具/判停类脚本失败 |
-| KEV 判停隧道 | 同一条远程 KEV 服务、独立一条隧道（避免和选工具排队） | `http://127.0.0.1:8010`，变量 `KEV_EOT_BASE` | 判停打分、确认轮真实打分失败（mock 路径不受影响） |
+| KEV 服务（选工具 / 判停 / 二次确认） | 远程 `StartLux-Decision-v1.1-9B-AutoThink` 决策模型；两阶段工具打分、判停、确认意图三处都走它（2026-11-03 起单服务，旧 `kev-latest` 的 `:8010` 判停隧道已退役） | `http://127.0.0.1:8009`，变量 `KEV_BASE`；判停另有 `EOT_JUDGE_BASE`，确认轮 `KEV_EOT_BASE`（默认同 8009） | 选工具/判停/确认轮的真实打分失败（mock 路径不受影响） |
 | LLM 凭据 | 公司 LiteLLM（走**上游** `model_clients.existing_slow_configuration()` 读配置） | 变量 `LITELLM_BASE_URL` / `LITELLM_API_KEY` / `SLOW_MODEL`（三个都要，缺一个显式失败） | 真实决策失败；mock 路径不受影响 |
 | ASR 凭据 | 火山豆包流式 ASR（麦克风模式 / wav 文件回放） | 变量 `CLOUD_ASR_APPID` / `CLOUD_ASR_ACCESS_TOKEN` 等 `CLOUD_ASR_*` | 麦克风与 m1b/mic-ws 脚本跑不了 |
 
 配在哪：这些都只从**进程环境变量**读，不读仓库里的文件。LiteLLM 三个变量由
 上游 `model_clients.py` 消费，本仓不落盘、不打印；ASR 变量由 `src/asr_stream.py` 消费。
-两条隧道怎么建取决于你的 KEV 服务位置（SSH 端口转发即可），本仓不含隧道配置。
+两条隧道怎么建取决于你的 KEV 服务位置（SSH 端口转发即可），本仓不含隧道配置。现在只需要一条
+`:8009`（选工具、判停、确认轮同用）；旧的第二条 `:8010` 判停专用隧道随 2026-11-03 判停换模型退役。
 
 ### 5. 没有外部服务时能跑什么
 

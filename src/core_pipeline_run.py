@@ -35,18 +35,20 @@ from registry import load_registry
 from decisions import Tool, mixed_questions
 
 KEV_BASE = "http://127.0.0.1:8009"
-# EOT judging goes through its own SSH tunnel so it never queues behind tool scoring on KEV_BASE.
-# Both local ports forward to the same remote KEV service (kev-latest @ 106.53.0.235:8009).
-KEV_EOT_BASE = os.environ.get("KEV_EOT_BASE", "http://127.0.0.1:8010")
-KEV_MODEL = "kev-latest"
+# 2026-11-03：判停换成 StartLux-Decision（8009 单服务）后，旧 kev-latest 专用隧道（8010）已退役。
+# 这里保留 KEV_EOT_BASE 是为了二次确认（confirm_gate）这条更早的调用：它同样发 noul 问题，
+# 默认改指同一台 8009，否则真实通道连不上（`EOT_JUDGE_BASE` 才是判停自己的入口）。
+KEV_EOT_BASE = os.environ.get("KEV_EOT_BASE", KEV_BASE)
+# 服务端只有一个模型（`/health` 与 `/v1/models` 都是这个名字）；请求里不带 `model`，
+# 这个常量只用于校验响应确实来自期望的服务，`KEV_MODEL` 可覆盖（例如换回旧服务做 A/B）。
+KEV_MODEL = os.environ.get("KEV_MODEL", "StartLux-Decision-v1.1-9B-AutoThink")
 # Stage 1 and every stage-2 batch share one keep-alive pool; the two concurrent batches below are
 # the widest fan-out of a single turn.
 KEV_TOOLS_CLIENT = httpx2.Client(timeout=30.0, trust_env=False, follow_redirects=False,
                                  limits=httpx2.Limits(max_connections=2, max_keepalive_connections=2,
                                                      keepalive_expiry=60.0))
 atexit.register(KEV_TOOLS_CLIENT.close)
-# Turn-taking (EOT) judging gets its own tunnel + connection pool so it never competes with tool
-# scoring, and concurrent per-prefix EOT calls can be in flight without queueing behind each other.
+# 二次确认（confirm_gate）复用这个连接池：它一轮只发一份三问，并发很低，因此不再单开隧道。
 KEV_EOT_CLIENT = httpx2.Client(timeout=30.0, trust_env=False, follow_redirects=False,
                                limits=httpx2.Limits(max_connections=4, max_keepalive_connections=4,
                                                    keepalive_expiry=60.0))
@@ -74,12 +76,18 @@ def unique_object(pairs):
 
 
 def kev_call(client, state, questions, base=KEV_BASE):
-    response = client.post(base + "/v1/systemone", json={"model": KEV_MODEL, "state": state,
-                          "questions": questions, "max_output_tokens": 512})
+    """One `/v1/systemone` decision call, in the shape the 2026-11-03 service documents.
+
+    与判停同一套口径：请求不带 `model`（服务端只有一个模型），`think_mode: "never"` 让它只打分
+    不思考——实测同一份 17 问 payload，`auto` 要生成 ~290 个思考 token、4.7s，`never` 0.5s（9 倍）。
+    响应里的 `model` 仍然校验：换错端口时不能拿另一个模型的分数悄悄当工具分。
+    """
+    response = client.post(base + "/v1/systemone",
+                           json={"state": state, "think_mode": "never", "questions": questions})
     if response.status_code != 200:
         raise ValueError("KEV returned non-200")
     raw = json.loads(response.content, object_pairs_hook=unique_object)
-    if not isinstance(raw, dict) or ("model" in raw and raw["model"] != KEV_MODEL):
+    if not isinstance(raw, dict) or (raw.get("model") is not None and raw["model"] != KEV_MODEL):
         raise ValueError("Wrong KEV response model")
     if not isinstance(raw.get("answers"), dict) or set(raw["answers"]) != set(questions):
         raise ValueError("Missing/extra KEV questions")
@@ -128,7 +136,10 @@ def score_tools(snapshot, utterance, context, *, mock=False):
         return scores, {"tool_names": [item["name"] for item in items], "tool_count": len(items),
                         "latency_ms": (finished-started)*1000, "started_ms": (started-origin)*1000,
                         "finished_ms": (finished-origin)*1000,
-                        "model_latency_ms": raw.get("latency_ms") if raw else None}
+                        # 新服务不回报 latency（旧 kev-latest 有），只回报 token usage；两个字段都照实落，
+                        # 空闲时看 usage 就能估这一包多少钱。
+                        "model_latency_ms": raw.get("latency_ms") if raw else None,
+                        "model_usage": raw.get("usage") if raw else None}
 
     stage1_scores, stage1_timing = score_items(domain_items)
     ranked_domains = [{"name": name[5:], "score": value} for name, value in

@@ -285,11 +285,12 @@ complete 且 (complete − max(cut,wait)) ≥ eot_margin(0.2)  →  真的算说
 |---|---|
 | **上游仓库** | `model_clients.py` / `registry.py` / `decisions.py` / 语料 fixture 来自 `navi-dual-system`，**不复制**。`POC_UPSTREAM` 指定，默认探测 `/Users/YUYSONG/Agents/navi-dual-system` |
 | **Python** | `/Users/YUYSONG/Agents/navi-dual-system/.venv/bin/python`（含 `httpx2`、`simple-websocket`、`jsonschema`、`flask`） |
-| **KEV 双隧道** | `:8009` 选工具、`:8010` 判停（**两条独立 SSH 隧道指向同一远程 KEV** `kev-latest @ 106.53.0.235:8009`），`KEV_EOT_BASE` 可覆盖 |
+| **KEV 服务** | 单服务 `:8009` —— `StartLux-Decision-v1.1-9B-AutoThink`（2026-11-03 起；此前是 `kev-latest` @ 106.53.0.235:8009），选工具 / 判停 / 确认轮同用；旧的 `:8010` 判停专用隧道已退役。`KEV_BASE` / `EOT_JUDGE_BASE` / `KEV_EOT_BASE` 可覆盖 |
 | **ASR 凭证** | 火山 `CLOUD_ASR_APP_ID / ACCESS_TOKEN / RESOURCE_ID / URL`，运行时从环境或 `~/.zshrc` 读，**不打印、不入库** |
 | **LLM 凭证** | 公司 LiteLLM，走上游 `model_clients`，经 `~/.dsh/.credentials.yaml` 取，**不打印** |
 
 **为什么判停要独立隧道**：实测两条 KEV 调用走同一隧道时会互相排队（真实会话里判停自报墙钟 340–556ms，超 `eot_timeout_ms`，大量结果变 stale）。但**单轮微基准测不出**（同隧道 p50 115ms vs 分隧道 121ms）——因为持续负载下的争用来自"一轮要等一次选工具往返 + GIL"，远程 KEV 服务自身才是共享瓶颈。所以隧道隔离是缓解措施，不是根治。
+（**2026-11-03 更新**：判停换成 8009 单服务后这条隔离不再存在，判停改走自己的连接池；实测新服务 17 问一包 ~0.6s、选工具两阶段墙钟 p50 ~1.5s，同隧道争用需在新的单服务上重测。）
 
 ## 2.3 数据契约
 
@@ -661,10 +662,9 @@ normalize(text).startswith(consumed_text)               → 只取增量作为�
 PY=/Users/YUYSONG/Agents/navi-dual-system/.venv/bin/python
 cd /Users/YUYSONG/Work/poc-streaming-eot
 
-# 1) 两条 KEV 隧道（选工具 :8009 / 判停 :8010 → 同一远程）
+# 1) 一条 KEV 隧道（选工具 / 判停 / 确认轮同用 :8009；8010 已随 2026-11-03 判停换模型退役）
 K=~/.ssh/kev/id_ed25519; H=ubuntu@106.53.0.235
 ssh -i $K -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -N -L 8009:127.0.0.1:8009 $H &
-ssh -i $K -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -N -L 8010:127.0.0.1:8009 $H &
 
 # 2) UI（默认 8765；麦克风需要 localhost）
 $PY -u -B ui/server.py
@@ -713,7 +713,7 @@ say -v Tingting -o /tmp/asr-zh.aiff "导航回家" && \
 | 术语 | 含义 |
 |---|---|
 | **EOT** | End-of-Turn，判停：判断用户"说完了没" |
-| **KEV** | 项目使用的打分服务（`kev-latest`），支持 `noul`（独立概率）和 `choice`（选项概率）两类问题 |
+| **KEV** | 项目使用的打分服务（`StartLux-Decision-v1.1-9B-AutoThink`；2026-11-03 前为 `kev-latest`），支持 `noul`（独立概率）和 `choice`（选项概率）两类问题 |
 | **noul** | 一种提问类型：对每个问题独立给 0–1 概率，不要求互斥归一 |
 | **判停三问** | `complete` / `cut` / `wait` 三个 noul 问题 |
 | **margin** | `complete − max(cut, wait)`，判停置信度 |

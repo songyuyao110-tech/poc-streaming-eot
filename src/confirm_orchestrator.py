@@ -18,7 +18,7 @@ TurnSession 在 `_apply_llm` 里拦截到一个池内高危工具的 tool_call �
 本模块只对"已经收敛的第二轮回文本"做意图判定并给出落地动作。
 
 mock 通道说明：TurnConfirmGate 用 `mock=True`（默认）时回到 confirm_gate 的稳定 mock 打分，
-不依赖 KEV 隧道；真实通道用 `mock=None`（需 EOT 隧道 :8010）。见 docs/spec-kev-confirmation-v2.md。
+不依赖 KEV 隧道；真实通道用 `mock=None`（需 KEV 服务 :8009，`KEV_EOT_BASE` 可覆盖）。见 docs/spec-kev-confirmation-v2.md。
 """
 from __future__ import annotations
 

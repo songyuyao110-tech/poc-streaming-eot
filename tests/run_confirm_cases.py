@@ -5,7 +5,7 @@
                   （expected_mock_intent 为 null 时该条跳过比较，报 N/A；mock 启发式无足够证据）
   L2 judge 注入    score_confirm_reply(mock=<score_override>) -> judge  对比 expected_kev_intent
                   （用真实校准分样本验证裁决逻辑把合理分数映射到正确分支，不依赖打分通道）
-  L3 真实 KEV     mock=False -> judge  对比 expected_kev_intent（需隧道 :8010，--mode kev 才跑）
+  L3 真实 KEV     mock=False -> judge  对比 expected_kev_intent。需 KEV 服务 :8009。
 
 本脚本可独立运行，不依赖 LLM/KEV 隧道（默认只跑 L1+L2，全离线、确定、可复现）。
 
@@ -60,7 +60,7 @@ def run_layer_override(case):
 
 
 def run_layer_kev(case):
-    """L3：真实 KEV 打分 -> judge。对比 expected_kev_intent。隧道需 :8010。"""
+    """L3：真实 KEV 打分 -> judge。对比 expected_kev_intent。需 KEV 服务 :8009。"""
     try:
         scores = score_confirm_reply(case["user_reply"], mock=False)
     except Exception as error:  # 隧道不可达等
@@ -83,7 +83,7 @@ def main():
     print(f"交互层用例集 runner：{len(cases)} 条  (dataset=tests/confirm_cases.json)")
     print(f"  L1 mock启发式  : {'ON' if do_mock else 'OFF'}")
     print(f"  L2 judge注入   : {'ON' if do_override else 'OFF'}")
-    print(f"  L3 真实KEV     : {'ON(需隧道 :8010)' if do_kev else 'OFF'}")
+    print(f"  L3 真实KEV     : {'ON(需 KEV :8009)' if do_kev else 'OFF'}")
     print("=" * 100)
 
     stats = {"L1": {"pass": 0, "skip": 0, "fail": 0},

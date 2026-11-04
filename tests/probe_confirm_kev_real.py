@@ -1,9 +1,9 @@
-"""真实 KEV 打分探针：对验收表 6 样例跑 score_confirm_reply（mock=False，需 EOT 隧道 :8010）。
+"""真实 KEV 打分探针：对验收表 6 样例跑 score_confirm_reply（mock=False，需 KEV 服务 :8009 / `KEV_EOT_BASE`）。
 
 这不替代 tests/test_confirm_gate.py 的离线判定验证；它验证"真实 KEV 三问打分 -> 同一 judge"
 在验收样例上落在哪一侧，用于校准 T_takeover / CLEAR_MARGIN。隧道不可达时给出清晰提示。
 
-运行：python3 -B tests/probe_confirm_kev_real.py   （需 KEV EOT 隧道，见 README 前置）
+运行：python3 -B tests/probe_confirm_kev_real.py   （需 KEV 服务 :8009，见 README 前置）
 """
 from __future__ import annotations
 
