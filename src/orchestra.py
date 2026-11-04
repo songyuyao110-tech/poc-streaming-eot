@@ -6,6 +6,7 @@ C1 之后两席各自判停、各自把段交给 `decide`；C2 把「做决定�
     席 D 段 ─┐
              ├─▶ SessionBrain.decide(seat, …)          ← 唯一决策入口（一个 AU 只决策一次）
     席 P 段 ─┘        │
+                      ├─ 任务：一条请求一条任务（运行中集合 / 已完成不进候选 / 先来后到，`task_entity.py`）
                       ├─ 指代解析：短附和（「我也要」）→ 最近动作台账
                       ├─ 在途 IU：目标 + 参与者 + 段；同目标未落地 → 并入同一 AU
                       ├─ AU：一次决策 + 一次执行 + 一条回执（执行面一次一个动作）
@@ -41,6 +42,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.dont_write_bytecode = True
 
+from task_entity import TaskBoard
 from turn_session import normalize
 
 SEAT_ORDER = ("D", "P")
@@ -99,12 +101,13 @@ class IntentUnit:
     status: str = "open"            # open | committed
     au_id: str = None
     t_close: int = None
+    task_id: str = None             # 所属任务（`task_entity.TaskBoard`，P2-1）
 
     def as_dict(self):
         return {"iu_id": self.iu_id, "seat": self.seat, "text": self.text, "goal": self.goal,
                 "participants": list(self.participants), "segments": list(self.segments),
                 "status": self.status, "au_id": self.au_id, "t_open": self.t_open,
-                "t_close": self.t_close}
+                "t_close": self.t_close, "task_id": self.task_id}
 
 
 @dataclass
@@ -147,7 +150,8 @@ class SessionBrain:
     """
 
     def __init__(self, decide_fn, *, merge_window_ms: int = DEFAULT_MERGE_WINDOW_MS,
-                 recent_limit: int = DEFAULT_RECENT_LIMIT, on_event=None, clock=None):
+                 recent_limit: int = DEFAULT_RECENT_LIMIT, on_event=None, clock=None,
+                 task_board=None):
         self.decide_fn = decide_fn
         self.merge_window_ms = int(merge_window_ms)
         self.recent_limit = int(recent_limit)
@@ -157,6 +161,11 @@ class SessionBrain:
         self.ius = []
         self.aus = []
         self.recent = []                      # 最近动作台账（已落地 AU，最新在末尾）
+        # 任务实体（P2-1，`task_entity.py`）：运行中集合 / 已完成不进候选 / 先来后到。
+        # 默认建一份空台账；要挂「判停模型打相关分」就传 `TaskBoard(relevance_fn=...)`。
+        self.tasks = task_board or TaskBoard()
+        if self.tasks.on_event is None:
+            self.tasks.on_event = self._on_task_event
         self._lock = threading.RLock()
         self._now_ms = 0
         self._seq = 0
@@ -201,6 +210,8 @@ class SessionBrain:
         with self._lock:
             now = self._now()
             reference = is_reference(utterance)
+            # 任务相关性打分入口（P2-1 只留位）：只记账、不改行为，见 `task_entity.match`。
+            self.tasks.match(utterance, now)
         if reference:
             with self._lock:
                 return self._decide_reference(seat, utterance, now)
@@ -297,6 +308,8 @@ class SessionBrain:
         except Exception:
             with self._lock:
                 self._close_iu(iu, now, "decide_error")
+                # 这条任务不会有 AU 了：当场结掉，别留一条空跑任务占着候选位。
+                self.tasks.close_task(iu.task_id, now, "abandoned", "decide_error")
             raise
         with self._lock:
             outcome = dict(outcome or {})
@@ -320,7 +333,12 @@ class SessionBrain:
         iu = IntentUnit(iu_id=self._next_id("iu"), seat=seat, text=text or "", t_open=now,
                         goal=goal, participants=[seat], segments=[text] if text else [])
         self.ius.append(iu)
-        self._emit("iu_open", now, iu_id=iu.iu_id, seat=seat, goal=goal, text=text)
+        # 任务实体：一条新请求＝一条新任务（先来后到）；IU / AU 都挂在它下面。
+        task = self.tasks.open_task(seat, text, now)
+        iu.task_id = task.task_id
+        self.tasks.attach_iu(task.task_id, iu.iu_id)
+        self._emit("iu_open", now, iu_id=iu.iu_id, seat=seat, goal=goal, text=text,
+                   task_id=iu.task_id, queue_pos=self.tasks.queue_position(iu.task_id))
         return iu
 
     def _close_iu(self, iu, now, why):
@@ -350,6 +368,7 @@ class SessionBrain:
                         t_decided=now, inherited_from=inherited_from)
         self.aus.append(au)
         iu.au_id = au.au_id
+        self.tasks.attach_au(iu.task_id, au.au_id, now)
         self._unapplied[seat].append(au)
         self._emit("au_decided", now, au_id=au.au_id, iu_id=iu.iu_id, seat=seat,
                    tool=au.tool, kind=au.kind, inherited_from=inherited_from)
@@ -391,6 +410,7 @@ class SessionBrain:
             au.state = "executed"
             au.receipt = "已回问：" + str((au.arguments or {}).get("question", ""))
             self.counters["executed"] += 1
+            self.tasks.settle_au(au.au_id, now, "executed")     # 任务层同样结算（不留空跑任务）
             self._emit("au_executed", now, au_id=au.au_id, iu_id=au.iu_id, seat=seat,
                        kind=au.kind, tool=au.tool, participants=list(au.participants),
                        scope=list(au.scope), receipt=au.receipt, merged=False,
@@ -460,6 +480,7 @@ class SessionBrain:
                    merged=au.merged, inherited_from=au.inherited_from, action_key=list(key))
         self._emit("receipt", now, au_id=au.au_id, seat=au.initiator, text=au.receipt,
                    participants=list(au.participants), scope=applied)
+        self.tasks.settle_au(au.au_id, now, "executed")
 
     def _abandon(self, au, now, why):
         if au.state in ("executed", "abandoned"):
@@ -471,6 +492,7 @@ class SessionBrain:
         self._close_iu(self._iu(au.iu_id), now, "au_abandoned")
         self._emit("au_abandoned", now, au_id=au.au_id, iu_id=au.iu_id, seat=au.initiator,
                    why=why)
+        self.tasks.settle_au(au.au_id, now, "abandoned")
 
     @staticmethod
     def _is_pool_tool(tool):
@@ -559,6 +581,8 @@ class SessionBrain:
             for iu in list(self.ius):
                 if iu.status == "open":
                     self._close_iu(iu, now, "session_end_no_au")
+            # 任务层兜底：会话结束还在跑的（含没有 AU 的空任务）一律结掉，`task_open` 才收得拢。
+            self.tasks.close_running(now, "session_end")
 
     def audit(self, case=None) -> dict:
         """A6 对账 / wave-2 orchestra audit：先按会话收口结算，再出编排层真值（不编）。"""
@@ -588,6 +612,8 @@ class SessionBrain:
                 "aus": [au.as_dict() for au in self.aus],
                 **{key: value for key, value in self.counters.items()},
             }
+            # 任务层真值（P2-1）：`task_*` 前缀，与 iu_/au_ 的账并列，不覆盖 A6 判据。
+            out.update(self.tasks.snapshot())
             if self.counters["references"]:
                 # 编排层真值覆盖席级观测：指代/合并之后「谁真的落了决策」按 AU 的发起席算，
                 # 被并进别人 AU 的附和席不再单独计一次（TC-16 期望 P:0 就是这条）。
@@ -598,6 +624,13 @@ class SessionBrain:
             return out
 
     # ---------- 事件 ----------
+
+    def _on_task_event(self, event: dict) -> None:
+        """任务台账事件与 IU/AU 事件同流（layer 一致，回放 / 诊断面都读得到）。"""
+        event.setdefault("layer", "orchestra")
+        self.events.append(event)
+        if self.on_event:
+            self.on_event(event)
 
     def _emit(self, name, t_ms, **payload):
         event = {"event": name, "t_ms": t_ms, "layer": "orchestra"}

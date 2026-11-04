@@ -25,6 +25,7 @@
 | `poc-streaming-m1b.py [wav]` | 文件流式 ASR 端到端（2 partial + 1 final + 1 决策） | PASS |
 | `dual_asr_text_cases.jsonl` + `run_dual_asr_text_cases.py` | **37 条双路 ASR 文本用例**：wave-1 16 条判停/隔离可跑（TC-34 复用 53/53）+ wave-2 20 条语义断言面（`STAGED`，等 C2/C3/C4；`--audit` 一接即门槛化） | wave-1 PASS / wave-2 STAGED |
 | `test_assert_surface.py` | **离线断言面自检**：REGISTRY 覆盖 37 条 expect、标量/区间、orchestra BLOCKED→PASS/FAIL、`late_verdict_drives` 两方向、`ask_user/decide/no_splice/own_text_only` 正反例、`dump_surface` 20 字段（不连 8009） | N/N |
+| `test_task_entity.py` | **任务实体（P2-1）**：运行中任务集合 / 已完成不进相关候选 / 先来后到队列位、相关性打分接口位（不接真调用时零调用、命中只记账不改行为、已完结任务给的命中不认）、任务层 `task_eq` 与 A6 `iu_eq` 共存（不连 8009） | 72/72 |
 
 注：`a3.py` 的 A3-1「无浪费 LLM」期望已因工具集更换改写为「浪费只来自 M4 shortlist 重发（≤1）」，
 原因写在脚本注释里（core_score 两阶段短名单比旧的 14 工具慢，`allow_stale_shortlist` 会先按旧短名单发起决策）。
