@@ -10,8 +10,9 @@
 - 前置校验：用例可解析；`expect`/`expect_fake_judge` 每个 key ∈ REGISTRY ∪ meta；违规退出码 2。
 - `expect_fake_judge`（可选）：同一用例在 `--judge fake` 下的附加期望（确认原因依赖判停 confidence）。
 - wave-1：绝对毫秒 plan 喂双席；`eot_fn` 按 `case["judge"]` 选（real→8009，
-  fake_weak/fake_timeout/fake_silent→假实现）；`--judge fake` 把 real 用例改用「立即 complete」假判停，
-  并把静默确认 p50 ≤ AI×1.10 时延门槛降级为 OBSERVED。
+  fake_weak/fake_timeout/fake_silent→假实现）；`--judge fake` 把 real 用例改用「立即 complete」假判停。
+- 时延（judge_kind=real 且 mode=real 才跑）：2026-11-04 去窗后「静默确认 p50 ≤ AI×1.10」这条判据的
+  分母（带窗地板 A1_CEILING_MS）已失效，故只记 p50 / 分 why 计数、一律 OBSERVED；重锚待 P3-1。
 - wave-2：事件锚 `D|P:confirm|decision` 按出现序号消费；无 `--audit` 且 `depends` 非空 → STAGED，
   orchestra 判据 BLOCKED、seat 判据 OBSERVED；有 `--audit MODULE:FUNC`（fn(case,duo)->dict）→
   全部门槛化 PASS|FAIL，缺字段按 BLOCKED。
