@@ -78,6 +78,11 @@ REGISTRY: dict[str, dict] = {
                    "owner": "-",
                    "semantics": "该席 llm_cancel 中 reason∈{speech_start,new_text} 的次数",
                    "source": "duo.seats[seat].events: llm_cancel reason in {speech_start,new_text}"},
+    "own_void": {"layer": "seat", "type": "int/seat",
+                 "owner": "-",
+                 "semantics": "该席 turn_void 次数（生成中打断=作废本轮；与判停前改口/未说完分开，"
+                              "与落地后再开口的 barge_in→新一轮也分开）",
+                 "source": "duo.seats[seat].events: turn_void 计数"},
     "ask_user": {"layer": "seat", "type": "int",
                  "owner": "-",
                  "semantics": "全局 llm_decision 中 decision.kind==ask_user 的次数（回问）",
@@ -252,6 +257,11 @@ def seat_surface(duo, case=None) -> dict:
                                if e.get("event") == "llm_cancel"
                                and e.get("reason") in ("speech_start", "new_text"))
 
+    own_void = {}
+    for seat in ("D", "P"):
+        own_void[seat] = sum(1 for e in duo.seats[seat].events
+                             if e.get("event") == "turn_void")
+
     ask_user = sum(1 for e in events
                    if e.get("event") == "llm_decision"
                    and (e.get("decision") or {}).get("kind") == "ask_user")
@@ -274,6 +284,7 @@ def seat_surface(duo, case=None) -> dict:
         "no_cross": duo.counters["cross_cancel"] == 0 and duo.counters["cross_reset"] == 0,
         "own_text_only": own_text_only,
         "own_cancel": own_cancel,
+        "own_void": own_void,
         "ask_user": ask_user,
         "decide": decide,
         "eq": eq,
@@ -353,7 +364,7 @@ def check_expect(expect: dict, seat: dict, audit: dict | None, case: dict) -> li
 
 def _verdict_seat(key, observed, spec) -> bool:
     """seat 层逐 key 的匹配口径。"""
-    if key in ("decisions", "segments", "own_cancel"):
+    if key in ("decisions", "segments", "own_cancel", "own_void"):
         # 形如 {"D": n|[lo,hi]} 的按席匹配
         if not isinstance(spec, dict):
             return False

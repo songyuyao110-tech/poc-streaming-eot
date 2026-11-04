@@ -184,7 +184,8 @@ class TurnSession:
         self._shortlist_source = None
         self._shortlist_age_ms = None
         self.counters = {"eot_calls": 0, "eot_skipped": 0, "eot_stale": 0, "tool_calls": 0,
-                         "llm_calls": 0, "llm_wasted": 0, "n_reissue": 0, "consumed": 0}
+                         "llm_calls": 0, "llm_wasted": 0, "n_reissue": 0, "consumed": 0,
+                         "turn_voids": 0}
         self.eot_scores = None
         self.decision = None
         # 对话式二次确认：挂起的第一轮决策 + 解析结果（CONFIRM_WAIT 期间保存）
@@ -799,19 +800,45 @@ class TurnSession:
             return
         self._start_llm(now_ms, speculative)
 
+    # 生成中打断（作废本轮）的可观测 reason 白名单：只有本席再开口/新话触发；
+    # stale_text / confirm_wait / confirm_timeout / shortlist_changed 是内部收敛或二次确认，
+    # 不是用户打断，不得发 turn_void（尤其 CONFIRM_WAIT 二轮回不是「作废本轮」）。
+    _VOID_REASONS = ("speech_start", "new_text")
+
     def _cancel_inflight_llm(self, now_ms, reason):
-        """Drop a decision that the user's continuation invalidated (in flight or already finished)."""
+        """Drop a decision that the user's continuation invalidated (in flight or already finished).
+
+        P0-2 生成中打断 = 一等动作：当取消确由本席再开口触发（reason∈{speech_start,new_text}）且
+        真的有东西被作废（在途 job 或已备好的 speculative 结果），发一次 `turn_void` —— 本轮决策
+        作废、继续听本席。与 `barge_in`（动作已落地后再开口 → 开新一轮）分开。
+        CONFIRM_WAIT 下的同因取消发生在二次确认收口路径上（状态机不回 LISTENING），
+        不算打断作废，同样不发 turn_void。
+        """
+        cancelled_something = False
+        prepared_speculative = None
         prepared, self._llm_prepared = self._llm_prepared, None
         if prepared is not None:
             # A speculative result that already finished is discarded too, and counted as waste.
             self.counters["llm_wasted"] += 1
+            cancelled_something = True
+            prepared_speculative = prepared.get("speculative")
             self._emit("llm_cancel", now_ms, reason=reason, speculative=True, prepared=True)
         job = self._jobs["llm"]
-        if job is None or job["canceled"]:
-            return
-        job["canceled"] = True
-        self.counters["llm_wasted"] += 1
-        self._emit("llm_cancel", now_ms, reason=reason, speculative=job["speculative"], prepared=False)
+        job_speculative = None
+        if job is not None and not job["canceled"]:
+            job["canceled"] = True
+            self.counters["llm_wasted"] += 1
+            cancelled_something = True
+            job_speculative = job["speculative"]
+            self._emit("llm_cancel", now_ms, reason=reason, speculative=job["speculative"], prepared=False)
+        if cancelled_something and reason in self._VOID_REASONS and self.state != "CONFIRM_WAIT":
+            # 一次打断动作只发一次 turn_void（即便 prepared+job 两路都被作废）；
+            # 纯观测事件，不动账目（llm_calls == consumed + llm_wasted 不变式不受影响）。
+            self.counters["turn_voids"] += 1
+            self._emit("turn_void", now_ms, reason=reason,
+                       speculative=prepared_speculative if job is None else job_speculative,
+                       voided_prepared=prepared is not None,
+                       voided_inflight=job is not None and job["canceled"])
 
     def _to_state(self, state, now_ms, why):
         if state == self.state:
@@ -914,7 +941,8 @@ class TurnSession:
         self.confirm_pending = None
         self.confirm_resolved = None
         self.counters = {"eot_calls": 0, "eot_skipped": 0, "eot_stale": 0, "tool_calls": 0,
-                         "llm_calls": 0, "llm_wasted": 0, "n_reissue": 0, "consumed": 0}
+                         "llm_calls": 0, "llm_wasted": 0, "n_reissue": 0, "consumed": 0,
+                         "turn_voids": 0}
 
     # ---------- events / evidence ----------
 

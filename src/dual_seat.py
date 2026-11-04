@@ -60,7 +60,7 @@ class DualSeatSession:
         self.confirms = {seat: [] for seat in SEAT_ORDER}
         self.counters = {"inputs": 0, "cross_cancel": 0, "cross_reset": 0, "own_cancel": 0,
                          "own_reset": 0, "unattributed_events": 0, "actions": 0, "deposits": 0,
-                         "errors": 0}
+                         "errors": 0, "own_void": 0, "cross_void": 0}
         overrides = {}
         if eot_fn is not None:
             overrides["eot_fn"] = eot_fn
@@ -160,6 +160,9 @@ class DualSeatSession:
             self._attribute(seat, owner_mic, "own_reset", "cross_reset")
         elif name == "llm_cancel":
             self._attribute(seat, owner_mic, "own_cancel", "cross_cancel")
+        elif name == "turn_void":
+            # 生成中打断=作废本轮（P0-2）：按最后一输入 mic 归因，own/cross 与 llm_cancel 同口径。
+            self._attribute(seat, owner_mic, "own_void", "cross_void")
         elif name == "llm_decision":
             self.counters["actions"] += 1
         elif name == "segment_consumed":
