@@ -346,14 +346,26 @@ def _dual_timeline(payload):
     return timeline, plan
 
 
-def _dual_mock_chain():
-    """双席演示的离线注入口：判停恒 complete、选工具按关键词、决策恒 tool_call。
+def _dual_mock_chain(complete_texts=None):
+    """双席演示的离线注入口：整句到齐才判 complete、选工具按关键词、决策恒 tool_call。
 
     与确认轮 demo 同一条思路（不连真实 KEV/LLM），只为把「两席并行且互不串席」演示稳定。
+
+    2026-11-04 去窗：确认窗不再替判停吸收前缀误判，假判停再对任何文本都报 complete，第一个字
+    （如「把」）就会让决策当刻落地，演示与用例都会失真。所以假判停只在拿到该席的整句时判
+    complete，其余判 wait（继续听）——形状与真判停「说到整句才收口」一致。`complete_texts`
+    由调用方按回放脚本给出（去窗后最短可执行输入就是整句）。
     """
     from confirm_orchestrator import TurnConfirmGate
+    from turn_session import normalize
+
+    wanted = {normalize(text) for text in (complete_texts or []) if normalize(text)}
 
     def eot(text):
+        if wanted and normalize(text) not in wanted:
+            # 还没说到整句：判「没说 yet」继续听（wait 档），不抢跑也不落地。
+            return {"complete": 0.05, "cut": 0.10, "wait": 0.85, "label": "wait",
+                    "confidence": 0.95, "margin": -0.80, "wall_ms": 5.0, "kev_ms": 5.0}
         return {"complete": 0.9, "cut": 0.08, "wait": 0.02, "label": "complete",
                 "confidence": 0.95, "margin": 0.65, "wall_ms": 5.0, "kev_ms": 5.0}
 
@@ -408,7 +420,10 @@ def dual_stream():
     kwargs = {"seat_cfg": cfg, "on_event": queue.put, "session_id": session_id,
               "evidence_root": EVIDENCE_ROOT}
     if mock:
-        eot, tools, decide, gate = _dual_mock_chain()
+        full_texts = [rows[-1]["text"] for seat in plan
+                      for rows in [[row for row in timeline
+                                    if row["seat"] == seat and row["type"] == "asr"]] if rows]
+        eot, tools, decide, gate = _dual_mock_chain(full_texts)
         kwargs.update(eot_fn=eot, select_tools_fn=tools, decide_fn=decide, confirm_gate=gate)
     else:
         kwargs.update(warm_fn=warm_slow_model)

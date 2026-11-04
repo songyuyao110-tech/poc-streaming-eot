@@ -236,16 +236,17 @@ def c3():
     h.pump(6000)
     consumed, decisions = h.named("segment_consumed"), h.named("llm_decision")
     cancels = h.named("llm_cancel")
-    spec_cancels = [event for event in cancels if event.get("speculative")]
     ok_inv, note = invariant(h)
     results = [
-        check("C3 speculative call on the unconsumed suffix really started (and was not applied yet)", inflight,
+        check("C3 the decision on the unconsumed suffix really started (and was not applied yet)", inflight,
               f"job={job.get('utterance') if job else None!r}"),
         check("C3 exactly 3 llm_calls", h.summary()["llm_calls"] == 3, f"calls={h.summary()['llm_calls']}"),
         check("C3 decide() inputs #1 #2 #3", h.decide_inputs == ["导航回家", "顺便看看", "顺便看看路况"],
               f"{h.decide_inputs}"),
-        check("C3 the in-flight speculative call was canceled as speculative",
-              bool(spec_cancels) and spec_cancels[0].get("reason") in {"new_text", "speech_start"},
+        # 2026-11-04 去窗后：强 complete 在 CONFIRMED 当刻就起决策，不再有「MAYBE_DONE 里抢跑」这一档，
+        # 所以这条在途调用带 `speculative=False`。要钉的是行为不变：续句一来，在途调用被作废、结果不采用。
+        check("C3 the in-flight call was canceled by the continuation (its result is not applied)",
+              bool(cancels) and cancels[0].get("reason") in {"new_text", "speech_start"},
               json.dumps([{key: event.get(key) for key in ("t_ms", "reason", "speculative", "prepared")}
                           for event in cancels], ensure_ascii=False)),
         check("C3 exactly 2 segment_consumed with the right texts",

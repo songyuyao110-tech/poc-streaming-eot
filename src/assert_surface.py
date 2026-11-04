@@ -234,14 +234,16 @@ def seat_surface(duo, case=None) -> dict:
     eot_reasons = sorted({e.get("reason") for e in events
                           if e.get("event") == "eot_skipped" and e.get("reason")})
 
-    # late_verdict_drives：存在 eot_skipped(timeout)，且其后有 state_change->MAYBE_DONE(why=eot_complete)
+    # late_verdict_drives：存在 eot_skipped(timeout)，且其后有「判停 verdict 推进了状态机」——
+    # 强 complete 直接进 CONFIRMED（why=eot_complete），弱 complete 进 MAYBE_DONE（同 why）。
+    # 去窗前只认 MAYBE_DONE，去窗后强 complete 不再过那一态，所以两个落点都算驱动。
     late_verdict_drives = False
     timeout_seen = False
     for e in events:
         if e.get("event") == "eot_skipped" and e.get("reason") == "timeout":
             timeout_seen = True
         elif timeout_seen and e.get("event") == "state_change" \
-                and e.get("to") == "MAYBE_DONE" and e.get("why") == "eot_complete":
+                and e.get("to") in ("CONFIRMED", "MAYBE_DONE") and e.get("why") == "eot_complete":
             late_verdict_drives = True
 
     own_cancel = {}

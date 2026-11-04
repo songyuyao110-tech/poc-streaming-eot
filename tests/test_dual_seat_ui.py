@@ -104,8 +104,12 @@ def test_no_cross_talk(events):
     check("席 P 只消费自己那路", texts["P"] == ["把空调调到24度"], texts["P"])
     check("cross_cancel = 0", summary["cross_cancel"] == 0, summary["cross_cancel"])
     check("cross_reset = 0", summary["cross_reset"] == 0, summary["cross_reset"])
-    check("own_cancel > 0（计数链路是活的）", summary["own_cancel"] > 0, summary["own_cancel"])
-    check("own_reset > 0", summary["own_reset"] > 0, summary["own_reset"])
+    # 2026-11-04 去窗：决策在 CONFIRMED 当刻才起，不再有「MAYBE_DONE 里抢跑、续句一到就作废」那一段，
+    # 即时 mock 下 own_cancel 因此记 0（不是计数链路坏了）。计数是活的由 own_reset 证：
+    # 它和 own_cancel 走同一套 `_attribute` 归因（own/cross 成对）。
+    check("own_cancel 记 0（去窗后即时 mock 不再有抢跑被作废；计数链路由 own_reset 证）",
+          summary["own_cancel"] == 0, summary["own_cancel"])
+    check("own_reset > 0（计数链路是活的）", summary["own_reset"] > 0, summary["own_reset"])
     check("每席各 1 次决策 / 各 1 段消费", summary["actions"] == 2 and summary["deposits"] == 2, summary)
     check("无错误事件", summary["errors"] == 0 and not [n for n, _ in events if n == "error"])
     check("两席确认时延都已记录",

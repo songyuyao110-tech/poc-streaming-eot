@@ -49,8 +49,8 @@ def _env_float(name: str, default: float) -> float:
 class TurnConfig:
     # 判停策略（`eot-judge-api` 文档，2026-11-03 用户拍板「整包替换」）。`score` 是文档的规则：
     # `probabilities.complete >= eot_complete_min` 才算「说完了」，抢跑（提前起决策）还要求
-    # `confidence >= eot_confidence_min`。低于 complete 门槛时按 cut/wait 的计时器等；complete 但
-    # 置信度不够时只由静音确认收口，决策串行跑在确认之后。
+    # `confidence >= eot_confidence_min`。低于 complete 门槛时按 cut/wait 的计时器等；
+    # complete 但置信度不够（弱 complete）只由「可能说完」那一档的收敛等待收口，决策串行跑在确认之后。
     # `margin` 是 PoC 实测的旧规则（margin 0.2 + 700ms 确认窗，0% 误启动，见 final-report），
     # `argmax` 只看模型标签。三者都保留，好让回放在同一份 score 上做 A/B；默认只走 `score`。
     eot_policy: str = "score"            # score|argmax|margin
@@ -60,6 +60,11 @@ class TurnConfig:
     eot_confidence_min: float = _env_float("EOT_CONFIDENCE_MIN", 0.70)
     speculative_llm: bool = True     # intentional: start the decision early, cancel it on reversal
     eot_input: str = "last_segment"     # last_segment|turn_text
+    # 2026-11-04 用户拍板（[[无确认窗流程]] §1.1 三态挂窗）：撤掉「判完→动手之间整条链路无条件等
+    # 700ms」的确认窗——强 complete（说完 + confidence 过线）当刻 CONFIRMED，直接进选工具/生成。
+    # 这个值只剩一个作用：弱 complete（「可能说完」那一档）的收敛等待，约 0.7s 看它是不是真说完；
+    # 期间有续句就回 LISTENING 继续听，整段时间仍由 max_silence_ms(2s) 封顶。
+    # 不许拿它当「整条链路的确认窗」再装回来（[[忌讳]] §1 第 30 条）；它也不是 cut/wait 那套。
     confirm_silence_ms: int = 700
     cut_wait_ms: int = 1500
     think_wait_ms: int = 3000
@@ -539,10 +544,18 @@ class TurnSession:
                 self._to_state("CUT_OFF_WAIT" if label == "cut" else "THINK_WAIT",
                                now_ms, "confirm_wait_eot_" + label)
             return
+        if label == "complete" and may_confirm and may_start_early:
+            # 三态挂窗的「说完」这一态（[[无确认窗流程]] §1.1，2026-11-04 拍板）：强 complete
+            # 当刻认——不再停一档 MAYBE_DONE 等 confirm_silence_ms，选工具（多已在途）→ 生成
+            # → 落地立刻往下走。`why=eot_complete` 让观测面把这条路径与弱 complete 的
+            # `confirm_silence` 分开，别再拿 confirm_silence 当「说完→动手」的判据。
+            self._confirm(now_ms, "eot_complete")
+            return
         if label == "complete":
+            # 「可能说完」这一态：判了 complete 但 confidence 没过抢跑线（弱 complete），只有这一档
+            # 等 confirm_silence_ms 的收敛窗（约 0.7s）；期间新文本 / speech_start 就回 LISTENING
+            # 继续听，整段时间仍由 max_silence_ms(2s) 封顶。弱 complete 不抢跑，决策串行跑在确认之后。
             self._to_state("MAYBE_DONE", now_ms, "eot_complete")
-            if self.cfg.speculative_llm and may_start_early:
-                self._maybe_start_llm(now_ms, speculative=True)
             return
         self._to_state("CUT_OFF_WAIT" if label == "cut" else "THINK_WAIT", now_ms, "eot_" + label)
 

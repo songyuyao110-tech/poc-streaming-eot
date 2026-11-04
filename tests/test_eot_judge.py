@@ -270,20 +270,56 @@ class PolicyTests(unittest.TestCase):
 class TurnBehaviourTests(unittest.TestCase):
     """四个分支在真实状态机里的落点（不只是 `_eot_verdict` 的返回值）。"""
 
-    def test_strong_complete_enters_maybe_done_and_starts_the_decision_early(self):
+    def test_strong_complete_confirms_immediately_without_the_confirm_window(self):
+        """2026-11-04 拍板：强 complete 当刻认，不再停一档 MAYBE_DONE 等整段 700ms 确认窗。"""
         session = new_session(lambda text: verdict(0.96, 0.03, 0.01, 0.95))
         try:
             drive(session, [(0, "打开空调", True)])
         finally:
             session.close()
         states = [(event["from"], event["to"]) for event in events_of(session, "state_change")]
-        self.assertIn(("LISTENING", "MAYBE_DONE"), states)
+        self.assertIn(("LISTENING", "CONFIRMED"), states)
+        self.assertNotIn(("LISTENING", "MAYBE_DONE"), states, "强 complete 不许先进「可能说完」态")
+        confirms = [event for event in events_of(session, "state_change")
+                    if event["to"] == "CONFIRMED"]
+        self.assertEqual([event["why"] for event in confirms], ["eot_complete"])
         starts = events_of(session, "llm_start")
-        self.assertTrue(starts, "强 complete 应当抢跑")
-        self.assertTrue(starts[0]["speculative"])
+        self.assertTrue(starts, "强 complete 应当当刻起决策")
         emitted = events_of(session, "eot_scores")[-1]
         self.assertEqual(emitted["applied_label"], "complete")
         self.assertTrue(emitted["may_start_early"])
+        # 判完即认：确认与生成启动都不落在 confirm_silence_ms 之后（旧口径恒 ≥700ms）。
+        summary = session.summary()
+        self.assertLess(summary["t_confirm_latency_ms"], session.cfg.confirm_silence_ms)
+        self.assertLess(summary["t_llm_start_latency_ms"], session.cfg.confirm_silence_ms)
+
+    def test_weak_complete_keeps_listening_when_the_user_continues(self):
+        """弱 complete 只等约 0.7s：这期间用户接着说 → 回 LISTENING 继续听，半句不被当说完。"""
+        session = new_session(lambda text: verdict(0.85, 0.10, 0.05, 0.69))
+        try:
+            drive(session, [(0, "打开空调", False), (300, "打开空调制热", True)])
+        finally:
+            session.close()
+        states = [(event["from"], event["to"]) for event in events_of(session, "state_change")]
+        self.assertIn(("LISTENING", "MAYBE_DONE"), states, "弱 complete 要进「可能说完」态等收敛")
+        self.assertIn(("MAYBE_DONE", "LISTENING"), states, "续句要把「可能说完」打回继续听")
+        self.assertEqual([event["why"] for event in events_of(session, "state_change")
+                          if event["to"] == "CONFIRMED"], ["confirm_silence"])
+        # 落地的那次决策用的是续完的整句，不是被打回的那半句。
+        self.assertTrue(session.consumptions, "续完的整句仍要落地一次")
+        self.assertIn("制热", session.consumptions[0]["text"])
+
+    def test_the_weak_confirm_wait_is_still_capped_by_max_silence(self):
+        """「可能说完」这一档的约 0.7s，上限仍是 max_silence_ms(2s)。"""
+        session = new_session(lambda text: verdict(0.85, 0.10, 0.05, 0.69),
+                              confirm_silence_ms=5000, max_silence_ms=2000)
+        try:
+            drive(session, [(0, "打开空调", True)])
+        finally:
+            session.close()
+        confirms = [event for event in events_of(session, "state_change")
+                    if event["to"] == "CONFIRMED"]
+        self.assertEqual([event["why"] for event in confirms], ["max_silence"])
 
     def test_weak_complete_waits_for_silence_then_decides_serially(self):
         session = new_session(lambda text: verdict(0.85, 0.10, 0.05, 0.69))

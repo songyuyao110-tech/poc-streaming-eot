@@ -6,8 +6,13 @@
 做法：从 `src/fixtures/streaming-prefix-cases.jsonl` 取 20 句中文，按语料自带的累进前缀
 每 150ms 喂一次 ASR（最后一个前缀标 final），再喂一次 `speech_end`，跑真实 `TurnSession`：
 判停走 `score_eot`（`EOT_JUDGE_BASE`，默认 127.0.0.1:8009），选工具/决策注入固定假实现。
-每轮取 `summary.t_confirm_latency_ms`（t_confirmed − t_last_word，含 `confirm_silence_ms=700`），
-最后给 p50 / p90 / max。
+每轮取 `summary.t_confirm_latency_ms`（t_confirmed − t_last_word），最后给 p50 / p90 / max。
+
+⚠️ 口径变更（2026-11-04）：本脚本定义时的 A0 基线是**带窗**口径（t_confirmed 恒 ≥
+`confirm_silence_ms=700`）。用户同日拍板撤掉「强 complete 也等 700ms」的整段确认窗
+（[[无确认窗流程]] §1.1），强 complete 现在判完当刻认（`confirm_reasons` 里出现 `eot_complete`），
+所以**今天跑出来的是去窗后的数，与历史 A0（858.7ms 等）不可比**；A0/A1 是否重锚、何时重锚待 P3-1，
+本脚本不产出新基线，也不要拿它和历史带窗数混比。
 
 运行（需要判停隧道：`curl 127.0.0.1:8009/health` 返回 ok）：
 
@@ -80,7 +85,9 @@ def sentences(limit=None):
 def run_round(sentence, prefix_interval_ms, budget_ms=4000):
     """一句一轮：累进前缀 + speech_end，返回该轮 summary 与关键事件计数。"""
     events = []
-    cfg = TurnConfig()          # 默认值：eot_policy=score、0.80/0.70、confirm_silence_ms=700
+    # 默认值：eot_policy=score、0.80/0.70。confirm_silence_ms=700 现在只挂「可能说完」那一档，
+    # 强 complete 当刻认（2026-11-04 去窗），所以这一列不再是带窗 A0 的分母。
+    cfg = TurnConfig()
     session = TurnSession(cfg, events.append, select_tools_fn=select, decide_fn=decide,
                           evidence_root=None, session_id="a0-baseline")
     prefixes = sentence["prefixes"]
@@ -161,7 +168,11 @@ def main():
         "eot_errors": seen_errors,
         "valid": seen_errors == 0 and all(row["confirm_reasons"] for row in rows),
         "policy": {"eot_policy": "score", "eot_complete_min": 0.80, "eot_confidence_min": 0.70},
+        # 配置里的弱 complete 收敛窗；带窗 A0 的「整段确认窗」已按 2026-11-04 拍板撤掉，
+        # 这里显式标出去窗口径，避免报告被读成历史 A0。
         "confirm_silence_ms": 700,
+        "confirm_window": "strong_complete_confirms_immediately(2026-11-04); weak_complete_waits_confirm_silence_ms",
+        "baseline_scope": "deconfirmed; not comparable with the windowed A0 (re-anchor pending P3-1)",
         "prefix_interval_ms": args.prefix_interval,
         "t_confirm_latency_ms": {
             "n": len(latencies),

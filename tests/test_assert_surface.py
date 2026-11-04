@@ -7,8 +7,8 @@
 2. 标量 / 区间两套匹配：`decisions {"D":1}` 与 `{"D":[1,2]}`。
 3. orchestra 缺席 → BLOCKED（不是 FAIL）；给 FakeAudit 正确值 → PASS；给错值（au_executed=3
    对 TC-17 期望 2）→ FAIL。
-4. `late_verdict_drives` 两个方向：timeout 后到 MAYBE_DONE(eot_complete) → True；
-   只有 timeout 无后续 → False。
+4. `late_verdict_drives` 两个方向：timeout 后到 MAYBE_DONE 或 CONFIRMED（都是 why=eot_complete）
+   → True；只有 timeout 无后续 → False。
 5. `ask_user` / `decide` / `no_splice` / `own_text_only` 各一条正反例。
 6. `dump_surface()` 里 20 个 orchestra 字段齐全、每个 REGISTRY 条目有 layer/owner/semantics。
 
@@ -107,6 +107,12 @@ def test_late_verdict_drives():
         [("eot_skipped", 100, {"reason": "timeout"}),
          ("state_change", 130, {"to": "MAYBE_DONE", "why": "eot_complete"})])
     check("timeout 后到 MAYBE_DONE/complete → True", on["late_verdict_drives"] is True)
+    # 去窗后强 complete 不再过 MAYBE_DONE，直接进 CONFIRMED(why=eot_complete)，同样是「驱动了状态机」。
+    on_strong = _surface_with_events(
+        [("eot_skipped", 100, {"reason": "timeout"}),
+         ("state_change", 130, {"to": "CONFIRMED", "why": "eot_complete"})])
+    check("timeout 后到 CONFIRMED/complete → True（强 complete 直接认）",
+          on_strong["late_verdict_drives"] is True)
     off = _surface_with_events([("eot_skipped", 100, {"reason": "timeout"})])
     check("只有 timeout、无后续 → False", off["late_verdict_drives"] is False)
     # 埋进 check_expect

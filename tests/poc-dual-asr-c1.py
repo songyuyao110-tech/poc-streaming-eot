@@ -5,9 +5,8 @@
 
 1) 隔离 20 组：D 半句 → P 插一句完整句 → D 续句。判据：两席各自 CONFIRMED；
    `cross_cancel=0`、`cross_reset=0`；D 的文本不出现在 P 的决策输入（反之亦然）；
-   每席「最后一字→CONFIRMED」p50 ≤ A0 单席基线 ×1.10。
-   时延只取 `confirm_silence` 这一条路径（A0 基线 20/20 都由静默确认收口，同定义）；
-   `cut_wait`（话断了等 1500ms）另记，不与基线混比。
+   每席「最后一字→CONFIRMED」p50 只记录（去窗后与带窗 A0 基线不可比，重锚待 P3-1；
+   2026-11-04 去窗：强 complete 判完当刻认，why=eot_complete，旧的 confirm_silence 判据失效）。
 2) 不拼接 10 组：D 说前半、P 说后半。判据：任何一席的决策文本都只含自己那一路的内容
    （两席会话/状态不混 ⇒ 不会把两个人的半句拼成一条指令）。
 
@@ -235,12 +234,17 @@ def main():
               % (index, splice_n, row["first_half"], row["second_half"],
                  len(row["decisions"]), len(row["violations"])), flush=True)
 
-    # 时延口径：A1 与 A0 必须同定义 —— A0 基线 20/20 都由 `confirm_silence`（静默 700ms）收口，
-    # 所以判据只取 `why == confirm_silence`；`cut_wait`（话断了等 1500ms）另记、不混比。
-    latencies = {seat: [item["latency_ms"] for row in isolation for item in row["confirms"][seat]
-                        if item["why"] == "confirm_silence"] for seat in ("D", "P")}
-    all_latencies = {seat: [item["latency_ms"] for row in isolation for item in row["confirms"][seat]]
-                     for seat in ("D", "P")}
+    # 时延口径（2026-11-04 去窗后）：强 complete 不再走 `confirm_silence` 那条静默路径（判完当刻认，
+    # why=eot_complete），所以旧判据「只取 confirm_silence、与 A0 带窗基线 ×1.10 比」的前提没了。
+    # 这里量**所有确认路径**并只记录、不当门槛：去窗后的 A0/A1 新基线要重跑才有
+    # （wiki [[无确认窗流程]] §未决 2，重锚时机待拍 P3-1）。
+    latencies = {seat: [item["latency_ms"] for row in isolation for item in row["confirms"][seat]]
+                 for seat in ("D", "P")}
+    confirms_by_why = {seat: {why: sum(1 for row in isolation for item in row["confirms"][seat]
+                                       if item["why"] == why)
+                              for why in sorted({item["why"] for row in isolation
+                                                 for item in row["confirms"][seat]})}
+                       for seat in ("D", "P")}
     summary = {
         "endpoint": EOT_JUDGE_BASE + "/v1/systemone",
         "policy": {"eot_policy": "score", "eot_complete_min": 0.80, "eot_confidence_min": 0.70},
@@ -250,12 +254,10 @@ def main():
         "isolation": {
             "groups": len(isolation),
             # 「两席各自 CONFIRMED」按任何确认路径算（话断了/犹豫后收口也是 CONFIRMED）；
-            # 时延那一列才挑 `confirm_silence`，两条口径分开写清楚。
+            # 去窗后确认原因不止 confirm_silence，按 why 分列记录（见 confirms_by_why）。
             "both_seats_confirmed": sum(1 for row in isolation
                                         if row["confirms"]["D"] and row["confirms"]["P"]),
-            "silence_confirms_by_seat": {seat: sum(1 for row in isolation for item in row["confirms"][seat]
-                                                   if item["why"] == "confirm_silence")
-                                         for seat in ("D", "P")},
+            "confirms_by_why": confirms_by_why,
             "cross_cancel": sum(row["cross_cancel"] for row in isolation),
             "cross_reset": sum(row["cross_reset"] for row in isolation),
             "text_leaks": sum(len(row["text_leaks"]) for row in isolation),
@@ -265,9 +267,7 @@ def main():
             "p50": {seat: percentile(values, 50) for seat, values in latencies.items()},
             "p90": {seat: percentile(values, 90) for seat, values in latencies.items()},
             "n": {seat: len(values) for seat, values in latencies.items()},
-            "cut_path_confirms": {seat: len(all_latencies[seat]) - len(latencies[seat])
-                                  for seat in ("D", "P")},
-            "all_paths_p50": {seat: percentile(values, 50) for seat, values in all_latencies.items()},
+            "latency_note": "去窗后与带窗 A0 基线（confirm_silence 路径）不可比；p50 只记录，重锚待 P3-1",
         },
         "splice": {
             "groups": len(splice),
@@ -278,13 +278,12 @@ def main():
         },
     }
     summary["verdict"] = {
+        # 时延不再进 A1 判据：去窗后判据本身失效（见上面 latency_note），只记数、不当门槛。
         "A1_isolation": (summary["isolation"]["both_seats_confirmed"] == len(isolation)
                          and summary["isolation"]["cross_cancel"] == 0
                          and summary["isolation"]["cross_reset"] == 0
                          and summary["isolation"]["text_leaks"] == 0
-                         and summary["isolation"]["errors"] == 0
-                         and all(value is not None and value <= limit_p50
-                                 for value in summary["isolation"]["p50"].values())),
+                         and summary["isolation"]["errors"] == 0),
         "A1_no_concat": (summary["splice"]["cross_seat_texts"] == 0
                          and summary["splice"]["cross_cancel"] == 0
                          and summary["splice"]["cross_reset"] == 0),

@@ -7,7 +7,8 @@
           [--only TC-01,TC-07] [--audit MODULE:FUNC] [--out PATH] [--dump-surface]
 
 行为要点（卡 4d3267ff §4.3）：
-- 前置校验：用例可解析；`expect` 每个 key ∈ REGISTRY ∪ meta；违规退出码 2。
+- 前置校验：用例可解析；`expect`/`expect_fake_judge` 每个 key ∈ REGISTRY ∪ meta；违规退出码 2。
+- `expect_fake_judge`（可选）：同一用例在 `--judge fake` 下的附加期望（确认原因依赖判停 confidence）。
 - wave-1：绝对毫秒 plan 喂双席；`eot_fn` 按 `case["judge"]` 选（real→8009，
   fake_weak/fake_timeout/fake_silent→假实现）；`--judge fake` 把 real 用例改用「立即 complete」假判停，
   并把静默确认 p50 ≤ AI×1.10 时延门槛降级为 OBSERVED。
@@ -305,27 +306,38 @@ def replay_case(case, mode):
 # ---------------------------------------------------------------- 判据
 
 def latency_gate(case, duo, active, metrics, judge_kind, mode):
-    """真判停才记时延门槛；假判停降级 OBSERVED（数字不可比）。"""
-    # metrics 从 seat_surface 无法拿 confirm_silence_p50；这里从 duo.confirms 算
-    silent = [item["latency_ms"] for seat in ("D", "P") if seat in active
-              for item in duo.confirms.get(seat, []) if item["why"] == "confirm_silence"]
-    if not silent:
+    """确认时延：只记，不再当门槛（去窗后旧判据的前提没了）。
+
+    2026-11-04 去窗（[[无确认窗流程]] §1.1）之后，旧判据「只取 `why == confirm_silence` 的静默确认
+    p50 ≤ A0×1.10（944.6ms）」失效——强 complete 不再走那条静默路径（`why == eot_complete`，判完
+    当刻认）。这里把所有确认路径一起量并**降级为 OBSERVED**：去窗后的新基线要重跑 A0/A1 才有
+    （wiki §未决 2，重锚时机待拍），不拿带窗地板去判新流程。
+    """
+    confirms = [item["latency_ms"] for seat in ("D", "P") if seat in active
+                for item in duo.confirms.get(seat, [])]
+    if not confirms:
         return []
-    p50 = round(statistics.median(silent), 1)
-    realistic = (mode == "real" and judge_kind == "real")
-    status = "PASS" if p50 <= A1_CEILING_MS else "FAIL"
-    layer = "seat"
-    if not realistic:
-        status = "OBSERVED"
-    return [{"check": "静默确认 p50 ≤ %sms（A0×1.10）" % A1_CEILING_MS,
-             "key": "__latency__", "layer": layer, "status": status,
-             "detail": "p50=%sms%s" % (p50, "" if realistic else "（假判停，数字不可比）"),
+    p50 = round(statistics.median(confirms), 1)
+    whys = sorted({item["why"] for seat in ("D", "P") if seat in active
+                   for item in duo.confirms.get(seat, [])})
+    return [{"check": "确认 p50（%s；带窗地板 %sms 只作历史对照）" % ("/".join(whys), A1_CEILING_MS),
+             "key": "__latency__", "layer": "seat", "status": "OBSERVED",
+             "detail": "p50=%sms%s" % (p50, "" if (mode == "real" and judge_kind == "real")
+                                        else "（假判停，数字不可比）"),
              "blocked_by": []}]
 
 
 def eval_case(case, duo, active, mode, judge_kind, audit=None):
-    """算一条用例的 checks + verdict。"""
-    expect = case.get("expect") or {}
+    """算一条用例的 checks + verdict。
+
+    `expect_fake_judge`（可选）：同一用例在**假判停**下的附加/覆盖期望。去窗后「确认原因」这一项
+    依赖判停给的 confidence —— 真判停强 complete 当刻认（`eot_complete`），而 `--judge fake` 给
+    real 用例的假判停刻意用弱 confidence（见 `eot_immediate`，避免假判停逐 partial 落地），走的是
+    「可能说完」那一档（`confirm_silence`）。不写这一块的用例两种判停共用 `expect`。
+    """
+    expect = dict(case.get("expect") or {})
+    if judge_kind != "real" and case.get("expect_fake_judge"):
+        expect.update(case["expect_fake_judge"])
     if expect.get("reuse") is not None:
         return _eval_reuse(case)
 
@@ -444,9 +456,10 @@ def validate_cases(rows):
     bad = []
     for row in rows:
         cid = row.get("case_id")
-        for k in (row.get("expect") or {}):
-            if k not in REGISTRY and k not in META_FIELDS:
-                bad.append((cid, k))
+        for block in ("expect", "expect_fake_judge"):
+            for k in (row.get(block) or {}):
+                if k not in REGISTRY and k not in META_FIELDS:
+                    bad.append((cid, block + "." + k))
         # 顶层 meta 控键允许存在
     if bad:
         for cid, k in bad:
@@ -515,6 +528,8 @@ def main():
         cid = case["case_id"]
         expect = case.get("expect") or {}
         judge = case.get("judge")
+        # 实际用的判停（`--judge fake` 会把 real 用例降级成假判停）：`expect_fake_judge` 靠它生效。
+        judge_kind = pick_eot(case, mode)[1]
         print("[%s] %s" % (cid, case["title"]), flush=True)
         try:
             if skipped_real:
@@ -523,7 +538,7 @@ def main():
                 print("   SKIP  真判停不可达")
                 continue
             if expect.get("reuse") is not None:
-                checks, verdict = eval_case(case, None, set(), mode, judge, audit_fn)
+                checks, verdict = eval_case(case, None, set(), mode, judge_kind, audit_fn)
                 results.append({"case_id": cid, "waves": case.get("wave"),
                                 "staged": case.get("staged"), "verdict": verdict,
                                 "checks": checks})
@@ -536,9 +551,10 @@ def main():
             if duo is not None:
                 duos_collected.append(duo)
             audit = audit_fn(case, duo) if audit_fn else None
-            checks, verdict = eval_case(case, duo, active, mode, judge, audit)
+            checks, verdict = eval_case(case, duo, active, mode, judge_kind, audit)
             results.append({"case_id": cid, "waves": case.get("wave"),
-                            "staged": case.get("staged"), "judge_kind": judge,
+                            "staged": case.get("staged"), "judge": judge,
+                            "judge_kind": judge_kind,
                             "wall_s": wall, "verdict": verdict,
                             "checks": checks, "audit": audit})
             print("   %-7s %s│ wall=%.2fs" % (verdict, _line(case, checks), wall))

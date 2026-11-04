@@ -6,12 +6,12 @@ import urllib.request
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8765
 
-# A long enough hold after a "complete" prefix that the shortlist is ready and the speculative call
+# A long enough hold after a "complete" prefix that the shortlist is ready and the decision
 # actually starts, then the user continues with more words.
-# The gap before the continuation must exceed the KEV shortlist round so the speculative call
-# really starts (measured ~0.4-0.9 s); 3.2 s keeps the check about cancellation, not about timing.
-# A long confirm window keeps MAYBE_DONE alive until the shortlist is ready, so the speculative
-# call reliably starts before the user continues; the check is about cancellation, not timing.
+# The gap before the continuation must exceed the KEV shortlist round so the decision really starts
+# (measured ~0.4-0.9 s); 3.2 s keeps the check about cancellation, not about timing.
+# 2026-11-04 去窗：强 complete 判完当刻进 CONFIRMED 并起决策，不再靠「长确认窗把 MAYBE_DONE 撑到短名单
+# 就绪」那个技巧；这条用例要钉的是「在途决策被续句作废」，`speculative` 标记不再适用。
 updates = [{"t_ms": 300, "text": "导航回家", "final": False},
            {"t_ms": 2800, "text": "吧", "final": False},
            {"t_ms": 3100, "text": "吧我想想", "final": True}]
@@ -21,9 +21,9 @@ vad = [{"t_ms": 0, "kind": "speech_start"}, {"t_ms": 350, "kind": "speech_end"},
 
 def run():
     body = {"updates": updates, "vad": vad, "tool_set": "core_score",
-            # max_silence must stay above the confirm window, otherwise it force-confirms before the reversal.
-            # spec_margin=0 removes KEV score variance from the check: any MAYBE_DONE starts the
-            # speculative call, so the acceptance tests cancellation, not the margin gate.
+            # max_silence must stay above the (weak-complete) settle window, otherwise it force-confirms
+            # before the reversal. `confirm_silence_ms` 现在只挂「可能说完」那一档（去窗后强 complete
+            # 不等它），留着只为弱 complete 的样本；spec_margin 只在 argmax/margin 策略下生效。
             "config": {"speculative_llm": True, "spec_margin": 0.0, "confirm_silence_ms": 4000,
                        "max_silence_ms": 6000}}
     request = urllib.request.Request(f"http://127.0.0.1:{PORT}/api/session/stream",
@@ -62,13 +62,15 @@ if __name__ == "__main__":
             detail = {"tool": detail["decision"].get("tool")}
         print(f"  {event['t_ms']:>7}ms v{event['text_version']:<3} {name:<14} {json.dumps(detail, ensure_ascii=False)[:150]}")
     last_asr = max(event["t_ms"] for event in events if event["event"] == "asr_update")
-    spec_starts = [event for event in events if event["event"] == "llm_start" and event.get("speculative")
+    # 去窗后强 complete 在 CONFIRMED 当刻起决策（speculative=False），所以这里只认「续句之前已经起了
+    # 决策」，不再要求它带投机标记——用例钉的是「作废」，不是「何时抢跑」。
+    spec_starts = [event for event in events if event["event"] == "llm_start"
                    and event["t_ms"] < last_asr]
     cancels = [event for event in events if event["event"] == "llm_cancel"]
     decisions = [event for event in events if event["event"] == "llm_decision"]
     done = next(event for event in events if event["event"] == "turn_done")
     results = [
-        check("A5 a speculative call started before the user continued", bool(spec_starts),
+        check("A5 a decision started before the user continued", bool(spec_starts),
               f"{[e['t_ms'] for e in spec_starts]}"),
         check("A5 it was canceled/discarded on continuation", bool(cancels),
               json.dumps([{"t_ms": e["t_ms"], "reason": e.get("reason"), "prepared": e.get("prepared")} for e in cancels], ensure_ascii=False)),
