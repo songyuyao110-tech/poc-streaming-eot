@@ -7,7 +7,8 @@
 
 | 脚本 | 验证内容 | 期望 |
 |---|---|---|
-| `poc-streaming-c1c4.py` | 多轮消费核心 + F1/F2：单/双段消费、投机作废、整句重发去重（已消费全文前缀）、迟到 EOT 空后缀 | 49/49 |
+| `poc-streaming-c1c4.py` | 多轮消费核心 + F1/F2：单/双段消费、投机作废、整句重发去重（已消费全文前缀）、迟到 EOT 空后缀、**C6 决策落地即关回合（默认口径）** | 54/54 |
+| `measure_turn_tail.py [--legacy]` | 真链路（8009 + 真两阶段选工具 + 真 LLM）量「决策落地 → `turn_done`」的尾巴：默认应为 0ms，`--legacy` 复现旧口径 ~2002ms | 默认 0ms / legacy ~2s |
 | `test_confirm_gate.py` | 对话式二次确认闸门：`judge_confirm_reply` 纯裁决（6 验收场+边界）、`score_confirm_reply` mock 稳定、CONFIRM_POOL/文案（离线，不连 KEV/LLM） | 53/53 |
 | `test_eot_judge.py` | 判停调用契约（eot-judge-api 单 choice 问题 / 响应强校验 / 重复键）+ `score` 四分支：强 complete 抢跑、弱 complete 等静默串行、cut、wait；`argmax`/`margin` A/B 保留；env 覆盖（离线，假客户端） | 24/24 |
 | `poc-streaming-eot-baseline.py [--smoke]` | **A0 基线**：单席 20 轮「最后一字→CONFIRMED」，真判停 + 假工具/决策（需判停隧道） | 20/20 确认、0 判停错误，登记 p50/p90 |

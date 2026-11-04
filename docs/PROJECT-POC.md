@@ -114,7 +114,13 @@ complete 且 (complete − max(cut,wait)) ≥ eot_margin(0.2)  →  真的算说
 | `think_wait_ms` | 3000 | 判 `wait` 后最多等 3s，**期间绝不调 LLM** | "你想，我不催" |
 | `max_silence_ms` | 2000 | 任何状态静音到 2s 直接确认（KEV 挂了/超时也走这条） | 最后一道兜底 |
 
-**静音从哪算起**：取「最后一次文本变化 / VAD `speech_end` / `speech_start` / 本轮开始 / **最近一次已消费决策**」中**最晚**的那个。最后一项是多段消费引入的关键修正（§1.7）。
+**静音从哪算起**：取「最后一次文本变化 / VAD `speech_end` / `speech_start` / 本轮开始 / **最近一次已消费决策**」中**最晚**的那个。最后一项只在「回合保持打开」的口径下有意义（`close_turn_on_decision=False`，见下）；默认口径下决策落地就把回合关了。
+
+**回合怎么收口（2026-11-03 用户拍板改）**：决策一落地、未消费后缀为空 → **立刻 `turn_done`**（`close_turn_on_decision=True`，默认）。改之前是「空后缀 + 静默 2000ms」才收口，那一段实测恒 **2002–2035ms**，纯等待、对用户没有任何信息量。代价：用户在这之后补一句会变成**新一轮**（`on_asr` → `barge_in` → 新一轮，也就拿不到上一轮的上下文），前端要按"新一轮"渲染而不是"同一轮追加"。
+
+`close_turn_on_decision=False` 保留旧口径（最后一次消费后再撑 `max_silence_ms`，这期间补的话并进同一轮），多段消费引擎的验收用例（`tests/poc-streaming-c1c4.py` 的 C2/C4/C5）仍跑这个口径。
+
+实测（真链路，`tests/measure_turn_tail.py`，"导航回家"一句话）：旧口径 **2018 / 2024 / 2035ms**，新默认 **0 / 0 / 0ms**（`turn_done.turn_tail_ms`，证据 `evidence/turn-tail/`）。
 
 **两条容易踩的坑（已写进代码注释）**：
 - `confirm_silence_ms` 必须 < `max_silence_ms`，否则确认窗永远被兜底抢先；
@@ -197,7 +203,7 @@ complete 且 (complete − max(cut,wait)) ≥ eot_margin(0.2)  →  真的算说
 | 边界 | **那次"落地了的决策"所依据的 ASR 文本版本**（`job["version"] == self.version`，代码保证它和当前文本逐字一致） |
 | 落点 | 该版本覆盖到的段被**封段**，此后任何 partial 都改写不到它 |
 | 未消费后缀 | `segments[consumed_segments:] + 当前在用段`，判停入口、选工具、`decide()` 输入**全部只吃后缀** |
-| 收尾 | 后缀为空 + 静音 ≥ `max_silence_ms`（或显式 `stop()`）→ `turn_done` 一次 |
+| 收尾 | 后缀为空 + 决策已落地 → 默认**立即** `turn_done` 一次；`close_turn_on_decision=False` 退回「后缀为空 + 静音 ≥ `max_silence_ms`」（或显式 `stop()`） |
 | 不变式 | **`llm_calls == consumed_count + llm_wasted`**：每一次 LLM 调用要么落地成一个已消费段，要么被记成浪费 |
 
 ### 1.7.3 为什么这是"接近全双工"的关键演进
@@ -210,7 +216,7 @@ complete 且 (complete − max(cut,wait)) ≥ eot_margin(0.2)  →  真的算说
 |---|---|
 | 段间无上下文 | 决策 #2 只拿到未消费后缀，拿不到决策 #1 的文本和结果（PoC 明确不做） |
 | 动作不可回滚 | 已消费段的动作已 mock 执行，后续"纠正"不撤销 |
-| 停顿窗口窄 | 消费 #1 落地前不能来第二段文本，且第二段必须在「消费 #1 + `max_silence_ms`」内到达。实测 **3.0s 停顿通过、5.0s 会收尾** |
+| 停顿窗口窄 | 只在 `close_turn_on_decision=False`（旧口径）下成立：消费 #1 落地前不能来第二段文本，且第二段必须在「消费 #1 + `max_silence_ms`」内到达（实测 **3.0s 停顿通过、5.0s 会收尾**）。默认口径下决策一落地就关回合，补一句是**新一轮**、不带上一段上下文 |
 | ASR 重发 | 火山对同一 utterance 会重发整句：完全重发 → `consumed_duplicate` 忽略；前缀重叠 → 只取增量（按归一字数对齐，不要求逐字节相同） |
 
 ---
@@ -540,7 +546,8 @@ normalize(text).startswith(consumed_text)               → 只取增量作为�
 
 | 脚本 | 验证 | 期望 |
 |---|---|---|
-| `tests/poc-streaming-c1c4.py` | 多段消费 C1–C4 + F1/F2（迟到 EOT 空后缀等） | 49/49 |
+| `tests/poc-streaming-c1c4.py` | 多段消费 C1–C5 + C6（决策落地即关回合）+ F1/F2（迟到 EOT 空后缀等） | 54/54 |
+| `tests/measure_turn_tail.py [--legacy]` | 真链路量「决策落地 → 回合收口」的尾巴（C6 的真链路对照） | 新默认 0ms；`--legacy` ~2002ms |
 | `tests/poc-streaming-a3.py PORT` | 脚本回放 → 判停/状态迁移/四类用例 | 全 PASS（历史报告记 9/9；`tests/README.md` 记 10/10，断言随功能增补，以脚本输出为准） |
 | `tests/poc-streaming-a4.py PORT [--with-reuse]` | 停顿分段、工具复用、barge-in | 8/8（+reuse 11/11） |
 | `tests/poc-streaming-a5.py PORT` | 投机被推翻 → 作废与浪费记账 | 4/4 |
@@ -663,7 +670,8 @@ ssh -i $K -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -N -L 8010:127.0
 $PY -u -B ui/server.py
 
 # 3) 回归（需 UI 在跑）
-$PY -u -B tests/poc-streaming-c1c4.py                       # 离线，多段消费 49/49
+$PY -u -B tests/poc-streaming-c1c4.py                       # 离线，多段消费 54/54
+$PY -u -B tests/measure_turn_tail.py [--legacy]              # 真链路：回合尾巴 0ms（--legacy 复现 ~2s）
 $PY -u -B tests/poc-streaming-a3.py 8765                    # 9/9
 $PY -u -B tests/poc-streaming-a4.py 8765 --with-reuse        # 11/11
 $PY -u -B tests/poc-streaming-a5.py 8765                    # 4/4

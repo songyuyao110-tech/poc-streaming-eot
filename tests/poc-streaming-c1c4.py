@@ -23,9 +23,14 @@ sys.dont_write_bytecode = True
 from turn_session import EVIDENCE_ROOT, TurnConfig, TurnSession, normalize
 
 # Acceptance-only overrides (spec §5); TurnConfig defaults are untouched.
+# 2026-11-03 用户拍板「去掉回合 2s 尾巴」（`close_turn_on_decision=True` 成为默认）后，C2/C4/C5
+# 这几个「一轮内多次消费」的引擎用例跑旧口径（回合在最后一次消费后再撑 max_silence_ms），
+# 默认口径的收口行为由 C1/C6 覆盖。
 BASE = {"speculative_llm": False, "confirm_silence_ms": 300, "max_silence_ms": 1500,
         "debounce_ms": 0, "shortlist_reissue": False, "warm_llm": False, "eot_max_inflight": 1,
-        "tools_max_inflight": 1, "eot_policy": "argmax", "tool_set": "core_score"}
+        "tools_max_inflight": 1, "eot_policy": "argmax", "tool_set": "core_score",
+        "close_turn_on_decision": False}
+DEFAULT = {**BASE, "close_turn_on_decision": True}
 SPEC = {**BASE, "speculative_llm": True, "spec_margin": 0.0}
 EOT_STUB = {"complete": 0.9, "cut": 0.05, "wait": 0.05, "label": "complete", "margin": 0.9,
             "wall_ms": 1.0, "kev_ms": 1.0}
@@ -79,6 +84,13 @@ class Harness:
             self.session.tick(self.now)
             time.sleep(0.002)
 
+    def pump_open(self, t_ms):
+        """pump() 但**不在 turn_done 停**：C6 要看「回合关了之后再补一句」的新一轮。"""
+        while self.now < t_ms:
+            self.now = min(float(t_ms), self.now + STEP)
+            self.session.tick(self.now)
+            time.sleep(0.002)
+
     def named(self, name):
         return [event for event in self.events if event["event"] == name]
 
@@ -105,8 +117,8 @@ def invariant(h):
 
 def c1():
     print("=" * 100)
-    print("C1 · single consumption baseline: 1 segment -> 1 decision, then silence closes the turn")
-    h = Harness(BASE, "c1-baseline")
+    print("C1 · single consumption baseline: 1 segment -> 1 decision, and the turn closes at that decision")
+    h = Harness(DEFAULT, "c1-baseline")
     h.session.on_vad(0, "speech_start")
     h.session.on_asr(100, "导航回家", True)
     h.session.on_vad(120, "speech_end")
@@ -138,10 +150,12 @@ def c1():
               f"consumed={h.summary()['consumed_count']} calls={h.summary()['llm_calls']} "
               f"wasted={h.summary()['llm_wasted']}"),
         check("C1 invariant llm_calls == consumed + wasted", ok_inv, note),
-        check("C1 turn_done a full max_silence_ms after the last consumption, state LISTENING",
+        check("C1 turn_done lands on the decision itself (no max_silence tail), state LISTENING",
               bool(done) and done_at is not None and consumed_at is not None
-              and done_at - consumed_at >= BASE["max_silence_ms"] and h.session.state == "LISTENING",
-              f"consumed@{consumed_at} done@{done_at} state={h.session.state}"),
+              and done_at - consumed_at <= STEP and done[0].get("turn_tail_ms") == 0
+              and h.session.state == "LISTENING",
+              f"consumed@{consumed_at} done@{done_at} tail={done[0].get('turn_tail_ms') if done else None} "
+              f"max_silence={BASE['max_silence_ms']} state={h.session.state}"),
         check("C1 summary exposes t_last_llm_start / t_last_decision",
               done and "t_last_llm_start" in done[0] and "t_last_decision" in done[0]
               and done[0]["t_last_decision"] is not None,
@@ -353,6 +367,43 @@ def c5():
     return results
 
 
+def c6():
+    print("=" * 100)
+    print("C6 · default policy: a follow-up sentence after the turn closed becomes a NEW turn (no 2s join window)")
+    h = Harness(DEFAULT, "c6-new-turn-after-decision")
+    h.session.on_vad(0, "speech_start")
+    h.session.on_asr(100, "导航回家", True)
+    h.session.on_vad(120, "speech_end")
+    h.pump_until(lambda: h.session.consumed_count == 1, 800)
+    first_done = h.named("turn_done")
+    first_done_at = first_done[0]["t_ms"] if first_done else None
+    h.pump_open(800)
+    # 同一批 ASR 设备在回合关掉之后补一句：默认口径下这是一轮新的
+    h.session.on_vad(800, "speech_start")
+    h.session.on_asr(900, "顺便看看路况", True)
+    h.session.on_vad(920, "speech_end")
+    h.pump_open(5000)
+    dones = h.named("turn_done")
+    tail_ms = [item.get("turn_tail_ms") for item in dones]
+    results = [
+        check("C6 the first turn closed at its own decision (tail 0)", bool(first_done)
+              and tail_ms and tail_ms[0] == 0, f"done@{first_done_at} tails={tail_ms}"),
+        check("C6 the follow-up opened turn #2 and got its own decision",
+              h.summary()["turns"] == 2 and len(h.named("llm_decision")) == 2,
+              f"turns={h.summary()['turns']} decisions={len(h.named('llm_decision'))}"),
+        check("C6 per-turn decide() input is the per-turn text (no cross-turn splice)",
+              h.decide_inputs == ["导航回家", "顺便看看路况"], f"{h.decide_inputs}"),
+        check("C6 the new turn's consumption cursor restarted (1 segment, not 2)",
+              len(h.summary()["consumptions"]) == 1
+              and h.summary()["consumptions"][0]["text"] == "顺便看看路况",
+              json.dumps(h.summary()["consumptions"], ensure_ascii=False)),
+        check("C6 both turns emitted turn_done with tail 0", len(dones) == 2 and tail_ms == [0, 0],
+              f"dones={[item['t_ms'] for item in dones]} tails={tail_ms}"),
+    ]
+    h.close()
+    return results
+
+
 def f2a():
     print("=" * 100)
     print("F2a · F2: a late EOT judgement on fully consumed text does not park the turn in MAYBE_DONE")
@@ -429,7 +480,7 @@ def f2b():
 
 
 if __name__ == "__main__":
-    results = {"C1": c1(), "C2": c2(), "C3": c3(), "C4": c4(), "C5": c5(),
+    results = {"C1": c1(), "C2": c2(), "C3": c3(), "C4": c4(), "C5": c5(), "C6": c6(),
                "F2a": f2a(), "F2b": f2b()}
     print("=" * 100)
     for name, items in results.items():

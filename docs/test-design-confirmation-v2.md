@@ -136,7 +136,7 @@ expected_kev_intent / expected_action / expected_mock_intent(null=启发式无�
 
 | 脚本 | 验证内容 | 通过标准 |
 |---|---|---|
-| `tests/poc-streaming-c1c4.py` | 多轮消费核心 + F1/F2：单/双段消费、投机作废、整句重发去重、迟到 EOT 空后缀 | 49/49 |
+| `tests/poc-streaming-c1c4.py` | 多轮消费核心 + F1/F2：单/双段消费、投机作废、整句重发去重、迟到 EOT 空后缀、C6 决策落地即关回合 | 54/54 |
 | `tests/test_confirm_gate.py` | 确认闸门纯函数（本功能自身） | 53/53 |
 | `tests/poc_confirm_flow.py` | 确认全流程（mock） | PASS |
 | `tests/poc_confirm_e2e.py` | 确认端到端 5 路径（mock） | PASS |

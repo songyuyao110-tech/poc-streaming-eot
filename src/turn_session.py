@@ -2,8 +2,9 @@
 
 One turn can consume several ASR segments: a landed decision seals the text it was made on (the
 "consumption cursor"), emits `segment_consumed` and returns to LISTENING; whatever the user says next
-is judged as the unconsumed suffix only. The turn is over when the suffix is empty and the silence
-timer (or an explicit stop()) says so.
+is judged as the unconsumed suffix only. By default the turn is over the moment a decision lands on an
+empty suffix (`close_turn_on_decision`); the old behaviour — keep the turn open for `max_silence_ms`
+so a follow-up sentence joins the same turn — is still available by turning that flag off.
 
 All state transitions happen on the caller's thread (the driver that calls tick()); the injected
 KEV/LLM callables run in worker threads and their results are applied only if text_version is
@@ -63,6 +64,12 @@ class TurnConfig:
     cut_wait_ms: int = 1500
     think_wait_ms: int = 3000
     max_silence_ms: int = 2000
+    # 用户 2026-11-03 拍板「去掉回合 2s 尾巴」：决策一落地（后缀已空、没有在途决策）就当回合结束，
+    # 不再等「空后缀 + 静音 max_silence_ms」才收口（实测那一段恒 ~2002ms，纯等待）。
+    # 代价：用户紧接着补一句会变成新一轮（on_asr → barge_in → _reset_turn），前端要按新一轮渲染。
+    # False 保留改动前的行为（最后一次消费后再撑 max_silence_ms，这期间补一句并进同一轮），
+    # 多段消费引擎的验收用例（tests/poc-streaming-c1c4.py C2/C4/C5）仍跑这个口径。
+    close_turn_on_decision: bool = True
     eot_timeout_ms: int = 900
     eot_max_inflight: int = 3        # >1 removes single-flight starvation: every prefix gets scored
     # Must stay below the ASR partial interval, otherwise each pending call is replaced before it fires
@@ -145,8 +152,10 @@ class TurnSession:
         self.consumed_count = 0
         self.version_t_ms = None
         # A landed decision is "work just done", not silence: the end-of-turn silence window restarts
-        # when a segment is consumed (otherwise a decision slower than max_silence_ms would close the
-        # turn the moment it lands and the user's next segment could never arrive).
+        # when a segment is consumed. Only relevant while the turn stays open after a decision
+        # (`close_turn_on_decision=False`); with the default the turn closes right at that decision
+        # (otherwise a decision slower than max_silence_ms would close the turn the moment it lands
+        # and the user's next segment could never arrive).
         self.t_last_consumed = None
         self._stop_requested = False
         self.timeline_path = None
@@ -622,6 +631,11 @@ class TurnSession:
                 self._maybe_finish_session(now_ms, force=True)
             return
         self._to_state("LISTENING", now_ms, "consumed")
+        if self.cfg.close_turn_on_decision:
+            # 用户 2026-11-03 拍板：决策落地即收口，不再等 max_silence_ms 的 2s 尾巴。
+            # 后缀已空、在途决策已应用，`_maybe_finish_session` 只会成功；用户紧接着补一句
+            # 会走 on_asr 的 barge_in 分支 → _reset_turn，变成新一轮（前端按新一轮渲染）。
+            self._maybe_finish_session(now_ms)
         if self._stop_requested:
             # Explicit stop(): consume what was left, then close the turn.
             self._maybe_finish_session(now_ms, force=True)
@@ -835,6 +849,8 @@ class TurnSession:
     def _finish_turn(self, now_ms):
         self.turn_done = True
         summary = self.summary()
+        # 决策落地 → 回合收口的间隔：默认（close_turn_on_decision）应为 0，旧口径恒 ~max_silence_ms。
+        summary["turn_tail_ms"] = self._delta(now_ms, self.t_decision_last)
         self.turns.append(summary)
         path = self._timeline_path()
         self._emit("turn_done", now_ms, **summary, timeline_path=str(path) if path else None)
