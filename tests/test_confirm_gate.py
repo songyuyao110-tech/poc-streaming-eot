@@ -167,5 +167,5 @@ def main():
 
 
 if __name__ == "__main__":
-    ok = main()
-    sys.exit(0 if ok else 1)
+    # main() 返回退出码（0=通过）；早前写成 sys.exit(0 if ok else 1) 会把 0 当 False 恒返 1。
+    sys.exit(main())
