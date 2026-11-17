@@ -16,3 +16,8 @@ tmp/
 venv/
 .env
 .env.*
+
+# 本地日志与编辑器
+*.log
+*.log.*
+.cursor/

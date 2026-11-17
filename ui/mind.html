@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>读心 · 一句场景（ASR + 画面 → 车舱旁白）</title>
+<style>
+  :root{
+    --bg:#0e141b; --panel:#151d27; --panel2:#101823; --line:#26364a; --line2:#334a63;
+    --text:#e8f0fa; --muted:#9fb2c8; --dim:#6f8499;
+    --listen:#38bdf8; --eot:#a78bfa; --gate:#f59e0b; --ok:#22c55e; --rej:#ef4444; --warn:#fbbf24;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 500px at 20% -10%,#172434 0%,var(--bg) 60%);
+       color:var(--text);font:14px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI",sans-serif;
+       height:100vh;overflow:hidden;display:flex;flex-direction:column}
+  header{padding:12px 18px 8px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  header h1{font-size:18px;margin:0;font-weight:660;letter-spacing:.01em}
+  .pill{font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid var(--line2);color:var(--muted)}
+  .pill.live{color:#062717;background:var(--ok);border-color:var(--ok);font-weight:650}
+  .pill.gate{color:#241800;background:var(--gate);border-color:var(--gate);font-weight:650}
+  header .grow{flex:1}
+  header .meta{font:11.5px var(--mono);color:var(--dim);text-align:right;line-height:1.5}
+  .bar{padding:6px 18px 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .bar .label{font-size:11.5px;color:var(--dim);margin-right:2px}
+  button{background:#1b2735;color:var(--text);border:1px solid var(--line2);border-radius:8px;
+         padding:6px 11px;font-size:12.5px;cursor:pointer;transition:.15s}
+  button:hover{background:#243447}
+  button.on{background:#0d3a56;border-color:var(--listen);color:#bae6fd}
+  button.demo{background:#2a1f3d;border-color:#6d4fa3;color:#ddd0f3;font-weight:600}
+  button.demo:hover{background:#382a51}
+  /* 真麦：主路径按钮 + 电平；演示/手打只作兜底，视觉上退后 */
+  button.mic{background:#4a1030;border-color:#a13b70;color:#ffd9ea;font-weight:700}
+  button.mic:hover{background:#5d1540}
+  button.mic.live{background:#7a1234;border-color:#ff4f86;color:#fff}
+  .micLvl{display:inline-block;width:56px;height:6px;border-radius:3px;background:#1b2836;overflow:hidden;vertical-align:middle}
+  .micLvl i{display:block;height:100%;width:0%;background:linear-gradient(90deg,#22c55e,#a3e635);transition:width .08s linear}
+  .micState{font:10.5px var(--mono);color:var(--dim);min-width:150px}
+  .micState.live{color:#ff7ea9}
+  .pill.micOn{color:#3d0018;background:#ff6b98;border-color:#ff6b98;font-weight:700}
+  .pill.micOff{color:var(--muted)}
+  .pill.micErr{color:#ffe4ce;background:#7c3a12;border-color:#a8561f;font-weight:650}
+  .asrSrc{font:10.5px var(--mono);color:var(--dim)}
+  button.ghost{background:transparent}
+  button:disabled{opacity:.55;cursor:default}
+  /* 读心引擎选择器：三选一，标签直接写「能不能读图 + 快慢」，不只丢模型名 */
+  .engineBar{padding-top:2px}
+  .enginePick{display:flex;gap:6px;flex-wrap:wrap}
+  .engine{display:flex;flex-direction:column;align-items:flex-start;gap:1px;
+          padding:4px 9px;line-height:1.35}
+  .engine b{font-size:12.5px;font-weight:650}
+  .engine small{font-size:10px;color:var(--muted)}
+  .engine.on{background:#0d3a56;border-color:var(--listen)}
+  .engine.on b{color:#bae6fd}
+  .engine.on small{color:#9fd7f7}
+  .vTag{display:inline-block;font-size:10px;padding:0 5px;border-radius:999px;margin-right:4px;
+        border:1px solid transparent}
+  .vTag.ok{background:#0c3320;color:#bbf7d0;border-color:#15803d}
+  .vTag.no{background:#3b1414;color:#fecaca;border-color:#7f1d1d}
+  .engineNow{font:11px var(--mono);color:#bae6fd}
+  .engineHint{font:10.5px var(--mono);color:var(--dim)}
+  main{flex:1;min-height:0;display:grid;grid-template-columns:1.05fr 1fr;grid-template-rows:1fr 1fr;
+       gap:10px;padding:0 18px 16px}
+  .card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);
+        border-radius:12px;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+  .card .head{display:flex;align-items:center;gap:8px;padding:9px 13px;border-bottom:1px solid var(--line)}
+  .card .head .tag{font-size:10.5px;font-weight:700;letter-spacing:.06em;padding:2px 7px;border-radius:5px;color:#06121e}
+  .card .head h2{font-size:13.5px;margin:0;font-weight:640}
+  .card .head .sub{font:10.5px var(--mono);color:var(--dim);margin-left:auto}
+  .card .body{padding:10px 13px;overflow:auto;min-height:0}
+  .tag.video{background:var(--listen)}
+  .tag.asr{background:var(--eot);color:#160d26}
+  .tag.scene{background:var(--gate);color:#1b1200}
+  .tag.dec{background:var(--ok)}
+
+  /* 视频块 */
+  .videoWrap{position:relative;height:100%;min-height:150px;border-radius:9px;overflow:hidden;background:#05090d}
+  .videoWrap video{width:100%;height:100%;object-fit:cover;display:block}
+  .videoWrap .overlay{position:absolute;left:9px;bottom:9px;display:flex;gap:6px;align-items:center;
+                      font:10.5px var(--mono);color:#dbeafe;background:rgba(4,10,16,.72);
+                      padding:3px 8px;border-radius:999px;border:1px solid #25405a}
+  .videoWrap .res{position:absolute;right:9px;top:9px;font:10.5px var(--mono);color:#cbd5e1;
+                  background:rgba(4,10,16,.72);padding:3px 8px;border-radius:999px;border:1px solid #25405a}
+  .videoWrap .hint{position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+                   text-align:center;padding:14px;color:var(--muted);font-size:12.5px}
+  .videoWrap .hint.show{display:flex}
+  /* 送进读心模型的就是这张（同一段 data URI、同压缩、同尺寸），不是另采一张原画 */
+  .videoWrap .sent{position:absolute;right:9px;bottom:9px;display:flex;gap:6px;align-items:flex-end;
+                   background:rgba(4,10,16,.72);border:1px solid #25405a;border-radius:9px;padding:5px 6px}
+  .videoWrap .sent img{width:160px;height:90px;display:block;border-radius:5px;image-rendering:auto}
+  .videoWrap .sent small{font:10px var(--mono);color:#cbd5e1;line-height:1.35;max-width:110px}
+
+  /* ASR 块 */
+  .asrNow{font-size:17px;line-height:1.45;color:#f3f8ff;min-height:52px;word-break:break-all}
+  .asrNow .cursor{display:inline-block;width:8px;height:16px;background:var(--eot);margin-left:2px;
+                  animation:blink 1s steps(1) infinite;vertical-align:-2px}
+  @keyframes blink{50%{opacity:0}}
+  .asrNow .ghost{color:var(--dim);font-size:11.5px}
+  .finals{margin-top:10px;display:flex;flex-direction:column;gap:6px}
+  .fin{display:flex;gap:8px;align-items:flex-start;background:#0d151f;border:1px solid #1e2c3d;
+       border-radius:7px;padding:6px 8px}
+  .fin .t{font:10.5px var(--mono);color:var(--dim);padding-top:2px;white-space:nowrap}
+  .fin .text{flex:1;font-size:12.5px}
+  .fin .badge{font-size:10px;padding:1px 6px;border-radius:999px;white-space:nowrap;margin-top:1px}
+  .badge.not{background:#3b1414;color:#fecaca;border:1px solid #7f1d1d}
+  .badge.agent{background:#0c3320;color:#bbf7d0;border:1px solid #15803d}
+  .badge.pending{background:#2a2410;color:#fde68a;border:1px solid #a16207}
+
+  /* 场景理解块 */
+  .sceneSummary{font-size:17px;line-height:1.5;color:#ecf5ff;font-weight:600}
+  .sceneMeta{font-size:11.5px;color:#7f94aa;margin-top:6px;letter-spacing:.2px}
+  .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-top:10px}
+  .kv{background:#0d151f;border:1px solid #1e2c3d;border-radius:7px;padding:5px 8px}
+  .kv .k{font-size:10px;color:var(--dim);letter-spacing:.05em}
+  .kv .v{font-size:12.5px;margin-top:1px;color:#e2ecf7;word-break:break-all}
+  .vis{margin-top:9px;background:#0b141d;border:1px solid #1c2b3c;border-radius:8px;padding:7px 9px}
+  .vis .row{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--muted);margin-top:4px}
+  .meter{flex:1;height:6px;border-radius:4px;background:#1c2a3a;overflow:hidden}
+  .meter > i{display:block;height:100%;background:linear-gradient(90deg,#0ea5e9,#38bdf8);width:0%}
+  .chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+  .chip{font-size:10.5px;padding:2px 7px;border-radius:999px;background:#13233a;border:1px solid #24405f;color:#c7dcf4}
+
+  /* 判断块 */
+  .verdict{display:flex;align-items:center;gap:12px}
+  .bool{font-size:15px;font-weight:760;padding:7px 14px;border-radius:10px;letter-spacing:.02em}
+  .bool.yes{background:#103d24;color:#86efac;border:1px solid #22c55e;box-shadow:0 0 22px rgba(34,197,94,.18)}
+  .bool.no{background:#3b1414;color:#fca5a5;border:1px solid #ef4444;box-shadow:0 0 22px rgba(239,68,68,.14)}
+  .bool.idle{background:#1b2735;color:#cbd5e1;border:1px solid var(--line2)}
+  .conf{flex:1}
+  .conf .top{display:flex;justify-content:space-between;font-size:11px;color:var(--muted)}
+  .conf .meter{height:8px;margin-top:4px}
+  .conf .meter > i{background:linear-gradient(90deg,#f59e0b,#fbbf24)}
+  .reason{margin-top:9px;font-size:12.5px;line-height:1.55;color:#dbe8f7}
+  .down{margin-top:9px;border-radius:8px;padding:8px 10px;font-size:12px;line-height:1.5}
+  .down.not_agent{background:#1d1213;border:1px solid #5b2222;color:#fecaca}
+  .down.pending{background:#161d26;border:1px solid #3a4a5f;color:#c7d3e2}
+  .down.agent_eligible{background:#0e1f2c;border:1px solid #175e82;color:#bae6fd}
+  .down b{font-weight:650}
+  /* 中枢：并发两路 + 闸门 */
+  .stage{display:flex;align-items:center;gap:5px;flex-wrap:wrap;font-size:10.5px;color:var(--dim);margin-bottom:9px}
+  .stage .step{padding:3px 8px;border-radius:999px;border:1px solid #243649;background:#0d1721;white-space:nowrap}
+  .stage .step.on{border-color:#0ea5e9;color:#e0f2fe;background:#0b2437}
+  .stage .step.hit{border-color:#22c55e;color:#86efac;background:#10301f}
+  .stage .step.stop{border-color:#ef4444;color:#fca5a5;background:#331416}
+  .cols{display:grid;grid-template-columns:1.15fr 1fr 1fr;gap:6px;margin-top:9px}
+  .cell{background:#0b141d;border:1px solid #1c2b3c;border-radius:8px;padding:7px 9px;min-height:66px}
+  .cell .ct{font-size:10px;color:var(--dim)}
+  .cell .cv{font-size:12px;color:#e2ecf7;margin-top:3px;line-height:1.4}
+  .cell .cm{font:10px var(--mono);color:#7f94aa;margin-top:4px}
+  .inputRow select{background:#0b141d;border:1px solid #243649;border-radius:7px;color:#c7dcf4;
+                   font-size:11.5px;padding:5px 7px;outline:none}
+  .counters{display:flex;gap:10px;margin-top:9px;font:10.5px var(--mono);color:var(--dim)}
+  .versions{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;font:10.5px var(--mono);color:#a9bdd3}
+  .versions .vchip{border:1px solid #26323f;border-radius:6px;padding:2px 6px;background:#0d151d}
+  .history{margin-top:8px;display:flex;flex-direction:column;gap:4px}
+  .hrow{display:flex;gap:7px;align-items:center;font:10.5px var(--mono);color:#a9bdd3}
+  .hrow .dot{width:7px;height:7px;border-radius:50%;background:var(--dim);flex:none}
+  .hrow .dot.yes{background:var(--ok)} .hrow .dot.no{background:var(--rej)}
+  .inputRow{display:flex;gap:6px;margin-top:9px}
+  .inputRow input{flex:1;background:#0b141d;border:1px solid #243649;border-radius:7px;
+                  color:var(--text);padding:6px 9px;font-size:12px;outline:none}
+  .inputRow input:focus{border-color:var(--listen)}
+  .foot{padding:7px 13px;border-top:1px solid var(--line);font:10.5px var(--mono);color:var(--dim);
+        display:flex;gap:12px;flex-wrap:wrap}
+  .warnline{color:var(--warn)}
+  @media (max-width:1100px){main{grid-template-columns:1fr;grid-template-rows:repeat(4,minmax(180px,1fr));overflow:auto}}
+</style>
+</head>
+<body>
+<header>
+  <h1>读心 · 一句场景</h1>
+  <span class="pill" id="modePill">读心说一句场景 · 中枢并发判「说没说完 + 接不接」→ 开闸</span>
+  <span class="pill micOff" id="micPill">麦克风 · 未开</span>
+  <span class="pill live" id="livePill">持续感知中</span>
+  <span class="grow"></span>
+  <div class="meta">
+    入口 · <b>http://127.0.0.1:8765/mind</b><br/>
+    读心只出一句场景 · 演示回放/手动输入只是兜底 · 接不接由中枢判<br/>
+    内心戏页 · <a href="/neixinxi" style="color:#8fe3cf;text-decoration:none">/neixinxi</a>
+  </div>
+</header>
+
+<div class="bar">
+  <span class="label">本席真麦</span>
+  <button class="mic" id="micStart">🎤 开麦听（本席真 ASR）</button>
+  <button id="micStop" disabled>停止</button>
+  <span class="micLvl"><i id="micLevel"></i></span>
+  <span class="micState" id="micState">未开麦</span>
+  <span class="label" style="margin-left:10px">回放兜底</span>
+  <button class="demo" id="demoChat">A · 闲聊 → 说完但不接</button>
+  <button class="demo" id="demoCmd">B · 指令 → 说完且要接</button>
+  <button class="demo" id="demoCut">C · 没说完 → 先不开闸</button>
+  <span class="label" style="margin-left:10px">视频源</span>
+  <button id="srcCamera">摄像头</button>
+  <button id="srcSynth" class="on">合成回放</button>
+  <button id="srcUpload">上传视频</button>
+  <input type="file" id="fileInput" accept="video/*" hidden/>
+  <span class="label" style="margin-left:10px">本席</span>
+  <button id="seatD" class="on">主驾 D</button>
+  <button id="seatP">副驾 P</button>
+  <span class="grow"></span>
+  <button class="ghost" id="btnReset">重置本席</button>
+</div>
+
+<div class="bar engineBar">
+  <span class="label">读心引擎</span>
+  <div class="enginePick" id="enginePick"></div>
+  <span class="engineNow" id="engineNow">当前 · 读取中…</span>
+  <span class="grow"></span>
+  <span class="engineHint" id="engineHint">选中后下一次判断就打该模型；刷新保持所选</span>
+</div>
+
+<main>
+  <!-- 1 视频 -->
+  <section class="card">
+    <div class="head"><span class="tag video">视频流</span><h2>前置画面（持续抽帧）</h2>
+      <span class="sub" id="videoSub">synth · 640×360</span></div>
+    <div class="body" style="padding:9px 10px">
+      <div class="videoWrap">
+        <video id="video" autoplay playsinline muted></video>
+        <div class="overlay"><span id="videoBadge">合成演示画面（非真实摄像头）</span></div>
+        <div class="res" id="videoRes">320×180 彩色 · 0.5s</div>
+        <div class="sent"><img id="sentFrame" alt="送进模型的那一帧"><small id="sentMeta">送进模型的这一张</small></div>
+        <div class="hint" id="videoHint">摄像头不可用时会自动落到合成回放；也可上传本地视频。</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 ASR -->
+  <section class="card">
+    <div class="head"><span class="tag asr">流式 ASR</span><h2>本席 ASR（partial / final）</h2>
+      <span class="asrSrc" id="asrSrc">字来自：未开麦</span>
+      <span class="sub" id="asrSub">主驾 D</span></div>
+    <div class="body">
+      <div class="asrNow" id="asrNow"><span class="ghost">等待出字…</span></div>
+      <div class="finals" id="finals"></div>
+    </div>
+  </section>
+
+  <!-- 3 场景理解 -->
+  <section class="card">
+    <div class="head"><span class="tag scene">场景理解</span><h2>车里的助手此刻怎么说（持续刷新）</h2>
+      <span class="sub" id="sceneSub">rev 0</span></div>
+    <div class="body">
+      <div class="sceneSummary" id="sceneSummary">等待输入…</div>
+      <div class="sceneMeta" id="sceneMeta">一句轻松旁白（稿 E）· 不超过 30 个字 · 不判说完、不判接不接</div>
+      <div class="vis">
+        <div class="row"><span style="width:56px">画面亮度</span><span class="meter"><i id="mBright"></i></span><span id="vBright" style="width:42px;text-align:right">—</span></div>
+        <div class="row"><span style="width:56px">画面运动</span><span class="meter"><i id="mMotion"></i></span><span id="vMotion" style="width:42px;text-align:right">—</span></div>
+        <div class="row"><span id="vNote" style="color:#8fa6bd">等待视频帧…</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 中枢：并发两路 + 闸门 -->
+  <section class="card">
+    <div class="head"><span class="tag dec">中枢</span><h2>一次出字 → 并发两路 → 开闸</h2>
+      <span class="sub" id="hubSub">版本 0</span></div>
+    <div class="body">
+      <div class="stage">
+        <span class="step on">出字</span><i>→</i>
+        <span class="step on">中枢并发（说没说完 + 接不接，带当时场景）</span><i>→</i>
+        <span class="step" id="stepGate">闸门</span><i>→</i>
+        <span class="step" id="stepTools">工具披露</span><i>→</i>
+        <span class="step" id="stepOut">决策 / 交后台</span>
+      </div>
+      <div class="verdict">
+        <div class="bool idle" id="boolBadge">等待这一版字</div>
+        <div class="conf">
+          <div class="top"><span>两路关键路径（并发，取较慢那一路）</span><span id="confVal">—</span></div>
+          <div class="meter"><i id="confBar"></i></div>
+        </div>
+      </div>
+      <div class="cols">
+        <div class="cell"><div class="ct">场景 · 读心（中枢开闸前取一次）</div>
+          <div class="cv" id="hubScene">—</div><div class="cm" id="hubSceneMeta">rev 0</div></div>
+        <div class="cell"><div class="ct">说没说完 · 判停</div>
+          <div class="cv" id="hubEot">—</div><div class="cm" id="hubEotMeta">—</div></div>
+        <div class="cell"><div class="ct">接不接 · 中枢（8009，与判停同一套判断模型）</div>
+          <div class="cv" id="hubAccept">—</div><div class="cm" id="hubAcceptMeta">—</div>
+          <div class="cm" id="acceptThreshold">开闸线未拍，本次临时用 0.5</div></div>
+      </div>
+      <div class="reason" id="reason">—</div>
+      <div class="down" id="downstream">—</div>
+      <div class="counters">
+        <span id="cVersion">版本 0</span>
+        <span id="cAcceptSource">接不接来源 —</span>
+        <span id="cScene">场景 —</span>
+        <span id="cTick">tick 0</span>
+      </div>
+      <div class="versions" id="hubVersions"></div>
+      <div class="history" id="history"></div>
+      <div class="inputRow">
+        <input id="manualText" placeholder="手动试一句（Enter 以 final 送入）：导航去公司 / 咱晚上去哪吃 / 帮我看看前面那个"/>
+        <button id="btnSend">送入 ASR</button>
+        <select id="eotMode" title="判停这一路用谁（真 8009 / 离线替身 / 强制三态）">
+          <option value="real">判停：真 8009（与接不接同一模型）</option>
+          <option value="offline">判停：离线替身（仅供演示）</option>
+          <option value="complete">强制：说完</option>
+          <option value="cut">强制：被截断</option>
+          <option value="wait">强制：没说完</option>
+        </select>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="foot">
+  <span>读心只出场景（出字或画面一变就更新）；中枢在同一次出字上并发「说没说完 + 接不接」，只在说完那一刻开闸。</span>
+  <span class="warnline">接不接走 8009 真判断（与「说没说完」同一套模型）· 开闸线未拍，本次临时用 <span id="footThreshold">0.5</span></span>
+  <span id="engineLine">引擎：读取中…</span>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const state = {
+  sessionId: "mind-" + (crypto.randomUUID ? crypto.randomUUID().slice(0,8) : Math.random().toString(16).slice(2)),
+  seat: "D",
+  source: "synth",          // synth | camera | upload
+  model: null,              // 读心引擎（页面三选一）；loadDemos 后按「刷新保持」定
+  scene: "chat",
+  demoToken: 0,
+  asrQueue: [],
+  lastSnapshot: null,
+  history: [],
+  tickCount: 0,
+  stream: null,
+  demos: [],
+  timers: [],
+};
+
+/* ---------------- 读心引擎选择（三选一；刷新保持所选） ----------------
+   引擎目录由后端 `/api/mind/demos` 下发（`mind_llm.MODEL_CHOICES`：模型名 + 能不能读图 + 快慢），
+   页面只负责渲染与选中；每次 tick 都把 `model` 带上，服务端按 id 取引擎 → 换模型不用改代码、
+   不用重启 8765。选中项存 localStorage，刷新页面仍是同一档。 */
+const MODEL_KEY = "mind.engine";
+const modelCatalog = {list: [], defaultId: ""};
+
+function readModelChoice(){ try { return localStorage.getItem(MODEL_KEY) || ""; } catch(e){ return ""; } }
+function writeModelChoice(id){ try { if (id) localStorage.setItem(MODEL_KEY, id); } catch(e){ } }
+
+/* ---------------- 本席真麦：真流式 ASR ----------------
+   浏览器采 16 kHz / 20 ms PCM → WS /api/mind/asr（服务端 ASRStream，火山豆包流式，与主 UI mic
+   模式同一条识别后端）→ partial/final 回页面 → 进 asrQueue → 现有 tick 把「字 + 当前帧」一起送进
+   读心。读心侧不建 TurnSession：不判停、不选工具、不进 Agent。 */
+const MIC_RATE = 16000, MIC_FRAME_SAMPLES = 320;     // 16 kHz × 20 ms = 320 采样
+const mic = {ws:null, context:null, node:null, stream:null, pending:null, turn:0,
+             frames:0, partials:0, finals:0, active:false, source:"off"};
+
+function micUi(text, kind){
+  const el = $("micState"), pill = $("micPill"), btn = $("micStart");
+  el.textContent = text;
+  el.className = "micState" + (kind === "live" ? " live" : "");
+  pill.className = "pill " + (kind === "live" ? "micOn" : kind === "err" ? "micErr" : "micOff");
+  pill.textContent = kind === "live" ? "麦克风 · 正在听" : kind === "err" ? "麦克风 · 不可用" : "麦克风 · 未开";
+  btn.classList.toggle("live", kind === "live");
+  $("micStop").disabled = !mic.active;
+  btn.disabled = mic.active;
+}
+
+/* 重采样到 16 kHz（main UI mic 同一套算法：+ 有降采样，− 无升采样） */
+function micResample(input, inputRate){
+  const SR = MIC_RATE;
+  if (inputRate === SR) return new Int16Array(Array.from(input, v => Math.max(-1, Math.min(1, v)) * 0x7fff));
+  if (inputRate > SR){
+    const ratio = inputRate / SR, out = new Int16Array(Math.floor(input.length / ratio));
+    for (let i = 0; i < out.length; i++) out[i] = Math.max(-1, Math.min(1, input[Math.floor(i * ratio)])) * 0x7fff;
+    return out;
+  }
+  const ratio = SR / inputRate;
+  const out = new Int16Array(Math.floor(input.length * ratio));
+  for (let i = 0; i < out.length; i++) out[i] = Math.max(-1, Math.min(1, input[Math.floor(i / ratio)] || 0)) * 0x7fff;
+  return out;
+}
+
+function micFlush(samples){
+  const merged = new Int16Array((mic.pending ? mic.pending.length : 0) + samples.length);
+  if (mic.pending) merged.set(mic.pending, 0);
+  merged.set(samples, mic.pending ? mic.pending.length : 0);
+  let offset = 0;
+  while (merged.length - offset >= MIC_FRAME_SAMPLES){
+    if (mic.ws && mic.ws.readyState === WebSocket.OPEN){
+      mic.ws.send(merged.slice(offset, offset + MIC_FRAME_SAMPLES).buffer);
+      mic.frames += 1;
+    }
+    offset += MIC_FRAME_SAMPLES;
+  }
+  mic.pending = offset < merged.length ? merged.slice(offset) : null;
+}
+
+function micOnAudio(event){
+  const input = event.inputBuffer.getChannelData(0);
+  let peak = 0;
+  for (let i = 0; i < input.length; i += 16) peak = Math.max(peak, Math.abs(input[i]));
+  if (mic.frames % 5 === 0) $("micLevel").style.width = Math.min(100, Math.round(peak * 140)) + "%";
+  micFlush(micResample(input, mic.context ? mic.context.sampleRate : MIC_RATE));
+  if (mic.frames % 50 === 0){
+    micUi(`正在听 · 已发 ${mic.frames} 帧 · partial ${mic.partials} / final ${mic.finals}`, "live");
+  }
+}
+
+async function startMic(){
+  if (mic.active) return true;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    micUi("此浏览器不支持录音（需要 localhost/https）", "err"); return false;
+  }
+  mic.turn += 1;
+  const turn = mic.turn;
+  mic.frames = 0; mic.partials = 0; mic.finals = 0;
+  micUi("正在请求麦克风授权…");
+  let stream;
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({audio: {channelCount: 1, echoCancellation: false,
+      noiseSuppression: false, autoGainControl: false}, video: false});
+  }catch(err){
+    micUi("麦克风授权失败：" + (err && err.message ? err.message : err) + "（可用演示 A/B 或手打兜底）", "err");
+    return false;
+  }
+  if (mic.turn !== turn){ stream.getTracks().forEach(t => t.stop()); return false; }
+  mic.stream = stream;
+  mic.context = new (window.AudioContext || window.webkitAudioContext)();
+  await mic.context.resume().catch(()=>{});
+  const source = mic.context.createMediaStreamSource(mic.stream);
+  mic.node = mic.context.createScriptProcessor(2048, 1, 1);
+  mic.node.onaudioprocess = micOnAudio;
+  const mute = mic.context.createGain(); mute.gain.value = 0;
+  source.connect(mic.node); mic.node.connect(mute); mute.connect(mic.context.destination);
+  mic.active = true;
+  $("asrSrc").textContent = "字来自：真麦（火山豆包流式 ASR）";
+
+  const ws = new WebSocket(`${location.origin.replace(/^http/, "ws")}/api/mind/asr`);
+  mic.ws = ws; ws.binaryType = "arraybuffer";
+  ws.onopen = () => { if (mic.turn === turn) micUi("麦克风已连上，正在听…", "live"); };
+  ws.onmessage = (message) => {
+    if (mic.turn !== turn) return;
+    let packet; try { packet = JSON.parse(message.data); } catch(e){ return; }
+    const {kind, data} = packet;
+    if (kind === "ready"){
+      mic.sessionId = data.session_id;
+      micUi("正在听 · " + (data.sample_rate || MIC_RATE) + "Hz/" + (data.frame_ms || 20) + "ms · 说一句试试", "live");
+    } else if (kind === "asr"){
+      (data.final ? mic.finals++ : mic.partials++);
+      state.asrQueue.push({text: data.text, final: !!data.final});
+      if (data.final) $("asrSrc").textContent = "字来自：真麦（火山豆包流式 ASR）· 已落段 " + mic.finals + " 句";
+    } else if (kind === "stopped"){
+      micUi("已停止送音频 · 等最后一段 final", "off");
+    } else if (kind === "error"){
+      micUi("ASR 错误：" + (data.error_type || "") + " " + (data.error || ""), "err");
+    }
+  };
+  ws.onerror = () => { if (mic.turn === turn) micUi("ASR 连接出错（见 server 日志）", "err"); };
+  ws.onclose = () => { if (mic.turn === turn && mic.active){ micUi("ASR 连接已关闭 · 可再点「开麦听」", "err"); } };
+  return true;
+}
+
+function stopMic(keepHint){
+  mic.active = false;
+  mic.turn += 1;                              // 旧连接的 onclose/onmessage 不再动新状态
+  const ws = mic.ws; mic.ws = null;
+  if (ws && ws.readyState === WebSocket.OPEN){ try { ws.send(JSON.stringify({cmd:"stop"})); } catch(e){} }
+  if (ws) { setTimeout(() => { try { ws.close(); } catch(e){} }, 1200); }
+  if (mic.node){ mic.node.onaudioprocess = null; try { mic.node.disconnect(); } catch(e){} mic.node = null; }
+  if (mic.stream){ mic.stream.getTracks().forEach(t => t.stop()); mic.stream = null; }
+  if (mic.context){ try { mic.context.close(); } catch(e){} mic.context = null; }
+  $("micLevel").style.width = "0%";
+  $("asrSrc").textContent = "字来自：未开麦";
+  micUi(keepHint || "已停麦", "off");
+}
+
+/* ---------------- 视频源 ---------------- */
+const video = $("video");
+let synthCanvas, synthCtx, synthRaf = 0, synthT = 0, synthScene = "chat";
+
+function stopSynth(){ if (synthRaf) cancelAnimationFrame(synthRaf); synthRaf = 0; }
+function clearStream(){
+  stopSynth();
+  if (state.stream) { state.stream.getTracks().forEach(t => t.stop()); state.stream = null; }
+  video.srcObject = null; video.removeAttribute("src"); video.load();
+}
+
+function startSynth(scene){
+  clearStream();
+  synthScene = scene || "chat"; state.scene = synthScene;
+  state.source = "synth";
+  if (!synthCanvas){ synthCanvas = document.createElement("canvas"); synthCanvas.width = 640; synthCanvas.height = 360; }
+  synthCtx = synthCanvas.getContext("2d", {willReadFrequently:true});
+  state.stream = synthCanvas.captureStream(15);
+  video.srcObject = state.stream;
+  video.play().catch(()=>{});
+  synthT = 0;
+  const draw = () => { synthT += 1/15; drawSynth(synthCtx, synthScene, synthT); synthRaf = requestAnimationFrame(draw); };
+  draw();
+  $("videoBadge").textContent = "合成演示画面（非真实摄像头）";
+  $("videoSub").textContent = "synth · 640×360 · 15fps";
+  $("videoHint").classList.remove("show");
+  markSource("srcSynth");
+}
+
+function drawSynth(ctx, scene, t){
+  const W = 640, H = 360;
+  // 挡风玻璃 / 道路
+  const sky = ctx.createLinearGradient(0,0,0,H*0.62);
+  sky.addColorStop(0,"#12324d"); sky.addColorStop(0.6,"#1b4a66"); sky.addColorStop(1,"#2a6c7e");
+  ctx.fillStyle = sky; ctx.fillRect(0,0,W,H*0.62);
+  ctx.fillStyle = "#1a2129"; ctx.fillRect(0,H*0.6,W,H*0.4);
+  // 路面透视
+  ctx.fillStyle = "#232c36";
+  ctx.beginPath(); ctx.moveTo(W*0.18,H*0.62); ctx.lineTo(W*0.82,H*0.62); ctx.lineTo(W*1.02,H); ctx.lineTo(W*-0.02,H); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = "#9fb6c9"; ctx.lineWidth = 5; ctx.setLineDash([26,26]); ctx.lineDashOffset = -(t*70)%52;
+  ctx.beginPath(); ctx.moveTo(W*0.5,H*0.63); ctx.lineTo(W*0.5,H); ctx.stroke(); ctx.setLineDash([]);
+  // 两侧虚线
+  ctx.strokeStyle = "rgba(210,228,240,.55)"; ctx.lineWidth = 3; ctx.setLineDash([18,24]); ctx.lineDashOffset = -(t*55)%42;
+  ctx.beginPath(); ctx.moveTo(W*0.3,H*0.63); ctx.lineTo(W*0.12,H); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(W*0.7,H*0.63); ctx.lineTo(W*0.88,H); ctx.stroke(); ctx.setLineDash([]);
+  // 后视镜 / 内饰框
+  ctx.fillStyle = "#0b1117";
+  ctx.fillRect(0,0,W,26); ctx.fillRect(0,H*0.58,W,20);
+  ctx.beginPath(); ctx.roundRect(30,30,86,54,8); ctx.fillStyle = "#101a24"; ctx.fill();
+  ctx.strokeStyle = "#2b4258"; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(30,30,86,54,8); ctx.stroke();
+  // 驾驶员
+  const cx = scene === "command" ? W*0.66 : W*0.6;
+  ctx.fillStyle = "#0f1a24";
+  ctx.beginPath(); ctx.roundRect(cx-74, H*0.66, 150, 120, 16); ctx.fill();          // 座椅
+  ctx.fillStyle = "#2d4356";
+  ctx.beginPath(); ctx.ellipse(cx, H*0.50, 27, 31, 0, 0, Math.PI*2); ctx.fill();     // 头
+  ctx.fillStyle = "#23384a"; ctx.beginPath(); ctx.ellipse(cx, H*0.60, 41, 26, 0, 0, Math.PI*2); ctx.fill(); // 肩
+  // 说话 / 手势动画
+  if (scene === "chat"){
+    ctx.fillStyle = "#f8d9b5";
+    ctx.beginPath(); const mouth = 5 + Math.abs(Math.sin(t*6))*5;
+    ctx.ellipse(cx-4*(1), H*0.53, 7, mouth, 0, 0, Math.PI*2); ctx.fill();
+    // 转向副驾
+    ctx.fillStyle = "#2d4356"; ctx.beginPath(); ctx.ellipse(cx-42, H*0.56, 26, 22, .3, 0, Math.PI*2); ctx.fill();
+    // 对话气泡
+    ctx.strokeStyle = "rgba(56,189,248,.65)"; ctx.fillStyle = "rgba(8,26,38,.72)";
+    ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(cx+52, H*0.42, 190, 48, 10); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = "#cfeafd"; ctx.font = "600 15px -apple-system, 'PingFang SC', sans-serif";
+    ctx.fillText("咱晚上去哪吃？", cx+68, H*0.42+30);
+  } else {
+    // 手抬起 + HUD 导航
+    ctx.strokeStyle = "#2d4356"; ctx.lineWidth = 10; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(cx-30, H*0.62); ctx.lineTo(cx-88, H*0.52); ctx.stroke();
+    ctx.strokeStyle = "rgba(56,189,248,.5)"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(W-250, 46, 220, 92, 10); ctx.fillStyle = "rgba(6,22,34,.75)"; ctx.fill(); ctx.stroke();
+    ctx.fillStyle = "#bae6fd"; ctx.font = "600 14px -apple-system, 'PingFang SC', sans-serif";
+    ctx.fillText("HUD · 导航", W-234, 68);
+    ctx.fillStyle = "#e2f2ff"; ctx.font = "700 17px -apple-system, 'PingFang SC', sans-serif";
+    ctx.fillText("望京 SOHO", W-234, 92);
+    ctx.strokeStyle = "#22c55e"; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(W-232, 112); ctx.lineTo(W-190, 112); ctx.lineTo(W-160, 126); ctx.stroke();
+  }
+  // 时间戳 + 水印
+  ctx.fillStyle = "rgba(226,240,252,.55)"; ctx.font = "11px ui-monospace, monospace";
+  ctx.fillText(new Date().toLocaleTimeString("zh-CN", {hour12:false}) + "  ·  合成回放", 18, H-16);
+}
+
+/* 摄像头 */
+async function startCamera(){
+  clearStream();
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({video:{width:{ideal:640}, height:{ideal:360}, facingMode:"user"}, audio:false});
+    state.stream = stream; state.source = "camera";
+    video.srcObject = stream; await video.play().catch(()=>{});
+    $("videoBadge").textContent = "前置摄像头（真实视频流）";
+    $("videoSub").textContent = "camera · live";
+    $("videoHint").classList.remove("show");
+    markSource("srcCamera");
+  }catch(err){
+    $("videoHint").classList.add("show");
+    $("videoBadge").textContent = "摄像头不可用 → 合成回放";
+    startSynth(state.scene);
+  }
+}
+
+/* 上传视频 */
+function startUpload(file){
+  clearStream();
+  state.source = "upload";
+  const url = URL.createObjectURL(file);
+  video.src = url; video.loop = true; video.play().catch(()=>{});
+  $("videoBadge").textContent = "本地视频回放 · " + file.name;
+  $("videoSub").textContent = "upload · " + (file.name || "");
+  $("videoHint").classList.remove("show");
+  markSource("srcUpload");
+}
+
+function markSource(id){
+  ["srcCamera","srcSynth","srcUpload"].forEach(x => $(x).classList.remove("on"));
+  if (id) $(id).classList.add("on");
+}
+
+/* 抽帧：把当前画面压成 320×180 的**彩色 JPEG**——这就是送进模型的那一张（不转灰阶、不放大）。
+   亮度 / 运动统计也从这同一帧的像素算，不另采图。 */
+const FRAME_W = 320, FRAME_H = 180;
+const frameCanvas = document.createElement("canvas");
+frameCanvas.width = FRAME_W; frameCanvas.height = FRAME_H;
+const frameCtx = frameCanvas.getContext("2d", {willReadFrequently:true});
+let framePrevGray = null;
+function grabFrame(){
+  try{
+    const el = (state.source === "synth" && synthCanvas) ? synthCanvas : video;
+    const w = (el === synthCanvas) ? synthCanvas.width : (video.videoWidth || 640);
+    const h = (el === synthCanvas) ? synthCanvas.height : (video.videoHeight || 360);
+    if (!w || !h) return null;
+    frameCtx.drawImage(el, 0, 0, w, h, 0, 0, FRAME_W, FRAME_H);
+    const data = frameCtx.getImageData(0,0,FRAME_W,FRAME_H).data;
+    const gray = new Float32Array(FRAME_W * FRAME_H);
+    let sum = 0, motion = 0;
+    for (let i=0, p=0; i<data.length; i+=4, p+=1){
+      const y = 0.299*data[i] + 0.587*data[i+1] + 0.114*data[i+2];
+      gray[p] = y; sum += y;
+      if (framePrevGray) motion += Math.abs(y - framePrevGray[p]);
+    }
+    const brightness = sum / (255.0 * gray.length);
+    const motionRate = framePrevGray ? motion / (255.0 * gray.length) : 0;
+    framePrevGray = gray;
+    const image = frameCanvas.toDataURL("image/jpeg", 0.82);
+    $("sentFrame").src = image;
+    $("sentMeta").textContent = FRAME_W + "×" + FRAME_H + " · 彩色 JPEG · " + Math.round(image.length/1024) + "KB";
+    return {image:image, w:FRAME_W, h:FRAME_H, brightness:Math.round(brightness*1000)/1000,
+            motion:Math.round(motionRate*1000)/1000};
+  }catch(e){ return null; }
+}
+
+/* ---------------- 后端 API ---------------- */
+async function sendTick(asr){
+  const frame = grabFrame();
+  state.tickCount += 1;
+  const body = {session_id: state.sessionId, seat: state.seat, frame: frame,
+                eot: ($("eotMode") && $("eotMode").value) || "real"};
+  if (state.model) body.model = state.model;   // 页面选中的引擎；服务端按 id 取对应模型
+  if (asr) body.asr = asr;
+  try{
+    const res = await fetch("/api/hub/tick", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)});
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    render(await res.json());
+  }catch(e){
+    $("livePill").textContent = "连接中断";
+    $("livePill").classList.remove("live");
+  }
+}
+
+function setLive(){ $("livePill").textContent = "持续感知中"; $("livePill").classList.add("live"); }
+
+/* 思考节拍：0.5s 一次；同一节拍里排队的 ASR 增量按到达顺序逐条送入，不丢 partial */
+(async function tickLoop(){
+  while (true){
+    const asr = state.asrQueue.shift() || null;
+    await sendTick(asr);
+    await new Promise(r => setTimeout(r, state.asrQueue.length ? 120 : 500));
+  }
+})();
+
+/* ---------------- 演示回放 ---------------- */
+async function loadDemos(){
+  try{
+    const res = await fetch("/api/mind/demos");
+    const data = await res.json();
+    state.demos = data.demos || [];
+    modelCatalog.list = data.models || [];
+    modelCatalog.defaultId = data.default_model || "";
+  }catch(e){ state.demos = []; modelCatalog.list = []; }
+  const saved = readModelChoice();
+  const valid = modelCatalog.list.some(m => m.id === saved);
+  state.model = valid ? saved
+    : (modelCatalog.defaultId || (modelCatalog.list[0] && modelCatalog.list[0].id) || "deepseek-v4.1-flash");
+  renderEngines();
+}
+
+/* 引擎选择器：三个选项都标明「能不能读图」与「大致快慢」，当前档高亮 */
+function renderEngines(){
+  const pick = $("enginePick");
+  pick.innerHTML = modelCatalog.list.map(m => {
+    const on = m.id === state.model ? " on" : "";
+    const vcls = m.vision === "ok" ? "ok" : "no";
+    return '<button class="engine' + on + '" data-model="' + escapeHtml(m.id) + '" title="' +
+      escapeHtml(m.note || "") + '"><b>' + escapeHtml(m.label || m.id) + '</b>'
+      + '<small><span class="vTag ' + vcls + '">' + escapeHtml(m.vision_label || "视觉未核")
+      + '</span>' + escapeHtml(m.speed_label || "") + '</small></button>';
+  }).join("");
+  Array.from(pick.querySelectorAll("button")).forEach(btn => {
+    btn.onclick = () => switchModel(btn.dataset.model);
+  });
+  const cur = modelCatalog.list.find(m => m.id === state.model);
+  $("engineNow").textContent = "当前 · " + (state.model || "—");
+  $("engineHint").textContent = cur ? (cur.note || "") : "选中后下一次判断就打该模型；刷新保持所选";
+}
+
+/* 换引擎 = 换判断通路：停掉演示定时器，丢掉上一模型的在途/结论，本席重新判定（真麦通道不动） */
+async function switchModel(id){
+  if (!id || id === state.model) return;
+  state.model = id;
+  writeModelChoice(id);
+  renderEngines();
+  clearTimers();
+  await resetServer();
+  resetLocal();
+  setLive();
+  $("modePill").textContent = "读心引擎 · " + id;
+  $("engineLine").textContent = "引擎：" + id + " · 切换中…";
+}
+
+function clearTimers(){ state.timers.forEach(t => clearTimeout(t)); state.timers = []; }
+
+function playDemo(id){
+  const demo = state.demos.find(d => d.id === id);
+  if (!demo) return;
+  if (mic.active) stopMic("已停麦（演示回放兜底）");   // 演示脚本不与真麦混流
+  state.demoToken += 1;
+  const token = state.demoToken;
+  clearTimers();
+  resetLocal();
+  state.seat = demo.seat || "D"; applySeatButtons();
+  startSynth(demo.video || "chat");
+  demo.script.forEach(step => {
+    const timer = setTimeout(() => {
+      if (token !== state.demoToken) return;
+      state.asrQueue.push({text: step.text, final: !!step.final});
+    }, step.t_ms);
+    state.timers.push(timer);
+  });
+  // 三条去处：C 演示强制判停说「被截断」（页面右上角的判停来源也可手动换）
+  if ($("eotMode")) $("eotMode").value = demo.id === "cut" ? "cut" : "real";
+  $("modePill").textContent = demo.name.replace(" · ", "：");
+}
+
+/* ---------------- 渲染 ---------------- */
+function fmtTime(ms){
+  const s = Math.floor(ms/1000), m = Math.floor(s/60);
+  return String(m).padStart(2,"0") + ":" + String(s%60).padStart(2,"0") + "." + String(ms%1000).padStart(3,"0");
+}
+
+function render(data){
+  const snap = data.mind, hub = data.hub || {}, gate = data.gate;
+  state.lastSnapshot = snap;
+  setLive();
+  const scene = snap.scene, asr = snap.asr;
+
+  // ASR（读心只记本席出了什么字，不再记「已消费 / 旁听」——那是中枢的账）
+  $("asrSub").textContent = snap.seat_label + " " + snap.seat;
+  if (asr.partial){
+    $("asrNow").innerHTML = escapeHtml(asr.partial) + '<span class="cursor"></span> <span class="ghost">partial · 还在出字</span>';
+  } else if (asr.finals.length){
+    $("asrNow").innerHTML = '<span class="ghost">本段已 final，等待下一段…</span>';
+  } else {
+    $("asrNow").innerHTML = '<span class="ghost">等待出字…</span>';
+  }
+  $("finals").innerHTML = asr.finals.slice().reverse().map(f =>
+    '<div class="fin"><span class="t">' + fmtTime(f.t_ms) + '</span><span class="text">' +
+    escapeHtml(f.text) + '</span><span class="badge pending">已 final</span></div>').join("");
+
+  // 场景（读心自己更新；中枢开闸前只取一次，不反过来驱动读心）
+  $("sceneSub").textContent = "rev " + scene.revision + " · " + (scene.finalized ? "final" : "partial");
+  $("sceneSummary").textContent = scene.summary;
+  const scenePending = scene.pending || scene.source === "llm_pending";
+  $("sceneMeta").textContent = scenePending
+    ? "正在读场景…（这是占位句，不参与判接不接，也不当判据）"
+    : "一句轻松旁白（稿 E）· " + String(scene.summary || "").length
+      + " 字（≤30）· 不判说完、不判接不接 · 本席 " + snap.seat_label + " " + snap.seat;
+  const v = scene.visual;
+  $("vBright").textContent = v.has_frame ? Math.round((v.brightness||0)*100) + "%" : "—";
+  $("vMotion").textContent = v.has_frame ? Math.round((v.motion||0)*100) + "%" : "—";
+  $("mBright").style.width = Math.round((v.brightness||0)*100) + "%";
+  $("mMotion").style.width = Math.min(100, Math.round((v.motion||0)*700)) + "%";
+  $("vNote").textContent = v.note + (v.has_frame ? "（画面已按帧送入模块）" : "");
+
+  // ---- 中枢：同一版字上两路并发 → 闸门 ----
+  const ver = hub.version || 0;
+  const route = gate && gate.route;
+  const gs = gate && gate.state;
+  $("hubSub").textContent = "版本 " + ver + (gs ? " · " + gs : " · 等两路");
+  const stepGate = $("stepGate"), stepTools = $("stepTools"), stepOut = $("stepOut");
+  [stepGate, stepTools, stepOut].forEach(el => { el.className = "step"; });
+  if (route === "agent"){
+    stepGate.className = "step hit"; stepGate.textContent = "闸门：开";
+    stepTools.className = "step hit"; stepTools.textContent = "工具披露（开闸后才发）";
+    stepOut.className = "step hit"; stepOut.textContent = "决策 / 交后台";
+  } else if (route === "context_only"){
+    stepGate.className = "step stop"; stepGate.textContent = "闸门：不开";
+    stepTools.className = "step stop"; stepTools.textContent = "工具披露：不发";
+    stepOut.className = "step stop"; stepOut.textContent = "不进 Agent · 只进上下文";
+  } else if (route === "accept_unavailable"){
+    stepGate.className = "step stop"; stepGate.textContent = "闸门：先不开";
+    stepTools.className = "step stop"; stepTools.textContent = "工具披露：不发";
+    stepOut.className = "step idle"; stepOut.textContent = "等接不接（超时/失败，不当成不接）";
+  } else {
+    stepGate.textContent = "闸门";
+    stepTools.textContent = "工具披露";
+    stepOut.textContent = "决策 / 交后台";
+  }
+
+  const bool = $("boolBadge");
+  if (!gate){
+    bool.className = "bool idle"; bool.textContent = "等待这一版字";
+  } else if (route === "agent"){
+    bool.className = "bool yes"; bool.textContent = "开闸 · 进 Agent";
+  } else if (route === "context_only"){
+    bool.className = "bool no"; bool.textContent = "不开闸 · 只进上下文";
+  } else if (route === "accept_unavailable"){
+    bool.className = "bool idle"; bool.textContent = gs || "接不接超时/失败 · 先不开闸";
+  } else {
+    bool.className = "bool idle"; bool.textContent = gs || "还没说完 · 先不开闸";
+  }
+  const twoRoute = gate && gate.two_route_ms;
+  $("confVal").textContent = twoRoute != null ? Math.round(twoRoute) + "ms · 取较慢那一路" : "—";
+  $("confBar").style.width = twoRoute != null ? Math.min(100, Math.round(twoRoute / 15)) + "%" : "0%";
+
+  // 场景格：开闸那一刻用的就是这一份（取一次，不等待）
+  const gscene = gate && gate.scene;
+  if (gscene && gscene.summary){
+    $("hubScene").textContent = gscene.summary;
+    $("hubSceneMeta").textContent = "rev " + (gscene.revision ?? "—") + " · 取快照时已旧 "
+      + (gscene.age_ms != null ? Math.round(gscene.age_ms) + "ms" : "—") + (gscene.pending ? " · 读心中" : "");
+  } else {
+    $("hubScene").textContent = gate
+      ? "无场景 · 按默认照常判（缺场景 ≠ 缺判断）" : "还没有这一版出字";
+    $("hubSceneMeta").textContent = "rev —";
+  }
+
+  // 判停格：说没说完（本页可选真 8009 / 离线替身）
+  const eot = (gate && gate.eot) || {};
+  const eotLabel = {complete: "说完", cut: "说完被截断", wait: "还没说完", error: "判停失败"}[eot.label] || "—";
+  $("hubEot").textContent = eot.label ? eotLabel : "判停还没回来";
+  $("hubEotMeta").textContent = (eot.may_confirm ? "能确认" : "还不能确认")
+    + (eot.confidence != null ? " · conf " + Math.round(eot.confidence * 100) + "%" : "")
+    + " · 来源 " + ((data.eot_source && data.eot_source.label) || "—");
+
+  // 接不接格：中枢这一路走 8009 真判断（与判停同一套模型）；开闸线未拍，界面照实写。
+  const acc = (gate && gate.accept) || {};
+  const accState = acc.state;
+  const accScore = acc.score != null ? acc.score : acc.confidence;
+  let accText = "—";
+  if (!gate) accText = "—";
+  else if (accState === "pending" || !accState) accText = "还在飞…";
+  else if (accState === "timeout") accText = "超时 · 先不开闸";
+  else if (accState === "failed") accText = "失败 · 先不开闸";
+  else if (acc.accept === true) accText = "要接 · 分数 " + (accScore != null ? accScore.toFixed(2) : "—");
+  else if (acc.accept === false) accText = "不接 · 分数 " + (accScore != null ? accScore.toFixed(2) : "—");
+  $("hubAccept").textContent = accText;
+  const meta = gate && gate.accept_source;
+  const thr = acc.threshold != null ? acc.threshold : (meta && meta.threshold);
+  const thrNote = acc.threshold_note || (meta && meta.threshold_note) || "开闸线未拍，本次临时用 0.5";
+  $("hubAcceptMeta").textContent = (meta ? meta.source + " · " + meta.model : (acc.source || "—"))
+    + (accScore != null ? " · 分数 " + accScore.toFixed(2) : "")
+    + (acc.latency_ms != null ? " · " + Math.round(acc.latency_ms) + "ms" : "")
+    + (acc.error && acc.error.kind ? " · error:" + acc.error.kind : "");
+  $("acceptThreshold").textContent = thrNote + (thr != null ? "（≥ " + Number(thr).toFixed(2) + " 才算要接）" : "");
+  if ($("footThreshold") && meta && meta.threshold != null) $("footThreshold").textContent = Number(meta.threshold).toFixed(2);
+
+  // 闸门结论
+  $("reason").textContent = gate ? gate.reason + (gate.accept_note ? "（" + gate.accept_note + "）" : "") : "—";
+  const down = $("downstream");
+  down.style.display = "block";
+  if (route === "agent"){
+    down.className = "down agent_eligible";
+    down.innerHTML = "<b>开闸：</b>这一版说完且要接 → 进 Agent（先工具披露，再决策 / 复杂的交后台）。";
+  } else if (route === "context_only"){
+    down.className = "down not_agent";
+    down.innerHTML = "<b>不开闸：</b>这一版只进上下文（不选工具、不决策、不进 Agent）；没说完的中间结论不算数。";
+  } else if (route === "accept_unavailable"){
+    down.className = "down pending";
+    down.innerHTML = "<b>先不开闸（不是「不接」）：</b>" + escapeHtml(gs || "接不接超时/失败")
+      + "——这一版先不进 Agent，也不把文本当「不接」折进上下文；界面标超时/失败，晚回来仍可改判。";
+  } else {
+    down.className = "down pending";
+    down.innerHTML = "<b>先不开闸：</b>" + (gs === "等接不接"
+      ? "判停已说完，同一版字的「接不接」还在飞——等这一份，不重取场景、不重判。"
+      : "判停还没到「说完」那一刻；中间那次「接不接」不作数。");
+  }
+
+  const source = meta ? (meta.source + "（开闸线未拍）") : "—";
+  $("cVersion").textContent = "版本 " + ver;
+  $("cAcceptSource").textContent = "接不接来源 " + source;
+  $("cScene").textContent = "场景 " + (gscene && gscene.summary ? "有（rev " + (gscene.revision ?? 0) + "）" : "无");
+  $("cTick").textContent = "tick " + snap.tick;
+  // 每一版的接不接结论：证明连续多版出字时没有被后一版悄悄顶掉
+  $("hubVersions").innerHTML = (hub.versions || []).map(v => {
+    const a = v.accept || {};
+    const sc = a.score != null ? a.score : a.confidence;
+    const text = a.state === "timeout" ? "超时" : a.state === "failed" ? "失败"
+      : a.accept === true ? "要接" : a.accept === false ? "不接" : "在飞";
+    return '<span class="vchip">v' + v.version + " · " + escapeHtml((v.text || "").slice(0, 12))
+      + " · " + text + (sc != null ? " " + Number(sc).toFixed(2) : "")
+      + (v.eot && v.eot.label ? " · 判停" + ({complete:"说完",cut:"截断",wait:"犹豫"}[v.eot.label] || v.eot.label) : "")
+      + "</span>";
+  }).join("") || '<span class="vchip">还没有版本结论</span>';
+
+  const eng = snap.engine || {};
+  let engLine = "读心引擎：" + (eng.label || eng.model || eng.name || "—") + " · " + (eng.mode || "—");
+  if (eng.thinking) engLine += " · 思考:关";
+  if (eng.reasoning_chars) engLine += " · 本次思考段 " + eng.reasoning_chars + " 字";
+  if (eng.vision && eng.vision.capability === "unavailable")
+    engLine += " · 视觉:不可用（读不懂图）";
+  else if (eng.vision && eng.vision.status && eng.vision.status !== "unknown")
+    engLine += " · 视觉:" + eng.vision.status;
+  if (eng.error) engLine += " · error:" + ((eng.error.kind) || "engine_error");
+  if (eng.pending) engLine += " · 读场景中";
+  $("engineLine").textContent = engLine;
+
+  // 闸门轨迹（版本/结论一变记一条）
+  const key = [ver, route, gs, gate && gate.reason].join("|");
+  if (!state.history.length || state.history[0].key !== key){
+    state.history.unshift({key: key, route: route, state: gs, t: gate ? gate.decided_at_ms : 0,
+                           ver: ver, scene: gscene && gscene.summary,
+                           accept: (gate && gate.accept && gate.accept.accept),
+                           score: (gate && gate.accept && (gate.accept.score != null ? gate.accept.score : gate.accept.confidence))});
+    state.history = state.history.slice(0, 8);
+  }
+  $("history").innerHTML = state.history.map(h =>
+    '<div class="hrow"><span class="dot ' + (h.route === "agent" ? "yes" : h.route === "context_only" ? "no" : "") + '"></span>' +
+    '<span>v' + h.ver + '</span><span>' + (h.state || "—") + '</span>' +
+    '<span style="color:#7f94aa">' + (h.accept === true ? "要接" : h.accept === false ? "不接" : "—")
+      + (h.score != null ? " " + Number(h.score).toFixed(2) : "") + '</span></div>'
+  ).join("");
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+/* ---------------- 交互 ---------------- */
+function resetLocal(){
+  state.asrQueue = []; state.history = []; state.tickCount = 0;
+  state.sessionId = "mind-" + (crypto.randomUUID ? crypto.randomUUID().slice(0,8) : Math.random().toString(16).slice(2));
+  $("finals").innerHTML = ""; $("history").innerHTML = "";
+  $("asrNow").innerHTML = '<span class="ghost">等待出字…</span>';
+  $("sceneSummary").textContent = "等待输入…";
+  $("boolBadge").className = "bool idle"; $("boolBadge").textContent = "等待这一版字";
+  $("reason").textContent = "—"; $("downstream").textContent = "—";
+  $("downstream").className = "down";
+  $("confVal").textContent = "—"; $("confBar").style.width = "0%";
+  $("hubSub").textContent = "版本 0 · 等两路";
+  $("hubScene").textContent = "—"; $("hubSceneMeta").textContent = "rev 0";
+  $("hubEot").textContent = "—"; $("hubEotMeta").textContent = "—";
+  $("hubAccept").textContent = "—"; $("hubAcceptMeta").textContent = "—";
+  $("cVersion").textContent = "版本 0"; $("cAcceptSource").textContent = "接不接来源 —";
+  $("hubVersions").innerHTML = "";
+  $("acceptThreshold").textContent = "开闸线未拍，本次临时用 0.5";
+  $("cScene").textContent = "场景 —"; $("cTick").textContent = "tick 0";
+  [ $("stepGate"), $("stepTools"), $("stepOut") ].forEach(el => { el.className = "step"; });
+}
+function resetServer(){
+  const body = JSON.stringify({session_id: state.sessionId});
+  const opts = {method:"POST", headers:{"Content-Type":"application/json"}, body: body};
+  fetch("/api/mind/reset", opts).catch(()=>{});
+  return fetch("/api/hub/reset", opts).catch(()=>{});
+}
+
+function applySeatButtons(){
+  $("seatD").classList.toggle("on", state.seat === "D");
+  $("seatP").classList.toggle("on", state.seat === "P");
+}
+
+$("demoChat").onclick = () => playDemo("chat");
+$("demoCmd").onclick = () => playDemo("command");
+$("demoCut").onclick = () => playDemo("cut");
+$("micStart").onclick = () => { startMic(); };
+$("micStop").onclick = () => stopMic("已停麦 · 可再点「开麦听」");
+$("srcSynth").onclick = () => startSynth(state.scene);
+$("srcCamera").onclick = () => startCamera();
+$("srcUpload").onclick = () => $("fileInput").click();
+$("fileInput").onchange = (e) => { const f = e.target.files[0]; if (f) startUpload(f); };
+/* 切本席 = 换读心通路：真麦先停，新本席重新开麦，避免一句话被两个席分掉（不串席） */
+function switchSeat(seat){
+  stopMic("本席已切到 " + (seat === "D" ? "主驾 D" : "副驾 P") + " · 真麦已停，请重新开麦（防串席）");
+  clearTimers(); resetServer(); resetLocal(); state.seat = seat; applySeatButtons();
+  return seat;
+}
+$("seatD").onclick = async () => { switchSeat("D"); startSynth(state.scene); };
+$("seatP").onclick = async () => { switchSeat("P"); startSynth(state.scene); };
+$("btnReset").onclick = async () => { clearTimers(); await resetServer(); resetLocal(); };
+$("btnSend").onclick = () => {
+  const text = $("manualText").value.trim();
+  if (!text) return;
+  state.asrQueue.push({text, final: true}); $("manualText").value = "";
+};
+$("manualText").onkeydown = (e) => { if (e.key === "Enter") $("btnSend").click(); };
+
+/* ---------------- 启动 ---------------- */
+(async function init(){
+  await loadDemos();
+  startSynth("chat");
+  const params = new URLSearchParams(location.search);
+  const demo = params.get("demo");
+  if (demo === "chat" || demo === "command"){
+    setTimeout(() => playDemo(demo), 300);     // 演示回放只作兜底入口
+  } else {
+    // 默认真麦：打开 /mind 就尝试授权开听（授权后随口说一句即可看到 partial/final 进模块）。
+    // 拿不到麦克风不挡页面：演示 A/B 与手动输入仍是兜底。
+    await startMic();
+  }
+})();
+</script>
+</body>
+</html>

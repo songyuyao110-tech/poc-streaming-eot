@@ -21,8 +21,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.dont_write_bytecode = True
 
 from core_pipeline_run import POC_ROOT, ROOT, select_tools
-from turn_eot import score_eot
-from turn_session import TurnConfig, TurnSession
+from gate.turn_eot import score_eot
+from gate.turn_session import TurnConfig, TurnSession
 
 CASES = POC_ROOT / "src/fixtures/streaming-prefix-cases.jsonl"
 EVIDENCE = POC_ROOT / "evidence/streaming-prefix"

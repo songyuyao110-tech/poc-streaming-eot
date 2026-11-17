@@ -16,7 +16,7 @@ def fake_audit(case, duo):
     """返回让用例此刻能门槛化判定所需的 audit 字段。"""
     import sys
     from pathlib import Path
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
     from assert_surface import ORCHESTRA_FIELDS
     expect = case.get("expect") or {}
     out = {}

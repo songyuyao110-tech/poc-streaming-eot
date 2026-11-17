@@ -95,19 +95,70 @@
     .tl-events .et { font: 11.5px/1.6 ui-monospace, monospace; color: #8b95a6; min-width: 60px; }
     .tl-empty { color: #8b95a6; font-size: 12.5px; }
     /* ---------- 双席（两路 ASR 各进各席） ---------- */
+    .duo-toggle-group { display: inline-flex; align-items: center; gap: 10px; font-size: 13px; color: #637187; }
+    .duo-toggle-group > strong { font-weight: 600; color: #33415c; }
+    .duo-toggle { display: inline-flex; gap: 5px; align-items: center; font-size: 13px; color: #33415c; cursor: pointer; }
     .duo-grid { margin-top: 12px; }
     .duo-seat { border: 1px solid #dce3ed; border-radius: 12px; padding: 12px; background: #fbfcfe; }
     .duo-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; margin-bottom: 8px; }
     .duo-state { font-size: 11.5px; padding: 1px 8px; border-radius: 999px; background: #eef2f9; color: #33415c; }
     .duo-state.ok { background: #e6f7ec; color: #1f6b3d; font-weight: 600; }
     .duo-state.done { background: #e6f0ff; color: #174dbb; font-weight: 600; }
+    .duo-state.off { background: #eef0f3; color: #9aa3b2; }
+    .duo-seat.duo-off { opacity: .5; background: #f5f6f8; }
     .duo-asr { font-weight: 600; min-height: 24px; overflow-wrap: anywhere; }
     .duo-seat .tl-events { max-height: 280px; overflow: auto; }
     #dual-verdict { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+    /* ---------- 中枢：每席同一版字上的并发两路 + 闸门 ---------- */
+    .duo-hub { margin: 8px 0 6px; border: 1px solid #dce3ed; border-radius: 10px; padding: 8px 10px; background: #f6f9fe; }
+    .duo-hub .dh-top { font: 11px/1.5 ui-monospace, monospace; color: #8b95a6; }
+    .duo-stage { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; font: 11px/1.5 ui-monospace, monospace; }
+    .duo-stage .st { padding: 1px 6px; border-radius: 999px; border: 1px solid #d7dfea; background: #fff; color: #637187; }
+    .duo-stage .st.on { border-color: #185aa0; color: #185aa0; background: #eef4fb; }
+    .duo-stage .st.hit { border-color: #1f6b3d; color: #1f6b3d; background: #e6f7ec; }
+    .duo-stage .st.stop { border-color: #b42318; color: #b42318; background: #fdeceb; }
+    .duo-hub-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; margin-top: 6px; font-size: 12px; }
+    .duo-hub-grid .dh-k { color: #8b95a6; margin-right: 4px; }
+    .duo-hub-grid .dh-v { color: #33415c; overflow-wrap: anywhere; }
+    /* ---------- 期五：四处出声口径（一屏看全） ---------- */
+    .hub-policy { margin: 14px 0 0; border: 1px solid #dce3ed; border-radius: 12px; padding: 10px 12px; background: #fff; }
+    .hub-policy .hp-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; margin-bottom: 8px; }
+    .hub-policy .hp-head strong { color: #33415c; font-size: 13.5px; }
+    .hub-policy table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .hub-policy th, .hub-policy td { border-top: 1px solid #e8edf5; padding: 4px 6px; text-align: left; vertical-align: top; }
+    .hub-policy th { color: #8b95a6; font-weight: 600; font-size: 11.5px; }
+    .hub-policy td .hp-slot { font-weight: 600; color: #33415c; }
+    .hub-policy td .hp-pri { color: #185aa0; }
+    .hub-policy .hp-live { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+    .hub-policy .hp-seat { border: 1px solid #e3eaf4; border-radius: 10px; padding: 8px 10px; background: #f8fbff; }
+    .hub-policy .hp-seat-title { font-size: 12px; color: #637187; margin-bottom: 4px; }
+    .hub-policy .hp-row { display: grid; grid-template-columns: 84px 1fr; gap: 6px; font-size: 12px; padding: 2px 0; }
+    .hub-policy .hp-row b { color: #33415c; font-weight: 600; }
+    .hub-policy .hp-row span { color: #33415c; overflow-wrap: anywhere; }
+    .hub-policy .hp-anchor { margin-top: 6px; padding-top: 5px; border-top: 1px dashed #e3eaf4; font: 11px/1.6 ui-monospace, monospace; color: #8b95a6; }
+    .hub-policy .hp-anchor.bad { color: #b42318; font-weight: 600; }
+    .tl-badge.policy { background: #f3eefc; color: #6b3fa0; }
+    /* ---------- 三泳道：前台（两路 ASR/判停） + 后台（任务判断/执行） ---------- */
+    .duo-layers { display: flex; flex-direction: column; gap: 14px; margin-top: 12px; }
+    .duo-layer { border-radius: 12px; padding: 12px; }
+    .duo-layer-front { background: #eef4fb; border: 1px solid #185aa0; }
+    .duo-layer-back { background: #e9f4f4; border: 1px solid #1e6f74; }
+    .duo-layer-title { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; margin: 0 0 10px; font-size: 13px; }
+    .duo-layer-title strong { font-size: 13.5px; }
+    .duo-layer-front .duo-layer-title strong { color: #185aa0; }
+    .duo-layer-back .duo-layer-title strong { color: #1e6f74; }
+    .duo-orchestra { border: 1px solid #dce3ed; border-left: 4px solid #1e6f74; border-radius: 10px; padding: 10px 12px; background: #fff; }
+    .duo-orchestra .tl-events { max-height: 420px; overflow: auto; margin: 0; }
+    .tl-badge.orchestra { background: #e9f4f4; color: #1e6f74; }
+    .tl-badge.hub { background: #eef4fb; color: #185aa0; }
+    .tl-badge.task { background: #eef4fb; color: #185aa0; }
+    .tl-badge.executed { background: #e6f7ec; color: #1f6b3d; }
+    .tl-badge.relevance { background: #f3eefc; color: #6b3fa0; }
     .cfg { display: flex; flex-direction: column; gap: 3px; align-items: stretch; }
     .cfg .cfg-key { font-size: 12.5px; color: #33415c; font-weight: 600; }
     .cfg .cfg-hint { font-size: 11.5px; color: #7b8496; line-height: 1.35; }
-    @media (max-width: 900px) { .tl-body { grid-template-columns: 1fr; } .tl-waterfall { width: 160px; } }
+    @media (max-width: 900px) { .tl-body { grid-template-columns: 1fr; } .tl-waterfall { width: 160px; }
+      .hub-policy .hp-live { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -124,6 +175,7 @@
       <option value="confirm" selected>确认轮（对话式二次确认）</option>
       <option value="mic">麦克风（真实流式 ASR）</option>
       <option value="dual">双席（两路 ASR 各进各席）</option>
+      <option value="dualmic">双席 · 真实麦克风（D/P 各选设备）</option>
     </select>
     <button id="send" type="submit">发送 ↵</button>
   </form>
@@ -173,17 +225,46 @@
   </section>
   <section id="dual-controls" class="card" hidden>
     <div class="row">
-      <label>席 D（mic-D）<input id="dual-d" value="导航回家" style="flex:1; min-width:200px"></label>
-      <label>席 P（mic-P）<input id="dual-p" value="把空调调到24度" style="flex:1; min-width:200px"></label>
+      <span class="duo-toggle-group">
+        <strong>开关</strong>
+        <label class="duo-toggle" title="关掉 = 那路不参与本轮（就像那路没说话）"><input id="dual-d-on" type="checkbox" checked>主驾（席 D）</label>
+        <label class="duo-toggle" title="关掉 = 那路不参与本轮（就像那路没说话）"><input id="dual-p-on" type="checkbox" checked>副驾（席 P）</label>
+      </span>
+    </div>
+    <div class="row">
+      <label>主驾麦克风（mic-D）<input id="dual-d" value="导航回家" style="flex:1; min-width:200px"></label>
+      <label>副驾麦克风（mic-P）<input id="dual-p" value="把空调调到24度" style="flex:1; min-width:200px"></label>
       <label>语速 <input id="dual-speed" type="number" value="6" min="1" max="20" step="0.5" aria-label="每秒字数"> 字/秒</label>
       <label><input id="dual-mock" type="checkbox"> 离线 mock（不连 KEV/LLM）</label>
       <button id="dual-go" type="button">跑双席 ↵</button>
     </div>
     <div class="row">
       <label>样例 <select id="dual-preset" aria-label="双席样例脚本"></select></label>
-      <span class="muted">两个输入框各是<b>一路干净 ASR</b>（前端先验，Agent 不做去重/分离）；<code>|600|</code> 表示停顿 600ms 并切一个新 ASR 段。默认走真 KEV/LLM，勾 mock 走离线判定。</span>
+      <span class="muted">两路可<b>单独开关</b>（默认都开）：关掉的一路不进本轮、不发事件、不参与相关打分（=那路没说话）。两个输入框各是<b>一路干净 ASR</b>（前端先验，Agent 不做去重/分离）；<code>|600|</code> 表示停顿 600ms 并切一个新 ASR 段。默认走真 KEV/LLM，勾 mock 走离线判定。</span>
     </div>
     <details><summary>TurnConfig（两席共用）</summary><div id="turn-config-dual"></div></details>
+  </section>
+  <section id="dualmic-controls" class="card" hidden>
+    <div class="row">
+      <span class="duo-toggle-group">
+        <strong>开关</strong>
+        <label class="duo-toggle" title="关掉 = 那路不参与本轮（就像那路没说话）"><input id="dualmic-d-on" type="checkbox" checked>主驾（席 D）</label>
+        <label class="duo-toggle" title="关掉 = 那路不参与本轮（就像那路没说话）"><input id="dualmic-p-on" type="checkbox" checked>副驾（席 P）</label>
+      </span>
+      <button id="dualmic-devices" type="button">刷新设备</button>
+      <button id="dualmic-start" type="button">🎤 开始（两路真实麦克风）</button>
+      <button id="dualmic-stop" type="button" disabled>停止</button>
+      <label><input id="dualmic-mock" type="checkbox"> 离线 mock（判停/选工具/决策不连 KEV/LLM）</label>
+    </div>
+    <div class="row">
+      <label>主驾麦克风（mic-D）<select id="dualmic-device-D" aria-label="主驾麦克风设备" style="min-width:240px"></select></label>
+      <label>副驾麦克风（mic-P）<select id="dualmic-device-P" aria-label="副驾麦克风设备" style="min-width:240px"></select></label>
+    </div>
+    <div class="row">
+      <span id="dualmic-status" class="muted">未连接 · 每席各选一个输入设备，浏览器各推 16kHz/20ms PCM，两路各自独立火山豆包流式 ASR → 各进各席</span>
+    </div>
+    <details><summary>TurnConfig（两席共用）</summary><div id="turn-config-dualmic"></div></details>
+    <p class="muted">麦克风需要 localhost 或 https，本页 http://127.0.0.1:8765 满足。两路各自独立 ASR（不复用同一条连接）；关掉的一路＝那路没说话，不进本轮、不串席。「离线 mock」只换判停/选工具/决策，<b>ASR 仍是真实豆包</b>（可复现 wav 回放见 <code>tests/test_dual_mic_ws.py</code> / <code>tests/poc_dual_mic_wav_replay.py</code>）。</p>
   </section>
   <section id="mic-controls" class="card" hidden>
     <div class="row">
@@ -202,23 +283,120 @@
     <p class="muted">麦克风需要 localhost 或 https，本页 http://127.0.0.1:8765 满足；用例存到 <code>Work/tmp/poc-streaming-mic-cases/</code>。</p>
   </section>
   <section id="dual-card" class="card" hidden>
-    <h2>双席（两路干净 ASR → 两席各自判停 / 状态机 / 决策）</h2>
+    <h2>双席 · 三泳道（前台两路 ASR/判停 ＋ 后台任务判断/执行）</h2>
     <p class="tl-legend">
-      <span><b>通道先验</b>：mic-D → 席 D（主驾）· mic-P → 席 P（副驾）</span>
-      <span><b>单写者</b>：两路 ASR 先进队列，只由驱动线程按 FIFO 派给本席</span>
+      <span><b>前台（蓝）</b>：两路 ASR 各进各席、并行判停三态，不堵、不等旧任务</span>
+      <span><b>后台（青）</b>：一个脑归并 → 任务判断（相关打分）→ 并进/新开 FIFO → 生成 → 落地回执</span>
       <span><b>不串席</b>：cross_cancel / cross_reset / 串席文本必须为 0</span>
     </p>
     <div id="dual-metrics" class="tl-metrics"></div>
-    <div class="grid duo-grid">
-      <div class="duo-seat" id="dual-seat-D">
-        <div class="duo-head"><strong>席 D · 主驾</strong><span class="duo-state" data-state>待开始</span><span class="muted">mic-D</span></div>
-        <div class="duo-asr" data-asr>—</div>
-        <ul class="tl-events" data-events></ul>
+    <section id="hub-policy" class="hub-policy">
+      <div class="hp-head"><strong>四处出声口径（期五 · 一屏看全）</strong>
+        <span class="muted">同一时刻最多一句 · 出声后 1 秒内不再出声 · 垫句优先于应声 · 有人说话 → 应声 / 垫句；没人说话 → 冷场 · 两人同时说只在「正在说 / 正在准备说」（垫句那一小段也算，应一声不算）</span></div>
+      <table>
+        <thead><tr><th>出声</th><th>何时问</th><th>谁优先</th><th>出声之后</th></tr></thead>
+        <tbody>
+          <tr><td><span class="hp-slot">垫一句（含垫句抢回）</span></td>
+            <td>人还在说、节奏=积极、这一句已连续说满 1.5 秒</td>
+            <td><span class="hp-pri">1（最高）</span>：与应声同刻只出垫句</td>
+            <td>记住（进本席上下文）；不进 Agent、不选工具、不开闸</td></tr>
+          <tr><td><span class="hp-slot">应一声</span></td>
+            <td>人还在说、这句还没说完（三个等待档里），同一版字上的判断说可以</td>
+            <td>2：同刻让位给垫句</td>
+            <td>不记住（连上下文也不进）；不开闸、不进 Agent</td></tr>
+          <tr><td><span class="hp-slot">两人同时说</span></td>
+            <td>只在那两个入口：①正在准备说 / 正在回答；②正在说一句垫句。<b>应一声不算</b></td>
+            <td>不跟另三句抢「谁出声」：它只定插话去哪；四条出口里的「垫句抢回」仍受同刻一句约束</td>
+            <td>让路=作废本轮（正在准备说）/ 停下这句垫句（正在说垫句），话都留下；说完再接 / 垫句抢回=插话排队随后回答；继续说=只进旁听；都不开闸</td></tr>
+          <tr><td><span class="hp-slot">冷场开口</span></td>
+            <td>只在中枢最后一句说完后安静到刻度（约 4 秒 / 10 秒 / 之后每 8 秒），且真的没人说话</td>
+            <td>与应声 / 垫句互斥：有人在说就不会问；安静时也不会再应声 / 垫一句</td>
+            <td>记住（进本席上下文），只接上文；不进 Agent、不选工具、不开闸</td></tr>
+        </tbody>
+      </table>
+      <div class="hp-live" id="hub-policy-live">
+        <div class="hp-seat" data-seat="D">
+          <div class="hp-seat-title">主驾 · 这一拍：四处当前判断与出声</div>
+          <div class="hp-row"><b>垫一句</b><span data-hp="cushion">—</span></div>
+          <div class="hp-row"><b>应一声</b><span data-hp="ack">—</span></div>
+          <div class="hp-row"><b>两人同时说</b><span data-hp="floor">—</span></div>
+          <div class="hp-row"><b>冷场开口</b><span data-hp="quiet">—</span></div>
+          <div class="hp-anchor" data-hp="anchor">上一声：—</div>
+        </div>
+        <div class="hp-seat" data-seat="P">
+          <div class="hp-seat-title">副驾 · 这一拍：四处当前判断与出声</div>
+          <div class="hp-row"><b>垫一句</b><span data-hp="cushion">—</span></div>
+          <div class="hp-row"><b>应一声</b><span data-hp="ack">—</span></div>
+          <div class="hp-row"><b>两人同时说</b><span data-hp="floor">—</span></div>
+          <div class="hp-row"><b>冷场开口</b><span data-hp="quiet">—</span></div>
+          <div class="hp-anchor" data-hp="anchor">上一声：—</div>
+        </div>
       </div>
-      <div class="duo-seat" id="dual-seat-P">
-        <div class="duo-head"><strong>席 P · 副驾</strong><span class="duo-state" data-state>待开始</span><span class="muted">mic-P</span></div>
-        <div class="duo-asr" data-asr>—</div>
-        <ul class="tl-events" data-events></ul>
+    </section>
+    <div class="duo-layers">
+      <div class="duo-layer duo-layer-front">
+        <div class="duo-layer-title"><strong>前台 · 实时交互层</strong><span class="muted">流式前缀 → 判停三态 → CONFIRMED → 往后执行（新话不必等旧任务做完）</span></div>
+        <div class="grid duo-grid">
+          <div class="duo-seat" id="dual-seat-D">
+            <div class="duo-head"><strong>主驾（席 D）</strong><span class="duo-state" data-state>待开始</span><span class="muted">mic-D</span></div>
+            <div class="duo-asr" data-asr>—</div>
+            <div class="duo-hub" data-hub>
+              <div class="dh-top">这一版出字 <span data-hub-version>—</span>
+                <span class="muted">· 场景取一次 · 说没说完 + 接不接 + 应一声 + 节奏 并发（垫句只在积极且说满 1.5 秒问；冷场只在安静到刻度才问：约 4s / 10s，之后每 8s）</span></div>
+              <div class="duo-stage" data-hub-stage>
+                <span class="st">出字</span><span class="st">中枢并发（说没说完 + 接不接）</span>
+                <span class="st">闸门</span><span class="st">工具披露</span><span class="st">决策 / 交后台</span>
+              </div>
+              <div class="duo-hub-grid">
+                <div><span class="dh-k">场景</span><span class="dh-v" data-hub-scene>—</span></div>
+                <div><span class="dh-k">说没说完</span><span class="dh-v" data-hub-eot>—</span></div>
+                <div><span class="dh-k">接不接</span><span class="dh-v" data-hub-accept>—</span></div>
+                <div><span class="dh-k">闸门</span><span class="dh-v" data-hub-gate>—</span></div>
+                <div><span class="dh-k">应声判断</span><span class="dh-v" data-hub-ack-judge>—</span></div>
+                <div><span class="dh-k">应一声</span><span class="dh-v" data-hub-ack>—</span></div>
+                <div><span class="dh-k">节奏</span><span class="dh-v" data-hub-pace>—</span></div>
+                <div><span class="dh-k">垫一句</span><span class="dh-v" data-hub-cushion>—</span></div>
+                <div><span class="dh-k">两人同时说</span><span class="dh-v" data-hub-floor>—</span></div>
+                <div><span class="dh-k">冷场判断</span><span class="dh-v" data-hub-quiet-judge>—</span></div>
+                <div><span class="dh-k">冷场开口</span><span class="dh-v" data-hub-quiet>—</span></div>
+              </div>
+            </div>
+            <ul class="tl-events" data-events></ul>
+          </div>
+          <div class="duo-seat" id="dual-seat-P">
+            <div class="duo-head"><strong>副驾（席 P）</strong><span class="duo-state" data-state>待开始</span><span class="muted">mic-P</span></div>
+            <div class="duo-asr" data-asr>—</div>
+            <div class="duo-hub" data-hub>
+              <div class="dh-top">这一版出字 <span data-hub-version>—</span>
+                <span class="muted">· 场景取一次 · 说没说完 + 接不接 + 应一声 + 节奏 并发（垫句只在积极且说满 1.5 秒问；冷场只在安静到刻度才问：约 4s / 10s，之后每 8s）</span></div>
+              <div class="duo-stage" data-hub-stage>
+                <span class="st">出字</span><span class="st">中枢并发（说没说完 + 接不接）</span>
+                <span class="st">闸门</span><span class="st">工具披露</span><span class="st">决策 / 交后台</span>
+              </div>
+              <div class="duo-hub-grid">
+                <div><span class="dh-k">场景</span><span class="dh-v" data-hub-scene>—</span></div>
+                <div><span class="dh-k">说没说完</span><span class="dh-v" data-hub-eot>—</span></div>
+                <div><span class="dh-k">接不接</span><span class="dh-v" data-hub-accept>—</span></div>
+                <div><span class="dh-k">闸门</span><span class="dh-v" data-hub-gate>—</span></div>
+                <div><span class="dh-k">应声判断</span><span class="dh-v" data-hub-ack-judge>—</span></div>
+                <div><span class="dh-k">应一声</span><span class="dh-v" data-hub-ack>—</span></div>
+                <div><span class="dh-k">节奏</span><span class="dh-v" data-hub-pace>—</span></div>
+                <div><span class="dh-k">垫一句</span><span class="dh-v" data-hub-cushion>—</span></div>
+                <div><span class="dh-k">两人同时说</span><span class="dh-v" data-hub-floor>—</span></div>
+                <div><span class="dh-k">冷场判断</span><span class="dh-v" data-hub-quiet-judge>—</span></div>
+                <div><span class="dh-k">冷场开口</span><span class="dh-v" data-hub-quiet>—</span></div>
+              </div>
+            </div>
+            <ul class="tl-events" data-events></ul>
+          </div>
+        </div>
+      </div>
+      <div class="duo-layer duo-layer-back">
+        <div class="duo-layer-title"><strong>后台 · 任务调度层</strong><span class="muted">任务台账 + 相关打分 + 排队执行（FIFO 先来后到；已做完不进候选）</span></div>
+        <div class="duo-orchestra" id="dual-orchestra">
+          <div class="duo-head"><strong>编排泳道 · 一个脑</strong><span class="muted">task_* / au_* / receipt</span></div>
+          <ul class="tl-events" data-events></ul>
+        </div>
       </div>
     </div>
     <div id="dual-verdict"></div>
@@ -266,6 +444,7 @@
     <details id="raw-section" class="card"><summary>原始 JSON · 全部结果</summary><pre id="raw"></pre></details>
   </section>
 </main>
+<script src="/mic_route.js"></script>
 <script>
   const byId = id => document.getElementById(id);
   const pretty = value => JSON.stringify(value, null, 2);
@@ -897,18 +1076,21 @@
     byId('mic-controls').hidden = mode !== 'mic';
     byId('confirm-controls').hidden = mode !== 'confirm';
     byId('dual-controls').hidden = mode !== 'dual';
+    byId('dualmic-controls').hidden = mode !== 'dualmic';
     byId('confirm-card').hidden = true;
     byId('dual-card').hidden = true;
-    byId('stream-card').hidden = mode === 'single' || mode === 'dual';
+    byId('stream-card').hidden = mode === 'single' || mode === 'dual' || mode === 'dualmic';
     byId('results').hidden = true;
     byId('error').hidden = true;
     timeline.reset();
     byId('status').textContent = mode === 'stream' ? '流式模拟：输入文本（可用 |600| 停顿）后发送'
       : mode === 'confirm' ? '确认轮：填第一轮指令与二轮回（模拟），点「跑确认轮」'
       : mode === 'dual' ? '双席：两路各填一句（|600| = 停顿并切段），点「跑双席」'
+      : mode === 'dualmic' ? '双席真麦：给 D / P 各选一个输入设备，点「开始」'
       : mode === 'mic' ? '麦克风模式：点「开始说话」' : '准备就绪 · Enter 发送';
     // 开始按钮不因为"还有旧连接"而禁用：新一轮会自己把旧连接收掉（旧轮用例已在服务端登记，仍可保存）
     if (mode === 'mic') { byId('mic-start').disabled = false; if (!mic.context) byId('mic-stop').disabled = true; }
+    if (mode === 'dualmic') dualmicRefreshDevices();
   }
   byId('mode').addEventListener('change', applyMode);
   applyMode();                                   // 进页面就按默认模式（麦克风 + 200 工具）摆好面板
@@ -1001,13 +1183,19 @@
 
   // ---------- 双席：两路干净 ASR -> DualSeatSession -> /api/session/dual/stream ----------
   const DUAL_SEAT_IDS = ['D', 'P'];
+  const SEAT_NAME = {D: '主驾', P: '副驾'};
   const DUAL_PRESETS = [
-    {label: 'D 导航回家 / P 把空调调到24度', d: '导航回家', p: '把空调调到24度'},
-    {label: 'D 帮我导航到|1500|人民广场 / P 放首歌', d: '帮我导航到|1500|人民广场', p: '放首歌'},
-    {label: 'D 我有点冷，开个座椅加热 / P 导航去公司', d: '我有点冷，开个座椅加热', p: '导航去公司'}
+    {label: '去向① 说完且要接 · 主驾「导航回家」→ 开闸进 Agent', d: '导航回家', p: ''},
+    {label: '去向② 说完但不接 · 主驾「咱晚上去哪吃」→ 只进上下文', d: '咱晚上去哪吃', p: ''},
+    {label: '去向③ 判停说还没说完 · 主驾「帮我看看前面那个」→ 先不开闸（静音窗到上限后才按接不接判）', d: '帮我看看前面那个', p: ''},
+    {label: '两席各干各的 · 主驾导航 / 副驾调空调（各开一条任务）', d: '导航回家', p: '把空调调到24度'},
+    {label: '并进 · 主驾「开空调」/ 副驾「我也要一样的」', d: '开空调', p: '我也要一样的'},
+    {label: '主驾帮我导航到人民广场 / 副驾放首歌', d: '帮我导航到|1500|人民广场', p: '放首歌'},
+    {label: '主驾「我有点冷，开个座椅加热」/ 副驾「导航去公司」', d: '我有点冷，开个座椅加热', p: '导航去公司'}
   ];
   const dualSeatState = {D: {}, P: {}};
   let dualRaw = [];
+  let dualEnabled = [...DUAL_SEAT_IDS];   // 本轮开着的席（提交时快照；关掉的席不在里面）
 
   function dualNode(seat, selector) { return byId('dual-seat-' + seat).querySelector(selector); }
   function dualSetState(seat, value) {
@@ -1029,19 +1217,349 @@
   function dualReset() {
     dualRaw = [];
     for (const seat of DUAL_SEAT_IDS) {
-      dualNode(seat, '[data-state]').textContent = '待开始';
-      dualNode(seat, '[data-state]').className = 'duo-state';
-      dualNode(seat, '[data-asr]').textContent = '—';
+      const on = dualEnabled.includes(seat);
+      dualNode(seat, '[data-state]').textContent = on ? '待开始' : '已关闭';
+      dualNode(seat, '[data-state]').className = 'duo-state' + (on ? '' : ' off');
+      dualNode(seat, '[data-asr]').textContent = on ? '—' : '（开关关着，不参与本轮）';
       dualNode(seat, '[data-events]').replaceChildren();
-      dualSeatState[seat] = {text: '', decision: null, confirmMs: null};
+      dualNode(seat, '[data-hub-version]').textContent = '—';
+      dualNode(seat, '[data-hub-scene]').textContent = '—';
+      dualNode(seat, '[data-hub-eot]').textContent = '—';
+      dualNode(seat, '[data-hub-accept]').textContent = '—';
+      dualNode(seat, '[data-hub-gate]').textContent = '—';
+      dualNode(seat, '[data-hub-ack-judge]').textContent = '—';
+      dualNode(seat, '[data-hub-ack]').textContent = '—';
+      dualNode(seat, '[data-hub-pace]').textContent = '—';
+      dualNode(seat, '[data-hub-cushion]').textContent = '—';
+      dualNode(seat, '[data-hub-floor]').textContent = '—';
+      dualNode(seat, '[data-hub-quiet-judge]').textContent = '—';
+      dualNode(seat, '[data-hub-quiet]').textContent = '—';
+      const hpBox = byId('hub-policy-live') && byId('hub-policy-live').querySelector('[data-seat="' + seat + '"]');
+      if (hpBox) {
+        hpBox.querySelectorAll('[data-hp]').forEach(el => { el.textContent = '—'; });
+        const anchor = hpBox.querySelector('[data-hp="anchor"]');
+        if (anchor) { anchor.textContent = '上一声：—'; anchor.classList.remove('bad'); }
+      }
+      dualNode(seat, '[data-hub-stage]').querySelectorAll('.st').forEach(el => { el.className = 'st'; });
+      dualSeatState[seat] = {text: '', decision: null, confirmMs: null, hub: {}, ack: {}, pace: {}, cushion: {}, floor: {}, quiet: {}, speech: {}};
+      byId('dual-seat-' + seat).classList.toggle('duo-off', !on);
     }
     byId('dual-metrics').replaceChildren();
     byId('dual-verdict').replaceChildren();
+    byId('dual-orchestra').querySelector('[data-events]').replaceChildren();
     byId('dual-raw').textContent = '';
   }
+  const HUB_TEXT = {
+    hub_eot: d => '判停 · ' + ({complete: '说完', cut: '说完被截断', wait: '还没说完', error: '判停失败'}[d.label] || d.label)
+      + (d.may_confirm ? ' · 能确认' : ' · 还不能确认'),
+    hub_accept: d => '接不接 · ' + (d.state === 'pending' ? '还在飞' : d.accept === true ? '要接'
+      : d.accept === false ? '不接' : '判断失败') + ' · ' + (d.source || '—'),
+    gate_decision: d => '闸门 · ' + d.state + '｜' + (d.reason || ''),
+    gate_open: d => '闸门开（说完且要接）· ' + (d.reason || ''),
+    gate_wait: d => '还没说完 · 先不开闸',
+    gate_context_only: d => '不开闸 · 只进上下文',
+    // 方案 B（wiki §13）：不接的原话按席留最近 3 句（带标签、跨席）；只在开闸那一轮两栏带进 Agent。
+    // 期一（2026-11-16）：应一声＝中枢的「陪着说」——台面出字 + 播报桩，不记住、不开闸、不进 Agent。
+    ack_spoken: d => '应一声「' + (d.text || '') + '」· ' + (d.chars || 0) + ' 字'
+      + ' · 距上一声 ' + (d.gap_ms == null ? '—' : Math.round(d.gap_ms) + 'ms')
+      + (d.spoken_total != null ? ' · 本席共 ' + d.spoken_total + ' 次' : ''),
+    ack_gate: d => '没出声 · ' + (d.reason || ''),
+    // 期二（2026-11-16）：节奏四档 + 垫一句（只有在「积极且已连续说满 1.5 秒」才问垫句）。
+    hub_pace: d => '节奏 · ' + (d.label || d.pace || '—')
+      + (d.raw_pace && d.raw_pace !== d.pace ? '（新判 ' + d.raw_pace + '，先不硬切）' : '')
+      + (d.speech_ms != null ? ' · 已说 ' + Math.round(d.speech_ms) + 'ms' : ''),
+    hub_cushion: d => '垫句判断 · ' + (d.state === 'pending' ? '还在飞'
+      : d.say === true ? '可以垫一句' : d.say === false ? '不垫' : '判断失败')
+      + (d.reason ? ' · ' + d.reason : ''),
+    cushion_spoken: d => '垫一句「' + (d.text || '') + '」· ' + (d.chars || 0) + ' 字'
+      + (d.kind === 'cushion_back' ? ' · 垫句抢回' : '')
+      + (d.pace ? ' · 节奏积极' : '')
+      + (d.speech_ms != null ? ' · 已说 ' + Math.round(d.speech_ms) + 'ms' : '')
+      + (d.spoken_total != null ? ' · 本席共 ' + d.spoken_total + ' 句' : '')
+      + ' · 记住（进上下文）但不进 Agent',
+    cushion_gate: d => '没垫 · ' + (d.reason || ''),
+    cushion_stopped: d => '垫句停下 · 「' + (d.text || '') + '」· ' + (d.reason || ''),
+    // 期三（2026-11-16）：两人同时说四选——这边正在说 / 正在准备说、人又开口时才问一次。
+    // 让路＝改动前那条（作废本轮、话留下、回到收听）；另外三条只改插话的去处，不改收口与开闸。
+    floor_asked: d => '两人同时说 · 人又开口「' + (d.text || '（还没出字）') + '」：问一次四选'
+      + '（' + (d.source === 'vad' ? 'VAD 先开的口' : '出字到的这一版') + '）',
+    hub_floor: d => '四选判断 · ' + (d.state === 'pending' ? '还在飞'
+      : d.state === 'ok' ? '「' + (d.label || d.outlet || d.choice || '—') + '」'
+        : d.state === 'timeout' ? '超时 → 继续说' : '失败 → 继续说')
+      + (d.reason && d.state !== 'ok' ? ' · ' + d.reason : ''),
+    floor_outcome: d => '四选出口 · ' + (d.label || d.outlet || '—') + '｜' + (d.reason || ''),
+    floor_queued: d => '插话排队 · 「' + (d.text || '') + '」等这句说完作为下一轮回答',
+    floor_released: d => '插话放行 · 「' + (d.text || '') + '」作为下一轮发出（字不丢、顺序不变）',
+    floor_context: d => '插话只进旁听 · 「' + (d.text || '') + '」（不是对车说，不进 Agent）',
+    floor_gate: d => '没垫（垫句抢回）· ' + (d.reason || ''),
+    floor_hold: d => '四选还在飞 · 当前这句先不落地（等判断回来再定）',
+    floor_insertion: d => '同一段插话续版 · 「' + (d.text || '') + '」',
+    // 期四（2026-11-16）：冷场三选——安静到刻度、真的没人说话才问一次（从「中枢最后一句说完」起算）。
+    // 三条出口：再等 / 主动接一句 / 问一句（约 10 秒之后才允许）；开口只接上文、不进 Agent。
+    quiet_asked: d => '冷场 · 安静 ' + ((d.quiet_ms || 0) / 1000).toFixed(1) + ' 秒：问一次要不要开口'
+      + (d.check_allowed ? '（这一拍可以问一句）' : '（这一拍还不能问一句）'),
+    hub_quiet: d => '冷场判断 · ' + (d.state === 'pending' ? '还在飞'
+      : d.state === 'ok' ? '「' + (d.label || d.outlet || d.choice || '—') + '」'
+        : d.state === 'timeout' ? '超时 → 不出声（按再等）' : '失败 → 不出声（按再等）')
+      + (d.reason && d.state !== 'ok' ? ' · ' + d.reason : ''),
+    quiet_gate: d => '冷场没出声 · ' + (d.reason || ''),
+    quiet_spoken: d => '冷场开口「' + (d.text || '') + '」· ' + (d.chars || 0) + ' 字'
+      + ' · ' + (d.label || d.outlet || '')
+      + '（安静 ' + ((d.quiet_ms || 0) / 1000).toFixed(1) + ' 秒）'
+      + ' · 记住（进上下文）但不进 Agent',
+    quiet_cleared: d => '有人开口 · 冷场计时清零（' + (d.why || '') + '）',
+    overhear_recorded: d => '不是对车说的 · 已按席留存：' + (d.text || '')
+      + (d.kept != null ? '（本席第 ' + d.kept + '/' + (d.keep_per_seat ?? 3) + ' 句）' : ''),
+    agent_context: d => '开闸带进 Agent（两栏）· ' + String(d.columns || '（无）').replace(/\n/g, ' / '),
+  };
+  function dualHubRender(seat) {
+    const node = byId('dual-seat-' + seat);
+    const hub = dualSeatState[seat].hub || {};
+    const gate = hub.gate || {};
+    const route = gate.route;
+    node.querySelector('[data-hub-version]').textContent =
+      hub.version ? 'v' + hub.version + (hub.text ? '「' + hub.text + '」' : '') : '—';
+    const stage = [...node.querySelectorAll('[data-hub-stage] .st')];
+    stage.forEach(el => { el.className = 'st'; });
+    if (hub.version) { stage[0].className = 'st on'; stage[1].className = 'st on'; }
+    if (route === 'agent') { for (let i = 2; i <= 4; i += 1) stage[i].className = 'st hit'; }
+    else if (route === 'context_only') { for (let i = 2; i <= 4; i += 1) stage[i].className = 'st stop'; }
+    else if (gate.state) stage[2].className = 'st on';
+    const scene = gate.scene || hub.scene || {};
+    node.querySelector('[data-hub-scene]').textContent = scene.summary
+      ? scene.summary + ' · rev ' + (scene.revision ?? '—') + ' · 取快照时已旧 '
+        + (scene.age_ms != null ? Math.round(scene.age_ms) + 'ms' : '—') : '无场景（照常判）';
+    const eot = gate.eot || hub.eot || {};
+    node.querySelector('[data-hub-eot]').textContent = eot.label
+      ? ({complete: '说完', cut: '说完被截断', wait: '还没说完', error: '判停失败'}[eot.label] || eot.label)
+        + (eot.may_confirm ? ' · 能确认' : ' · 还不能确认')
+        + (eot.confidence != null ? ' · ' + Math.round(eot.confidence * 100) + '%' : '') : '还没回来';
+    const acc = gate.accept || hub.accept || {};
+    const meta = gate.accept_source || hub.accept_source || {};
+    const notDecided = meta.decided === false && !String(meta.model || '').includes('未拍板') ? '（未拍板）' : '';
+    node.querySelector('[data-hub-accept]').textContent = (acc.state === 'pending' ? '还在飞'
+      : acc.accept === true ? '要接' : acc.accept === false ? '不接' : '判断失败')
+      + ' · ' + (meta.source || acc.source || '—') + notDecided;
+    const gateLabel = gate.state
+      || {agent: '开闸', context_only: '只进上下文', wait: '还没说完'}[route] || '';
+    node.querySelector('[data-hub-gate]').textContent = gateLabel
+      ? gateLabel + ' · ' + (gate.reason || '') : '—';
+    // 期一：应一声（中枢的陪着说）。判断在不在飞 / 判断说要不要出 / 已经出了几次、隔了多久 —— 台面一眼看全。
+    const ackJudge = hub.ackJudge || hub.ack || {};
+    node.querySelector('[data-hub-ack-judge]').textContent =
+      ackJudge.state === 'pending' ? '还在飞'
+        : ackJudge.say === true ? '可以应一声' : ackJudge.say === false ? '不出声' : '判断失败';
+    const spoken = dualSeatState[seat].ack || {};
+    node.querySelector('[data-hub-ack]').textContent = spoken.count
+      ? '已出声 ' + spoken.count + ' 次 · 上次「' + (spoken.lastText || '') + '」'
+        + (spoken.lastGap == null ? '' : ' · 隔 ' + Math.round(spoken.lastGap) + 'ms')
+      : '还没出声';
+    // 期二：节奏（这一拍实际的档）+ 垫一句（只在「积极且已说满 1.5 秒」时才会问）
+    const paceSt = hub.paceJudge || hub.pace || {};
+    const paceWords = {normal: '平常', patient: '耐心', narrative: '讲述', eager: '积极'};
+    node.querySelector('[data-hub-pace]').textContent = paceSt.state === 'pending' ? '还在飞'
+      : paceSt.state === 'timeout' || paceSt.state === 'failed' ? '判断失败（保持上一拍）'
+        : paceSt.pace ? (paceWords[paceSt.pace] || paceSt.pace)
+          + (paceSt.held ? '（先稳住，新判 ' + (paceWords[paceSt.raw_pace] || paceSt.raw_pace || '—') + '）' : '')
+          : '—';
+    const cushSt = dualSeatState[seat].cushion || {};
+    const cushJudge = hub.cushionJudge || hub.cushion || {};
+    node.querySelector('[data-hub-cushion]').textContent = cushSt.count
+      ? '已垫 ' + cushSt.count + ' 句 · 上次「' + (cushSt.lastText || '') + '」'
+        + (cushSt.lastGap == null ? '' : ' · 隔 ' + Math.round(cushSt.lastGap) + 'ms')
+      : (cushJudge.state === 'not_asked' ? '没问：' + (cushJudge.reason || '')
+        : cushJudge.state === 'pending' ? '还在飞'
+          : cushJudge.asked ? '问了，还没垫' : '还没垫');
+    // 期三：两人同时说（只在「这边正在说 / 正在准备说，人又开口」时才问一次）
+    const floorSt = dualSeatState[seat].floor || {};
+    const floorJudge = hub.floorJudge || hub.floor || {};
+    node.querySelector('[data-hub-floor]').textContent = floorSt.outlet
+      ? (floorSt.label || floorSt.outlet) + '（第 ' + (floorSt.episode ?? '—') + ' 回插话）'
+        + (floorSt.closing ? ' · 已作废本轮' : floorSt.queued ? ' · 已排队' : '')
+      : (floorJudge.state === 'pending' ? '还在飞'
+        : floorJudge.state === 'timeout' || floorJudge.state === 'failed' ? '判断失败 → 继续说'
+          : floorJudge.label ? floorJudge.label : '还没问');
+    // 期四：冷场三选（安静到刻度才问一次；三条出口都不进 Agent，开口只接上文）
+    const quietSt = dualSeatState[seat].quiet || {};
+    const quietJudge = hub.quietJudge || hub.quiet || {};
+    node.querySelector('[data-hub-quiet-judge]').textContent =
+      quietJudge.state === 'pending' ? '还在飞'
+        : quietJudge.state === 'ok'
+          ? '「' + (quietJudge.label || quietJudge.outlet || '—') + '」'
+            + (quietJudge.quiet_ms != null ? ' · 安静 ' + (quietJudge.quiet_ms / 1000).toFixed(1) + 's' : '')
+          : quietJudge.state === 'timeout' ? '超时 → 不出声（按再等）'
+            : quietJudge.state === 'failed' ? '判断失败 → 不出声（按再等）'
+              : '还没问';
+    node.querySelector('[data-hub-quiet]').textContent = quietSt.count
+      ? '已开口 ' + quietSt.count + ' 次 · 上次「' + (quietSt.lastText || '') + '」'
+        + (quietSt.lastGap == null ? '' : ' · 隔 ' + Math.round(quietSt.lastGap) + 'ms')
+      : (quietSt.cleared ? '有人开口，已清零' : '还没开口');
+    dualPolicyRender(seat);
+  }
+  // 期五：四处出声的口径（同一时刻最多一句 / 垫句优先于应声 / 有人说话走应声·垫句、没人说话走冷场 /
+  // 两人同时说只在「正在说 / 正在准备说」，应一声不算）。这一块只读现有事件，不另发判断。
+  const HP_KIND = {ack: '应一声', cushion: '垫一句', quiet: '冷场开口'};
+  function hpSourceBrief(source) {
+    const text = String(source || '');
+    if (text.includes('离线')) return ' · 离线替身（不冒充真判断）';
+    if (text.includes('8009')) return ' · 真判断 8009';
+    return '';
+  }
+  function dualSpeechTrack(seat, kind, data) {
+    const sp = dualSeatState[seat].speech || (dualSeatState[seat].speech = {});
+    const t = data.t_ms == null ? null : data.t_ms;
+    if (sp.lastT != null && t != null && t === sp.lastT) sp.sameTick = true;
+    sp.lastT = t == null ? sp.lastT : t;
+    sp.lastKind = data.kind === 'cushion_back' ? '垫句抢回' : (HP_KIND[kind] || kind);
+    sp.lastText = data.text || '';
+  }
+  function dualPolicyRender(seat) {
+    const box = byId('hub-policy-live') && byId('hub-policy-live').querySelector('[data-seat="' + seat + '"]');
+    if (!box) return;
+    const st = dualSeatState[seat] || {};
+    const hub = st.hub || {};
+    const put = (slot, text) => { const el = box.querySelector('[data-hp="' + slot + '"]'); if (el) el.textContent = text; };
+    const ackJ = hub.ackJudge || {}, cushJ = hub.cushionJudge || {};
+    const floorJ = hub.floorJudge || {}, quietJ = hub.quietJudge || {};
+    const ackS = st.ack || {}, cushS = st.cushion || {}, floorS = st.floor || {}, quietS = st.quiet || {};
+    const judgeText = (judge, on, off) => judge.state === 'pending' ? '判断还在飞'
+      : judge.state === 'timeout' || judge.state === 'failed' ? '判断失败 / 超时（不出声）'
+        : judge.say === true ? on : judge.say === false ? off : '—';
+    const spokenText = (state, countWord, unit) => state.count
+      ? '已出声 ' + state.count + unit + ' · 上次「' + (state.lastText || '') + '」'
+        + (state.lastGap == null ? '' : ' · 隔 ' + Math.round(state.lastGap) + 'ms')
+      : '还没出声';
+    // 垫一句（最高优先）
+    const cushJudgeText = cushJ.state === 'not_asked'
+      ? '没问：' + (cushJ.reason || '未到「积极 + 说满 1.5 秒」')
+      : judgeText(cushJ, '可以垫一句', '判断说不垫');
+    put('cushion', cushJudgeText + hpSourceBrief(cushJ.source) + ' · ' + spokenText(cushS, ' 句', ' 句'));
+    // 应一声（同刻让位给垫句）
+    put('ack', judgeText(ackJ, '可以应一声', '不出声') + hpSourceBrief(ackJ.source)
+      + ' · ' + spokenText(ackS, ' 次', ' 次'));
+    // 两人同时说：两个入口；应一声不算
+    const floorWindowText = floorS.window === 'speech' ? '正在说一句垫句'
+      : floorS.window === 'turn' ? '正在准备说 / 正在回答' : '还没问';
+    const floorJudgeText = floorJ.state === 'pending' ? '还在飞'
+      : floorJ.state === 'timeout' || floorJ.state === 'failed' ? '判断失败 → 继续说'
+        : floorJ.state === 'ok' ? '「' + (floorJ.label || floorJ.outlet || '—') + '」'
+          : '还没问';
+    put('floor', floorJudgeText + ' · 窗口：' + floorWindowText
+      + (floorS.released ? ' · 插话已放行' : floorS.queued ? ' · 插话已排队' : '')
+      + hpSourceBrief(floorJ.source));
+    // 冷场开口（没人说话才问）
+    const quietJudgeText = quietJ.state === 'pending' ? '判断还在飞'
+      : quietJ.state === 'ok' ? '「' + (quietJ.label || quietJ.outlet || '—') + '」'
+        + (quietJ.quiet_ms != null ? ' · 安静 ' + (quietJ.quiet_ms / 1000).toFixed(1) + 's' : '')
+        : quietJ.state === 'timeout' || quietJ.state === 'failed' ? '判断失败 / 超时（不出声）'
+          : '还没问（安静到刻度才问）';
+    const quietStateText = quietS.count
+      ? '已出声 ' + quietS.count + ' 次 · 上次「' + (quietS.lastText || '') + '」'
+        + (quietS.lastGap == null ? '' : ' · 隔 ' + Math.round(quietS.lastGap) + 'ms')
+      : quietS.cleared ? '有人开口，已清零（这一拍不出声）' : '还没出声';
+    put('quiet', quietJudgeText + hpSourceBrief(quietJ.source) + ' · ' + quietStateText);
+    // 上一声：四处共用一个 1 秒静默窗口；同一时刻出现两句就是异常（台面直接标红）。
+    const sp = st.speech || {};
+    const anchor = box.querySelector('[data-hp="anchor"]');
+    if (anchor) {
+      if (sp.lastT == null) {
+        anchor.textContent = '上一声：— · 出声后 1 秒内谁都不再出声';
+        anchor.classList.remove('bad');
+      } else {
+        anchor.textContent = '上一声：' + (sp.lastKind || '—') + '「' + (sp.lastText || '') + '」@ '
+          + Math.round(sp.lastT) + 'ms · 出声后 1 秒内谁都不再出声'
+          + (sp.sameTick ? ' · ⚠ 同一时刻不止一句（异常）' : '');
+        anchor.classList.toggle('bad', !!sp.sameTick);
+      }
+    }
+  }
   function dualApply(type, data) {
+    if (data.layer === 'orchestra') { dualApplyOrchestra(type, data); return; }   // 编排层事件（无 seat_id）走中间泳道
     const seat = data.seat_id;
     if (!seat || !dualSeatState[seat]) return;              // 跨席事件不该出现；出现了也不画错席
+    if (data.layer === 'hub') {                             // 中枢：场景 / 判停 / 接不接 / 闸门
+      const st = dualSeatState[seat].hub || (dualSeatState[seat].hub = {});
+      if (type === 'hub_text') {
+        st.version = data.version; st.text = data.text; st.scene = data.scene;
+        st.eot = null; st.accept = null; st.gate = null;
+      } else if (type === 'hub_eot') { st.eot = data; }
+      else if (type === 'hub_accept') { st.accept = data; }
+      else if (type === 'hub_ack') { st.ack = data; st.ackJudge = data; }
+      else if (type === 'hub_pace') { st.pace = data; st.paceJudge = data; }
+      else if (type === 'hub_cushion') { st.cushion = data; st.cushionJudge = data; }
+      else if (type === 'hub_floor') {
+        st.floor = data; st.floorJudge = data;
+        const fSt = dualSeatState[seat].floor || (dualSeatState[seat].floor = {});
+        if (data.state === 'ok') { fSt.outlet = data.outlet; fSt.label = data.label; }
+      }
+      else if (type === 'hub_quiet') {
+        st.quiet = data; st.quietJudge = data;
+        const qSt = dualSeatState[seat].quiet || (dualSeatState[seat].quiet = {});
+        if (data.state === 'ok') { qSt.outlet = data.outlet; qSt.label = data.label; }
+      }
+      else if (type === 'quiet_asked') {
+        const qSt = dualSeatState[seat].quiet || (dualSeatState[seat].quiet = {});
+        qSt.episode = data.episode; qSt.quietMs = data.quiet_ms;
+        qSt.checkAllowed = !!data.check_allowed; qSt.outlet = null; qSt.label = null;
+        qSt.lastAt = data.t_ms;
+      }
+      else if (type === 'quiet_spoken') {
+        const qSt = dualSeatState[seat].quiet || (dualSeatState[seat].quiet = {});
+        qSt.count = data.spoken_total ?? ((qSt.count || 0) + 1);
+        qSt.lastText = data.text || ''; qSt.lastGap = data.gap_ms ?? null;
+        qSt.outlet = data.outlet; qSt.label = data.label;
+        qSt.context = !!data.context; qSt.agent = data.agent === true;
+        dualSpeechTrack(seat, 'quiet', data);
+      }
+      else if (type === 'quiet_cleared') {
+        const qSt = dualSeatState[seat].quiet || (dualSeatState[seat].quiet = {});
+        qSt.cleared = data.why || ''; qSt.outlet = null; qSt.label = null;
+      }
+      else if (type === 'floor_asked') {
+        const fSt = dualSeatState[seat].floor || (dualSeatState[seat].floor = {});
+        fSt.episode = data.episode; fSt.text = data.text || ''; fSt.outlet = null; fSt.label = null;
+        fSt.window = data.window || null; fSt.hubState = data.hub_state || null;
+        fSt.closing = false; fSt.queued = false;
+      }
+      else if (type === 'floor_outcome') {
+        const fSt = dualSeatState[seat].floor || (dualSeatState[seat].floor = {});
+        fSt.outlet = data.outlet; fSt.label = data.label; fSt.episode = data.episode;
+        fSt.window = data.window || fSt.window;
+        fSt.closing = !!data.void; fSt.queued = !!data.queued; fSt.contextOnly = !!data.context_only;
+      }
+      else if (type === 'floor_released') {
+        const fSt = dualSeatState[seat].floor || (dualSeatState[seat].floor = {});
+        fSt.released = data.text || ''; fSt.releasedIndex = data.index ?? null;
+      }
+      else if (type === 'cushion_stopped') {
+        // 让路落在垫句那一小段：这句垫句停下（本机只记一笔，不接真 TTS），插话留下继续听这一席。
+        const fSt = dualSeatState[seat].floor || (dualSeatState[seat].floor = {});
+        fSt.stopped = data.text || '';
+      }
+      else if (type === 'cushion_spoken') {
+        const cSt = dualSeatState[seat].cushion || (dualSeatState[seat].cushion = {});
+        cSt.count = data.spoken_total ?? ((cSt.count || 0) + 1);
+        cSt.lastText = data.text || ''; cSt.lastGap = data.gap_ms ?? null;
+        cSt.context = !!data.context; cSt.agent = data.agent === true;
+        dualSpeechTrack(seat, 'cushion', data);
+      }
+      else if (type === 'ack_spoken') {
+        const ackSt = dualSeatState[seat].ack || (dualSeatState[seat].ack = {});
+        ackSt.count = data.spoken_total ?? ((ackSt.count || 0) + 1);
+        ackSt.lastText = data.text || ''; ackSt.lastGap = data.gap_ms ?? null;
+        dualSpeechTrack(seat, 'ack', data);
+      }
+      else if (type === 'gate_decision' || type === 'gate_open' || type === 'gate_wait' || type === 'gate_context_only') {
+        st.gate = Object.assign({}, data, {
+          route: data.route || {gate_open: 'agent', gate_wait: 'wait', gate_context_only: 'context_only'}[type],
+        });
+      } else if (type === 'context_absorbed') {
+        dualLine(seat, '只进上下文：' + (data.text || ''), 'final');
+      }
+      dualHubRender(seat);
+      if (HUB_TEXT[type]) dualLine(seat, HUB_TEXT[type](data), 'hub');
+      return;
+    }
     if (type === 'asr_update') {
       byId('dual-seat-' + seat).querySelector('[data-asr]').textContent = data.text || '—';
       dualSeatState[seat].text = data.text || '';
@@ -1087,6 +1605,58 @@
     }
     if (type === 'error') { dualLine(seat, `错误 · ${data.error_type || ''} ${data.error || ''}`, 'error'); }
   }
+  // ---------- 编排泳道（后台 · 任务判断/执行）：消费无 seat_id 的 orchestra 层事件 ----------
+  const ORCHESTRA_TEXT = {
+    iu_open: e => `开 IU ${e.iu_id} · 席 ${e.seat} · 「${e.text || ''}」 · 任务 ${e.task_id}${e.merged ? '（并进）' : ''} · 队列位 ${e.queue_pos ?? '—'}`,
+    iu_committed: e => `IU 收口 ${e.iu_id} · ${e.why || ''}`,
+    au_decided: e => `决策 ${e.au_id} · ${e.kind || ''} ${e.tool || ''}${e.inherited_from ? '（指代 ' + e.inherited_from + '）' : ''}`,
+    au_held: e => `归并窗 ${e.au_id} · 等第二席附和（deadline ${e.deadline_ms ?? '—'}ms）`,
+    au_merged: e => `并进 ${e.au_id} · 席 ${e.seat} 加入 · 作用 ${(e.scope || []).join('+') || '—'}`,
+    au_inherited: e => `指代新开 ${e.au_id} · 席 ${e.seat} · 继承 ${e.inherited_from || ''}`,
+    au_executed: e => `落地 ${e.au_id} · ${e.tool || e.kind || ''} · 作用 ${(e.scope || []).join('+')} · ${e.receipt || ''}`,
+    au_abandoned: e => `作废 ${e.au_id} · ${e.why || ''}`,
+    au_awaiting_confirm: e => `待确认 ${e.au_id} · ${e.tool || ''}（跨席确认 C3 未做）`,
+    au_merge_timeout: e => `归并窗走完 ${e.au_id} · 按现有参与者落地`,
+    au_merge_released: e => `归并窗释放 ${e.au_id} · ${e.reason || ''}`,
+    orchestra_reference: e => `指代解析 · 席 ${e.seat} · 「${e.text || ''}」`,
+    orchestra_no_target: e => `无最近动作 · 席 ${e.seat} · 回问（第 ${e.asked ?? '—'} 次）`,
+    receipt: e => `回执 · ${e.text || ''}`,
+    task_open: e => `新开任务 ${e.task_id} · 席 ${e.seat} · 「${e.text || ''}」 · FIFO 位 ${e.queue_pos ?? '—'}`,
+    task_au_attached: e => `任务 ${e.task_id} 挂 AU ${e.au_id}`,
+    task_merged: e => `并进任务 ${e.task_id} · IU ${e.iu_id}（不开新任务）`,
+    task_relevance: e => {
+      const reason = {hit: '命中', none_relevant: '都不相关 → 新开', no_candidate: '无在跑任务 → 新开',
+        no_scorer: '无打分器 → 新开', scorer_error: '打分出错 → 新开', bad_hit: '命中已完结任务（拒绝）'}[e.reason] || e.reason;
+      const cands = (e.candidates || []).join('、') || '无';
+      let line = `任务判断 · 候选 [${cands}] → ${reason}`;
+      if (e.hit_task_id) line += ` · 命中 ${e.hit_task_id}`;
+      if (e.rejected_task_id) line += ` · 拒绝 ${e.rejected_task_id}`;
+      return line;
+    },
+    task_close: e => `任务收口 ${e.task_id} · ${e.state || ''}${e.executed !== undefined ? '（执行 ' + e.executed + ' / 作废 ' + e.abandoned + '）' : ''}`,
+  };
+  const ORCHESTRA_TONE = {
+    task_open: 'task', task_close: 'task', task_merged: 'task', task_au_attached: 'task', task_relevance: 'relevance',
+    au_executed: 'executed', receipt: 'executed', au_merged: 'executed', au_inherited: 'executed',
+    au_held: 'warn', au_decided: 'orchestra', au_abandoned: 'cancel', au_awaiting_confirm: 'warn',
+    iu_open: 'orchestra', iu_committed: 'orchestra',
+  };
+  function dualApplyOrchestra(type, data) {
+    const text = ORCHESTRA_TEXT[type] ? ORCHESTRA_TEXT[type](data) : type;
+    const tone = ORCHESTRA_TONE[type] || 'orchestra';
+    const list = byId('dual-orchestra').querySelector('[data-events]');
+    const item = document.createElement('li');
+    const time = document.createElement('span');
+    time.className = 'et';
+    time.textContent = Math.round(data.t_ms || 0) + 'ms';
+    const badge = document.createElement('span');
+    badge.className = 'tl-badge ' + tone;
+    badge.textContent = text;
+    item.append(time, badge);
+    list.append(item);
+    while (list.children.length > 200) list.firstElementChild.remove();
+    list.scrollTop = list.scrollHeight;
+  }
   function dualChip(box, label, tone) {
     const chip = document.createElement('span');
     chip.className = 'tl-chip' + (tone ? ' ' + tone : '');
@@ -1118,17 +1688,25 @@
     if (summary.errors) dualChip(box, `错误 ${summary.errors}`, 'warn');
     for (const seat of DUAL_SEAT_IDS) {
       const values = (summary.confirm_latency_ms || {})[seat] || [];
-      dualChip(box, `席 ${seat} 判停→往后走 ${values.length ? values.map(value => Math.round(value)).join('/') + 'ms' : '—'}`,
+      dualChip(box, `${SEAT_NAME[seat]} 判停→往后走 ${values.length ? values.map(value => Math.round(value)).join('/') + 'ms' : '—'}`,
         values.length ? 'ok' : '');
     }
     const verdict = byId('dual-verdict');
     verdict.replaceChildren();
     for (const seat of DUAL_SEAT_IDS) {
       const row = document.createElement('div');
+      if (!dualEnabled.includes(seat)) {
+        row.className = 'muted';
+        row.textContent = `${SEAT_NAME[seat]}：已关闭（开关关掉，不参与本轮、无事件、不走相关打分）`;
+        verdict.append(row);
+        continue;
+      }
       const decision = dualSeatState[seat].decision;
       const consumed = (texts[seat] || []).join(' / ') || '无';
-      row.textContent = `席 ${seat}：决策 ${decision ? `${decision.kind || ''} ${decision.tool || ''}` : '未产生'}`
+      const hubGate = (dualSeatState[seat].hub || {}).gate;
+      row.textContent = `${SEAT_NAME[seat]}：决策 ${decision ? `${decision.kind || ''} ${decision.tool || ''}` : '未产生'}`
         + ` · 已消费「${consumed}」`
+        + (hubGate && hubGate.state ? ` · 闸门「${hubGate.state}」` : ' · 闸门未出结论')
         + (dualSeatState[seat].text ? ` · 最后 ASR「${dualSeatState[seat].text}」` : '')
         + (!plan[seat] ? ' · 本席无输入' : '');
       verdict.append(row);
@@ -1138,6 +1716,20 @@
       warn.style.color = '#a61f32';
       warn.textContent = '串席告警：' + crossed.join('；');
       verdict.append(warn);
+    }
+    const brain = summary.brain;
+    if (brain) {
+      // 后台账（duo_done.summary.brain）：任务账 + AU 账 + 相关打分，只做展示层对账，不设门。
+      const row = document.createElement('div');
+      row.className = 'muted';
+      row.textContent = `后台账 · 任务 开 ${brain.task_total ?? 0} / 在跑 ${brain.task_open ?? 0}`
+        + ` / 做完 ${brain.task_done ?? 0} / 作废 ${brain.task_abandoned ?? 0}`
+        + ` · 落地 ${brain.au_executed ?? 0} / 作废 AU ${brain.au_abandoned ?? 0}`
+        + ` · 并进 ${brain.tasks_merged ?? 0} 次`
+        + ` · 相关打分 ${brain.relevance_calls ?? 0} 次（命中 ${brain.relevance_hits ?? 0}）`
+        + ` · 合并回执含两席 ${brain.receipt_has_both ? '是' : '否'}`
+        + ` · 账平 ${(brain.task_eq && brain.iu_eq) ? '是' : '否'}`;
+      verdict.append(row);
     }
   }
   function dualPresetOptions() {
@@ -1153,20 +1745,26 @@
   }
   async function dualSubmit() {
     const speed = Math.max(1, Number(byId('dual-speed').value) || 6);
-    const seats = {
-      D: {script: byId('dual-d').value.trim(), speed},
-      P: {script: byId('dual-p').value.trim(), speed}
-    };
-    if (!seats.D.script && !seats.P.script) {
+    const seats = {};
+    if (byId('dual-d-on').checked) seats.D = {script: byId('dual-d').value.trim(), speed};
+    if (byId('dual-p-on').checked) seats.P = {script: byId('dual-p').value.trim(), speed};
+    const hasAnyText = Object.values(seats).some(seat => seat.script);
+    if (!Object.keys(seats).length) {
       byId('error').hidden = false;
-      byId('error').textContent = '至少一路要有文本（席 D 或席 P）';
+      byId('error').textContent = '至少开一路（两路都关掉就没有输入了）';
+      return;
+    }
+    if (!hasAnyText) {
+      byId('error').hidden = false;
+      byId('error').textContent = '至少一路要有文本（开着的席里要 ≥1 席有内容）';
       return;
     }
     byId('dual-go').disabled = true;
     byId('error').hidden = true;
     byId('dual-card').hidden = false;
+    dualEnabled = Object.keys(seats);
     dualReset();
-    byId('status').textContent = '双席回放中：两路 ASR 各进各席，各自判停…';
+    byId('status').textContent = `${dualEnabled.length === 1 ? '单席' : '双席'}回放中：开着的路各进各席，关掉的路不参与…`;
     try {
       const response = await fetch('/api/session/dual/stream', {method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({seats, mock: byId('dual-mock').checked, tool_set: byId('tool-set').value,
@@ -1177,7 +1775,7 @@
         byId('dual-raw').textContent = pretty(dualRaw);
         if (type === 'duo_accepted') {
           const names = Object.keys(data.plan || {}).map(seat => `${seat}（${data.plan[seat].mic_id}，${data.plan[seat].updates} 条 ASR）`);
-          byId('status').textContent = `双席开始：${names.join(' + ')}${data.mock ? ' · 离线 mock' : ' · 真 KEV/LLM'} · ${data.session_id}`;
+          byId('status').textContent = `${names.length === 1 ? '单席' : '双席'}开始：${names.join(' + ')}${data.mock ? ' · 离线 mock' : ' · 真 KEV/LLM'} · ${data.session_id}`;
           continue;
         }
         if (type === 'duo_done') {
@@ -1203,12 +1801,323 @@
   dualPresetOptions();
   buildTurnConfig('turn-config-dual');
 
+  // ---------- 双席 · 真实麦克风：D/P 各选输入设备 → 两路独立 ASR → DualSeatSession ----------
+  // 新增真链（不拆上面的文本回放双席）。每条连接 = 一席，共用同一个 session_id 汇成一对；
+  // 每席各推 16kHz/20ms PCM，服务端每席一份独立 ASRStream，事件广播、前端按 seat_id 过滤。
+  const DUALMIC_RATE = 16000, DUALMIC_FRAME_SAMPLES = 320;   // 20 ms @16 kHz
+  const dualmic = {sessionId: null, seats: {}, turn: 0, mock: false, routeFailed: false};
+
+  function dualmicStatus(text) { byId('dualmic-status').textContent = text; }
+
+  // 开麦路由（与内心戏页同一套写法）：选了哪支就必须开哪支。
+  // 没授权时浏览器只给空设备号（deviceId = ''），按「默认」开就会两路落到同一支 —— 正是这次要修的 bug。
+  async function dualmicInputs(unlock) {
+    let all = await navigator.mediaDevices.enumerateDevices();
+    let inputs = all.filter(device => device.kind === 'audioinput');
+    if (unlock && !inputs.some(device => device.deviceId)) {
+      let probe = null;
+      try { probe = await navigator.mediaDevices.getUserMedia({audio: true}); }
+      catch (error) { throw new Error('还没给麦克风权限，拿不到真实设备号：' + error.message); }
+      finally { if (probe) probe.getTracks().forEach(track => track.stop()); }
+      all = await navigator.mediaDevices.enumerateDevices();
+      inputs = all.filter(device => device.kind === 'audioinput');
+    }
+    return inputs;
+  }
+  function dualmicSelection(seat) {
+    const select = byId('dualmic-device-' + seat);
+    const option = select.options[select.selectedIndex];
+    return {deviceId: select.value, label: option ? option.textContent : ''};
+  }
+  // 用真设备列表重建下拉：旧选择按「设备号 → 标签」保留（绝不悄悄换成另一支/默认那支）
+  function dualmicFill(inputs, wanted) {
+    for (const seat of DUAL_SEAT_IDS) {
+      const select = byId('dualmic-device-' + seat);
+      select.replaceChildren();
+      inputs.forEach((device, index) => select.append(
+        new Option(device.label || ('输入设备 ' + (index + 1)), device.deviceId)));
+      if (!inputs.length) select.append(new Option('（没有检测到输入设备）', ''));
+      const options = [...select.options];
+      const want = wanted && wanted[seat];
+      let index = -1;
+      if (want && want.deviceId) index = options.findIndex(option => option.value === want.deviceId);
+      if (index < 0 && want && want.label) {
+        index = options.findIndex(option => option.value && option.textContent === want.label);
+      }
+      if (index < 0) index = (seat === 'P' && options.length > 1) ? 1 : 0;   // P 默认第二支麦
+      select.selectedIndex = options.length ? index : -1;
+    }
+  }
+  async function dualmicRefreshDevices(unlock) {
+    // label 要授权后才读得到：没授权时用「输入设备 N」兜底，授权后自动补真名。
+    const wanted = {};
+    for (const seat of DUAL_SEAT_IDS) wanted[seat] = dualmicSelection(seat);
+    try {
+      const inputs = await dualmicInputs(!!unlock);
+      dualmicFill(inputs, wanted);
+      dualmicStatus(inputs.length
+        ? '检测到 ' + inputs.length + ' 个输入设备：给 D / P 各选一个（两席不能是同一支），点「开始」'
+        : '没有检测到输入设备（或未授权麦克风；点「开始」会请求授权）');
+      return true;
+    } catch (error) {
+      dualmicStatus('枚举设备失败：' + error.message);
+      return false;
+    }
+  }
+  // 点开始前把「两席到底要哪支」定死：没真设备号就先授权 + 重枚举；授权后列表刷新、按标签对不上的，
+  // 明确让人按真名再选一次（不猜、不按默认开）。
+  async function dualmicEnsureRoute(enabled) {
+    const before = {};
+    for (const seat of DUAL_SEAT_IDS) before[seat] = dualmicSelection(seat);
+    if (enabled.some(seat => !before[seat].deviceId)) {
+      const inputs = await dualmicInputs(true);
+      dualmicFill(inputs, before);
+      for (const seat of enabled) {
+        const now = dualmicSelection(seat);
+        if (!now.deviceId) {
+          throw new Error('席 ' + seat + ' 还没拿到真实设备号：浏览器没给麦克风权限或没有输入设备 —— '
+            + '先刷新设备、按真名选一次再开始（不按默认开）');
+        }
+        if (!before[seat].deviceId && now.label !== before[seat].label) {
+          throw new Error('授权后设备列表刷新了：请按真名重新选一次 D / P 的麦，再点开始（不按默认开）');
+        }
+      }
+    }
+    const selected = {};
+    for (const seat of enabled) selected[seat] = dualmicSelection(seat);
+    const plan = MicRoute.plan(selected);
+    if (!plan.ok) throw new Error(plan.message);
+    return selected;
+  }
+
+  function dualmicFlush(seat, samples) {
+    const state = dualmic.seats[seat];
+    if (!state) return;
+    const target = state.pending ? state.pending.length : 0;
+    const merged = new Int16Array(target + samples.length);
+    if (state.pending) merged.set(state.pending, 0);
+    merged.set(samples, target);
+    let offset = 0;
+    while (merged.length - offset >= DUALMIC_FRAME_SAMPLES) {
+      if (state.socket && state.socket.readyState === WebSocket.OPEN) {
+        state.socket.send(merged.slice(offset, offset + DUALMIC_FRAME_SAMPLES).buffer);
+        state.frames += 1;
+      }
+      offset += DUALMIC_FRAME_SAMPLES;
+    }
+    state.pending = offset < merged.length ? merged.slice(offset) : null;
+  }
+
+  async function dualmicSeatStart(seat, sessionId, turn, selected) {
+    // 每席：独立 getUserMedia(设备) → 独立 WebSocket → 独立 ASR（服务端每席一份 ASRStream）。
+    // 只按这一席选的那支开：设备号必须真有（空号 = 落到系统默认，直接失败）；浏览器实际给的
+    // 不是所选那支也算这一轮没开成（不悄悄用另一支顶上）。
+    const state = dualmic.seats[seat];
+    const deviceId = selected.deviceId;
+    if (!deviceId) throw new Error('席 ' + seat + ' 没有真实设备号：不按默认开麦');
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: {deviceId: {exact: deviceId}, channelCount: 1,
+                echoCancellation: false, noiseSuppression: false, autoGainControl: false}});
+    } catch (error) {
+      throw new Error('没打开所选那支麦「' + (selected.label || '所选设备') + '」：' + error.message);
+    }
+    const track = stream.getAudioTracks()[0];
+    const settings = (track && track.getSettings) ? track.getSettings() : {};
+    const granted = MicRoute.grant(selected, settings);
+    if (granted.known && !granted.ok) {
+      stream.getTracks().forEach(item => item.stop());
+      throw new Error(granted.message);
+    }
+    state.stream = stream;
+    state.selectedDeviceId = deviceId;
+    state.selectedLabel = selected.label || '';
+    state.actualDeviceId = granted.actualDeviceId || '';
+    state.actualLabel = granted.label || state.selectedLabel;
+    state.routeState = '';
+    state.routeMatch = granted.match;
+    dualLine(seat, '真在用：' + state.actualLabel
+      + (granted.known ? '（与所选一致）' : '（浏览器没回报设备号，按实际声音确认两路是否分开）'), 'ok');
+    state.context = new (window.AudioContext || window.webkitAudioContext)();
+    await state.context.resume();
+    const source = state.context.createMediaStreamSource(state.stream);
+    state.node = state.context.createScriptProcessor(2048, 1, 1);
+    state.node.onaudioprocess = event => {
+      if (dualmic.turn !== turn) return;
+      dualmicFlush(seat, micResample(event.inputBuffer.getChannelData(0), state.context.sampleRate));
+    };
+    const mute = state.context.createGain(); mute.gain.value = 0;
+    source.connect(state.node); state.node.connect(mute); mute.connect(state.context.destination);
+
+    const socket = new WebSocket(`${location.origin.replace(/^http/, 'ws')}`
+      + `/api/session/dual/mic?session_id=${encodeURIComponent(sessionId)}&seat=${seat}`);
+    state.socket = socket;
+    socket.binaryType = 'arraybuffer';
+    socket.onopen = () => {
+      if (dualmic.turn !== turn) return;
+      dualmicSendClaim(seat);
+      dualLine(seat, `设备就绪 · ASR 连接已建（session ${sessionId}）`, 'state');
+    };
+    socket.onmessage = message => {
+      if (dualmic.turn !== turn) return;
+      const {kind, data} = JSON.parse(message.data);
+      if (kind === 'ready') {
+        dualLine(seat, `就绪 · ${data.seat} · ${data.sample_rate}Hz/${data.frame_ms}ms`, 'ok');
+      } else if (kind === 'event') {
+        if (data.event === 'mic_route') { dualmicRoute(seat, data); return; }
+        if (data.event === 'duo_done') {
+          dualFillVerdict(data);
+          byId('status').textContent = data.timed_out ? '双席真麦结束：有席未在期限内收口' : '双席真麦回放完成';
+          dualmicStop();
+          return;
+        }
+        dualApply(data.event, data);           // 与文本回放同一套显示（按 seat_id 过滤）
+      } else if (kind === 'error') {
+        byId('error').hidden = false;
+        byId('error').textContent = `双席真麦 ${data.stage || ''} 错误：${data.error_type || ''} ${data.error || ''}`;
+      } else if (kind === 'stopping') {
+        dualLine(seat, '已停止送音频，等该席 ASR final 与收口…', 'cancel');
+      }
+    };
+    socket.onerror = () => {
+      if (dualmic.turn !== turn) return;
+      byId('error').hidden = false; byId('error').textContent = `席 ${seat} 的 ASR WebSocket 出错，见 server 日志`;
+    };
+    socket.onclose = () => {
+      if (dualmic.turn !== turn) return;
+      dualLine(seat, 'ASR 连接已关闭', 'cancel');
+    };
+  }
+
+  // 告诉服务端「这一席向浏览器要的是哪支、实际给的是哪支」（只有标签与是否一致，不发设备号）。
+  // 服务端拿这个 + 两路实际收到的声音，判这一轮到底有没有开成两支。
+  function dualmicSendClaim(seat) {
+    const state = dualmic.seats[seat];
+    if (!state || !state.socket || state.socket.readyState !== WebSocket.OPEN) return;
+    // 只有「浏览器明确给的是另一支（设备名也不对）」才报不一致；设备号回声对不上但名字一样/没名字
+    // 按不可判（null），由服务端按两路实际声音判——不拿回声冒充结论。
+    const match = state.routeMatch === true ? true : (state.routeMatch === false ? false : null);
+    try {
+      state.socket.send(JSON.stringify({cmd: 'route', seat: seat,
+        selected_label: state.selectedLabel || '', actual_label: state.actualLabel || '',
+        match: match, requested_exact: true}));
+    } catch (error) { /* 连接刚好断了：重连时会再报一次 */ }
+  }
+
+  // 服务端按两路实际收到的声音判「这一轮到底开成没开成两支」：
+  //   ok = 真分开；same_source = 两路是同一份声音；device_mismatch = 浏览器给错了。
+  // 后两种必须当场说清并停下 —— 静默按一路继续听就是「假装在听两路」。
+  function dualmicRoute(seat, data) {
+    const state = dualmic.seats[seat];
+    if (state) state.routeState = data.status || '';
+    if (data.status === 'ok') {
+      dualLine(seat, '两路已确认分开：各自是所选那支，两路电平走势对不上', 'ok');
+      return;
+    }
+    if (data.status === 'same_source' || data.status === 'device_mismatch') {
+      if (dualmic.routeFailed) return;
+      dualmic.routeFailed = true;
+      // `event` 是广播的：两席都收得到，只停一次。
+      const message = data.message || MicRoute.statusText(data.status);
+      byId('error').hidden = false;
+      byId('error').textContent = '没开成两支：' + message;
+      dualLine(seat, '这一轮没开成两支：' + message, 'cancel');
+      dualmicStop();
+    }
+  }
+
+  async function dualmicStart() {
+    const enabled = DUAL_SEAT_IDS.filter(seat => byId('dualmic-' + seat.toLowerCase() + '-on').checked);
+    if (!enabled.length) {
+      byId('error').hidden = false;
+      byId('error').textContent = '至少开一路（两路都关掉就没有输入了）';
+      return;
+    }
+    byId('error').hidden = true;
+    // 先把两席各要哪支定死（没真设备号就先授权 + 重枚举；拿不到/对不上就当场失败，不按默认开）
+    let selected;
+    try {
+      selected = await dualmicEnsureRoute(enabled);
+    } catch (error) {
+      byId('error').hidden = false;
+      byId('error').textContent = '没开成两支：' + error.message;
+      byId('dualmic-start').disabled = false; byId('dualmic-stop').disabled = true;
+      return;
+    }
+    dualmic.turn += 1;
+    const turn = dualmic.turn;
+    dualmic.seats = {};
+    for (const seat of enabled) dualmic.seats[seat] = {pending: null, frames: 0};
+    dualmic.routeFailed = false;
+    dualEnabled = [...enabled];
+    dualReset();
+    byId('dual-card').hidden = false;
+    byId('dualmic-start').disabled = true;
+    byId('dualmic-stop').disabled = false;
+    byId('status').textContent = '双席真麦开始：正在申请设备与建立两路 ASR…';
+    let sessionId;
+    try {
+      const response = await fetch('/api/session/dual/mic/open', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({mock: byId('dualmic-mock').checked, tool_set: byId('tool-set').value,
+                              config: collectTurnConfig('turn-config-dualmic')})});
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+      sessionId = data.session_id;
+      dualmic.mock = data.mock;
+      dualmicStatus(`session ${sessionId} · ${data.mock ? '离线 mock 判定' : '真 KEV/LLM'} · ${data.sample_rate}Hz/${data.frame_ms}ms`);
+    } catch (error) {
+      byId('error').hidden = false; byId('error').textContent = `无法创建双席真麦会话：${error.message}`;
+      byId('dualmic-start').disabled = false; byId('dualmic-stop').disabled = true;
+      return;
+    }
+    dualmic.sessionId = sessionId;
+    for (const seat of enabled) {
+      try {
+        await dualmicSeatStart(seat, sessionId, turn, selected[seat]);
+      } catch (error) {
+        // 一席没开成就不能假装两路都在听：停下这一轮并当场说明
+        byId('error').hidden = false;
+        byId('error').textContent = `没开成两支：席 ${seat} 取麦克风失败：${error.message}（需要 localhost/https 与授权）`;
+        dualLine(seat, `席 ${seat} 没开成：${error.message}`, 'cancel');
+        dualmicStop();
+        return;
+      }
+    }
+    dualmicStatus(`两路已开（${enabled.join(' / ')}）· 各推 16kHz/20ms PCM · 点「停止」收尾`);
+  }
+
+  function dualmicStopSeat(seat) {
+    const state = dualmic.seats[seat];
+    if (!state) return;
+    if (state.socket && state.socket.readyState === WebSocket.OPEN) state.socket.send(JSON.stringify({cmd: 'stop'}));
+    if (state.node) { state.node.onaudioprocess = null; state.node.disconnect(); state.node = null; }
+    if (state.stream) { state.stream.getTracks().forEach(track => track.stop()); state.stream = null; }
+    if (state.context) { state.context.close(); state.context = null; }
+  }
+
+  function dualmicStop() {
+    dualmic.turn += 1;                     // 让旧连接的回调全部失效
+    for (const seat of Object.keys(dualmic.seats)) dualmicStopSeat(seat);
+    dualmic.routeFailed = false;
+    byId('dualmic-start').disabled = false;
+    byId('dualmic-stop').disabled = true;
+    dualmicStatus('已停止送音频，等两席各自收口…（可再次点「开始」开新一轮）');
+  }
+
+  byId('dualmic-devices').addEventListener('click', () => dualmicRefreshDevices());
+  byId('dualmic-start').addEventListener('click', dualmicStart);
+  byId('dualmic-stop').addEventListener('click', dualmicStop);
+  buildTurnConfig('turn-config-dualmic');
+
   byId('query-form').addEventListener('submit', async event => {
     event.preventDefault();
     if (byId('mode').value === 'stream') return streamSubmit();
     if (byId('mode').value === 'mic') return micStart();
     if (byId('mode').value === 'confirm') return confirmSubmit();
     if (byId('mode').value === 'dual') return dualSubmit();
+    if (byId('mode').value === 'dualmic') return dualmicStart();
     const tool_set = byId('tool-set').value;
     byId('send').disabled = true;
     byId('tool-set').disabled = true;

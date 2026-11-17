@@ -20,7 +20,7 @@ import statistics
 import time
 import uuid
 
-import bootstrap
+from app import bootstrap
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 POC_ROOT = bootstrap.POC_ROOT
 ROOT = bootstrap.install()          # 上游仓库根：model_clients / registry / 语料 fixtures

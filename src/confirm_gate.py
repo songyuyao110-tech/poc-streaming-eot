@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.dont_write_bytecode = True
 
 from core_pipeline_run import KEV_EOT_BASE, KEV_EOT_CLIENT, kev_call, probability
-from turn_session import normalize  # 复用轻量文本规整（去全半角标点），仅用于 mock 关键词前筛
+from shared.text import normalize
 
 # 3 个"确认意图"问题标签，顺序即裁决优先级参考（takeover > agree/reject）。
 CONFIRM_LABELS = ("agree", "reject", "takeover")

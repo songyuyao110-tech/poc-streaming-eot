@@ -182,7 +182,7 @@ def _match(value, spec) -> bool:
 
 
 def _normalize(text: str) -> str:
-    from turn_session import normalize  # 惰性：避免 import 时耦合（虽然本模块已是测试层）
+    from shared.text import normalize
     return normalize(text)
 
 

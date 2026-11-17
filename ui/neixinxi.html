@@ -1,0 +1,1909 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>内心戏 · 车内对话</title>
+<!--
+  「内心戏」用户页（/neixinxi，2026-11-16 验收卡批准的第一版）：
+  两路麦 → 两路流式识别（音量线只做降噪）→ 两路判停（只走语义）→ 一份读心 → 中枢出声。
+
+  主画面按用户页口径（不是测试台）：中间大字 = **车说的话**（应声 / 垫句 / 冷场接话，
+  车没开口时这一行不出现）；飘过去的弹幕 = **读心**（车看见的场景）；下方左右两路 = **人说的话**。
+  判停 / 要不要回答 / 应声 / 节奏 / 垫句 / 插话 / 冷场这些判断只在「详情」里，默认关上。
+  设备、降噪线、文字验证、原始事件也一并收进详情的次级设置（主画面不摊表）。
+
+  本页不判「要不要回答」、不开闸、不进 Agent；判停只判「这句说完没说完」。
+  记忆（2026-11-12 10:29–10:31 拍板）：收住只是有资格——这句收住触发的那次读心落地后，再用判停
+  同一套模型做一次很快的写前快判断（有没有必要写），通过才落一刀（攒并后的原话 `主驾说：“…”` +
+  `当时场景：<读心>`）；写完把记忆**查回来**显示在页上——显示的是查回来的内容，不是把旁白再贴一次。
+  另有一条不靠真麦的「文字验证」通道：两席各一个输入框，发送即收住（走真读心 + 真记忆）。
+-->
+<style>
+  :root{
+    --teal:#2fd6c4; --teal-soft:#6ff0e2; --amber:#f0a93b; --amber-soft:#ffc56a;
+    --ink:#fbf6ee; --warm:#ffd9ac; --line:rgba(255,255,255,.16);
+    --panel:rgba(8,10,16,.42);
+    --font:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    --serif:"Songti SC","Noto Serif CJK SC","Times New Roman",serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:#05060a;color:var(--ink);font-family:var(--font);overflow:hidden}
+  #stage{position:relative;width:100vw;height:100vh;overflow:hidden;background:#05060a}
+
+  /* ---------- 车内实景：彩色原画铺满；没开摄像头时用暗场占位（不是表格页） ---------- */
+  #fallback{position:absolute;inset:0;
+    background:
+      radial-gradient(38% 44% at 24% 56%, rgba(52,112,106,.42) 0%, rgba(5,6,10,0) 64%),
+      radial-gradient(36% 42% at 76% 54%, rgba(138,86,50,.38) 0%, rgba(5,6,10,0) 66%),
+      radial-gradient(80% 34% at 50% 88%, rgba(60,52,44,.20) 0%, rgba(5,6,10,0) 70%),
+      radial-gradient(120% 90% at 50% 8%, rgba(30,38,54,.60) 0%, rgba(5,6,10,.94) 72%),
+      #05060a}
+  #cam{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#05060a;
+       display:none;transform:scale(1.02)}
+  #veil{position:absolute;inset:0;pointer-events:none;
+    background:
+      radial-gradient(ellipse 70% 60% at 50% 42%, rgba(8,10,16,.18) 0%, rgba(8,10,16,.36) 55%, rgba(5,6,10,.58) 100%),
+      linear-gradient(to top, rgba(0,0,0,.55) 0%, rgba(0,0,0,.10) 38%, rgba(0,0,0,.26) 100%)}
+
+  /* ---------- 顶栏：只有「内心戏」和「详情」（设备 / 门限 / 模型都在详情里） ---------- */
+  header{position:absolute;top:30px;left:44px;right:44px;z-index:60;display:flex;align-items:flex-start;
+         justify-content:space-between;pointer-events:none}
+  .brand h1{margin:0;font-size:clamp(20px,1.5vw,28px);font-weight:800;letter-spacing:.18em;color:rgba(255,255,255,.92);
+            text-shadow:0 2px 12px rgba(0,0,0,.55)}
+  .brand span{display:block;margin-top:5px;font-size:11px;letter-spacing:.28em;color:rgba(255,255,255,.48)}
+  .top-right{display:flex;align-items:center;gap:10px;pointer-events:auto}
+  .pill{font:inherit;font-size:13px;letter-spacing:.08em;color:rgba(255,255,255,.78);
+        background:var(--panel);border:1px solid var(--line);padding:8px 16px;border-radius:999px;
+        backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);white-space:nowrap}
+  button.pill{cursor:pointer}
+  button.pill:hover{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.3)}
+  body.drawer-open #drawerBtn{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.32)}
+
+  /* ---------- 中间的球：听的时候偏冷，车开口时偏暖 ---------- */
+  .orb-stage{position:absolute;left:50%;top:43%;width:320px;height:320px;z-index:20;
+             transform:translate(-50%,-50%);pointer-events:none;
+             filter:drop-shadow(0 18px 40px rgba(0,0,0,.35));transition:opacity .5s}
+  #island{width:320px;height:320px;display:block}
+
+  /* ---------- 中间大字：车说的话。车没开口时这一行不出现 ---------- */
+  #carSpeech{position:absolute;left:50%;top:63%;width:88%;z-index:40;text-align:center;
+             transform:translateX(-50%);pointer-events:none;opacity:0;transition:opacity .45s}
+  #carSpeech.show{opacity:1}
+  #carSpeech .who{display:block;font-size:12px;letter-spacing:.34em;color:rgba(255,255,255,.5);
+                  margin-bottom:10px}
+  #carSpeech .line{display:block;font-family:var(--serif);font-weight:700;
+                   font-size:clamp(26px,3.3vw,52px);line-height:1.32;letter-spacing:.04em;color:#fff8ef;
+                   text-shadow:0 0 26px rgba(255,196,132,.28),0 6px 26px rgba(0,0,0,.6)}
+
+  /* ---------- 弹幕：读心。新的飘进来，旧的淡出，不抢中间大字 ---------- */
+  #mindLayer{position:absolute;inset:0;z-index:30;pointer-events:none;overflow:hidden}
+  .dm{position:absolute;white-space:nowrap;font-family:var(--serif);font-weight:700;color:#fffaf3;
+      letter-spacing:.06em;text-shadow:0 0 2px #2a1810,1.5px 1.5px 0 #2a1810,-1.5px 1.5px 0 #2a1810,
+      1.5px -1.5px 0 #2a1810,-1.5px -1.5px 0 #2a1810,0 8px 18px rgba(0,0,0,.5);
+      will-change:transform,opacity;opacity:0}
+
+  /* ---------- 下方两路：人说的话（只有人，没有判断标签） ---------- */
+  .sub{position:absolute;bottom:34px;z-index:45;width:min(38vw,620px);padding:14px 20px 16px;
+       border-radius:18px;border:1px solid rgba(255,255,255,.18);background:rgba(8,10,16,.42);
+       backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+       opacity:0;transform:translateY(10px);transition:opacity .35s,transform .35s}
+  .sub.show{opacity:1;transform:none}
+  .sub.d{left:44px;border-left:3px solid rgba(47,214,196,.85)}
+  .sub.p{right:44px;border-right:3px solid rgba(240,169,59,.9);text-align:right}
+  .sub .who{display:block;font-size:11px;letter-spacing:.3em;color:rgba(255,255,255,.56)}
+  .sub.d .who{color:var(--teal-soft)}
+  .sub.p .who{color:var(--amber-soft)}
+  .sub .say{display:block;margin-top:6px;font-size:clamp(18px,1.5vw,26px);font-weight:600;
+            line-height:1.36;color:#fffdf8;text-shadow:0 3px 14px rgba(0,0,0,.55)}
+  .sub .badge{display:none}   /* 主画面不打「正在说 / 已说完 / 判停」这类标签 */
+
+  /* ---------- 通告（只有底噪 / 识别中断 / 没接上这类要当场说清的事） ---------- */
+  #notice{position:absolute;left:50%;top:96px;z-index:70;transform:translateX(-50%);max-width:min(760px,86vw);
+          display:none;padding:10px 18px;border-radius:14px;border:1px solid rgba(255,255,255,.18);
+          background:rgba(8,10,16,.66);backdrop-filter:blur(14px)}
+  #notice.show{display:block}
+  #notice b{display:block;font-size:14px;font-weight:800;letter-spacing:.04em;color:#fff}
+  #notice span{display:block;margin-top:3px;font-size:12px;color:rgba(255,255,255,.72);line-height:1.5}
+  #notice.warn b,#notice.gate b{color:var(--amber-soft)}
+  #notice.error b{color:#ffb9b9}
+  #notice.info b{color:var(--teal-soft)}
+  #hint{position:absolute;left:50%;bottom:calc(34px + 96px);z-index:44;transform:translateX(-50%);
+        font-size:12px;letter-spacing:.06em;color:rgba(255,255,255,.42);transition:opacity .6s;text-align:center}
+
+  /* ---------- 详情（默认关上）：判断 / 设备 / 音量 / 记忆 / 原始事件都在这里 ---------- */
+  #drawer{position:absolute;right:0;top:0;bottom:0;width:min(440px,92vw);z-index:80;
+          padding:26px 20px 28px;overflow-y:auto;transform:translateX(100%);transition:transform .32s ease;
+          background:linear-gradient(180deg,rgba(6,8,12,.94),rgba(6,8,12,.90));
+          backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+          border-left:1px solid rgba(255,255,255,.12)}
+  #drawer.open{transform:none}
+  #drawer .close{position:absolute;right:14px;top:14px;width:28px;height:28px;border-radius:50%;
+                 border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.06);color:#dfe7ee;
+                 font-size:16px;line-height:1;cursor:pointer}
+  #drawer .close:hover{color:#fff;border-color:rgba(255,255,255,.5)}
+  #drawer h3{margin:0 0 8px;padding-right:30px;font-size:11px;letter-spacing:.16em;
+              color:rgba(255,255,255,.5);font-weight:700}
+  #drawer section{margin:0 0 16px;padding:0 0 14px;border-bottom:1px dashed rgba(255,255,255,.12)}
+  #drawer section:last-child{border-bottom:0}
+  #drawer .row{display:flex;justify-content:space-between;gap:10px;padding:3px 0;font-size:11.5px}
+  #drawer .row b{font-weight:600;color:#eef4fa}
+  #drawer .row span{color:rgba(255,255,255,.62);text-align:right;overflow-wrap:anywhere}
+  #drawer .row.lang{display:block}
+  #drawer .row.lang span{display:block;text-align:left;line-height:1.55;margin-top:4px;color:#dbe6ef}
+  #drawer .score{display:flex;gap:6px;margin-top:5px}
+  #drawer .score i{font-style:normal;font-size:10px;color:#a9b7c4;background:rgba(255,255,255,.07);
+                   padding:2px 7px;border-radius:999px}
+  #drawer .errors{color:#ffb3b3;font:11px/1.5 var(--mono);white-space:pre-line}
+  #drawer .links{display:flex;gap:8px;flex-wrap:wrap}
+  #drawer .links a{color:#9fd8ff;text-decoration:none;border:1px solid rgba(159,216,255,.4);
+                   padding:5px 10px;border-radius:999px;font-size:11.5px}
+  #drawer img#frameThumb{display:none;width:100%;border-radius:10px;margin:8px 0 4px;border:1px solid rgba(255,255,255,.14)}
+  /* 这一拍的判断：一排一件事，有结论写结论，没有就留「—」 */
+  .judge-hint{font-size:11px;line-height:1.6;color:rgba(255,255,255,.45);margin:0 0 10px}
+  .judge-seat{margin:0 0 12px;padding:10px 12px;border:1px solid rgba(255,255,255,.12);border-radius:12px;
+              background:rgba(255,255,255,.03)}
+  .judge-seat .js-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px}
+  .judge-seat .js-head b{font-size:12.5px;letter-spacing:.14em;color:#fff}
+  .judge-seat .js-head i{font-style:normal;font-size:10.5px;color:rgba(255,255,255,.42)}
+  .judge-seat .js-row{display:flex;justify-content:space-between;gap:12px;padding:5px 0;
+                      border-top:1px solid rgba(255,255,255,.07);font-size:12px}
+  .judge-seat .js-row span{color:rgba(255,255,255,.55)}
+  .judge-seat .js-row b{font-weight:600;color:#fff5e6;text-align:right;max-width:70%;
+                        overflow-wrap:anywhere}
+  .judge-seat .js-row small{display:block;font-size:10.5px;font-weight:400;color:rgba(255,255,255,.42);margin-top:2px}
+  /* 次级设置：设备 / 降噪线 / 按钮（从主画面收进来） */
+  .group{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+  .mic{position:relative;display:flex;align-items:center;gap:8px;padding:8px 12px 8px 10px;border-radius:10px;
+       border:1.4px solid rgba(255,255,255,.16);background:rgba(255,255,255,.05);min-width:170px;cursor:pointer}
+  .mic.d{border-color:rgba(47,214,196,.6)}
+  .mic.p{border-color:rgba(240,169,59,.6)}
+  .mic.live.d{box-shadow:0 0 0 1px rgba(47,214,196,.3) inset}
+  .mic.live.p{box-shadow:0 0 0 1px rgba(240,169,59,.3) inset}
+  .dot{width:8px;height:8px;border-radius:50%;background:#5b6672;flex:0 0 auto}
+  .mic.live.d .dot{background:var(--teal);box-shadow:0 0 8px var(--teal)}
+  .mic.live.p .dot{background:var(--amber);box-shadow:0 0 8px var(--amber)}
+  .micmode{display:flex;align-items:center;gap:8px;margin:2px 0 8px}
+  .micmode em{font-style:normal;font-size:11px;letter-spacing:.12em;color:rgba(255,255,255,.5);min-width:34px}
+  .micmode select{flex:0 0 auto;font-size:12px;padding:4px 6px;border-radius:8px;
+                  background:rgba(255,255,255,.06);color:var(--text);border:1px solid var(--line)}
+  .micmode i{font-style:normal;font-size:11px;color:rgba(255,255,255,.5)}
+  .mic.off{opacity:.5;border-style:dashed}
+  .mic.off .dot{background:rgba(255,255,255,.25);box-shadow:none}
+  .mic.off select{opacity:.5}
+  .mic-body{display:flex;flex-direction:column;line-height:1.25;min-width:0}
+  .mic-body b{font-size:12px;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+  .mic-body i{font-style:normal;font-size:10.5px;color:rgba(255,255,255,.55);white-space:nowrap;
+              overflow:hidden;text-overflow:ellipsis;max-width:150px}
+  .mic select{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
+  .refresh{width:24px;height:24px;border-radius:50%;border:1px solid rgba(255,255,255,.22);
+           background:rgba(255,255,255,.06);color:#cfdae5;cursor:pointer;font-size:13px;line-height:1}
+  .thr{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:11px;color:rgba(255,255,255,.6)}
+  .thr em{font-style:normal;min-width:76px}
+  .thr-track{position:relative;flex:1;min-width:120px;height:22px;border-radius:8px;
+             background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);overflow:hidden}
+  .thr-fill{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,rgba(47,214,196,.25),rgba(47,214,196,.6))}
+  .thr.p .thr-fill{background:linear-gradient(90deg,rgba(240,169,59,.25),rgba(240,169,59,.6))}
+  .thr-level{position:absolute;top:-2px;bottom:-2px;width:2px;background:#fff;opacity:.8}
+  .thr-tick{position:absolute;top:0;bottom:0;width:2px;background:#fff}
+  .thr-track input{position:absolute;inset:0;width:100%;opacity:0;cursor:pointer}
+  .thr .num{font-variant-numeric:tabular-nums;min-width:64px;text-align:right;color:rgba(255,255,255,.7)}
+  .btn{font:inherit;font-size:12px;padding:8px 14px;border-radius:999px;cursor:pointer;
+       border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.07);color:#eaf2f8}
+  .btn:hover{background:rgba(255,255,255,.15)}
+  .btn.on{border-color:rgba(47,214,196,.7);color:#d8fff8}
+  .btn.rec{border-color:rgba(240,169,59,.8);background:rgba(240,169,59,.16);color:#ffe6bf}
+  .camstat{display:inline-block;width:8px;height:8px;border-radius:50%;background:#5b6672;margin-right:6px}
+  .btn.on .camstat{background:var(--teal);box-shadow:0 0 8px var(--teal)}
+  .mem-pill{display:flex;flex-direction:column;gap:2px;font-size:10.5px;color:rgba(255,255,255,.5);
+            padding:6px 10px;border-radius:10px;border:1px dashed rgba(255,255,255,.18)}
+  .mem-pill b{font-size:10.5px;letter-spacing:.14em;color:rgba(255,255,255,.6)}
+  .mem-pill.hit{border-color:rgba(47,214,196,.6);color:#d9fff8}
+  #textPanel{display:none;flex-direction:column;gap:8px;margin-top:6px}
+  #textPanel.open{display:flex}
+  #textPanel .tp-title{font-size:11px;letter-spacing:.13em;color:rgba(255,255,255,.5);font-weight:700}
+  #textPanel .tp-row{display:flex;gap:6px}
+  #textPanel input{flex:1;min-width:0;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.18);
+                   color:#f2f7fb;border-radius:8px;padding:8px 10px;font:inherit;font-size:12px}
+  #textPanel input:focus{outline:none;border-color:rgba(47,214,196,.7)}
+  #textPanel button{border:1px solid rgba(255,255,255,.24);background:rgba(255,255,255,.08);color:#eaf2f8;
+                    border-radius:8px;padding:8px 12px;font:inherit;font-size:12px;cursor:pointer}
+  #textPanel .tp-note{font-size:10.5px;color:rgba(255,255,255,.42);line-height:1.55}
+  #drawer .memrow{display:flex;gap:6px;margin-top:6px}
+  #drawer .memrow input{flex:1;min-width:0;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.18);
+                        color:#f2f7fb;border-radius:8px;padding:7px 9px;font:inherit;font-size:11.5px}
+  #drawer .memrow button{border:1px solid rgba(255,255,255,.24);background:rgba(255,255,255,.08);color:#eaf2f8;
+                         border-radius:8px;padding:7px 10px;font:inherit;font-size:11.5px;cursor:pointer}
+
+  /* 详情打开：主画面中的字 / 球 / 副驾那一路往左让开抽屉，中间大字不会被截断 */
+  body{--dw:0px}
+  body.drawer-open{--dw:440px}
+  body.drawer-open #mindLayer{right:var(--dw)}
+  #carSpeech{width:calc(88% - var(--dw))}
+  #carSpeech{left:calc(50% - var(--dw) / 2)}
+  .orb-stage{left:calc(50% - var(--dw) / 2)}
+  .sub.p{right:calc(44px + var(--dw))}
+
+  @media (max-width:860px){
+    header{left:20px;right:20px;top:18px}
+    .sub{width:44vw;bottom:20px;padding:10px 12px}
+    .sub.d{left:16px} .sub.p{right:16px}
+    .orb-stage{top:40%;transform:translate(-50%,-50%) scale(1.15)}
+    #carSpeech{top:60%}
+    #hint{display:none}
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="fallback"></div>
+  <video id="cam" playsinline autoplay muted></video>
+  <div id="veil"></div>
+
+  <header>
+    <div class="brand"><h1>内心戏</h1><span>车内对话</span></div>
+    <div class="top-right">
+      <span class="pill" id="modePill">未连服务</span>
+      <button class="pill" id="drawerBtn">详情</button>
+    </div>
+  </header>
+
+  <div class="orb-stage"><canvas id="island"></canvas></div>
+
+  <div id="carSpeech"><span class="who">车</span><span class="line" id="carText"></span></div>
+
+  <div id="mindLayer"></div>
+
+  <div class="sub d" id="sub-D">
+    <span class="who">主驾</span>
+    <span class="say" id="text-D"></span>
+    <span class="badge off" id="badge-D">未开口</span>
+  </div>
+  <div class="sub p" id="sub-P">
+    <span class="who">副驾</span>
+    <span class="say" id="text-P"></span>
+    <span class="badge off" id="badge-P">未开口</span>
+  </div>
+
+  <div id="notice"><b id="notice-title"></b><span id="notice-body"></span></div>
+  <div id="hint">主画面只有：车里看到什么 · 车有没有在说 · 人在说什么 · 读心此刻怎么看。设备、门限和判断都在「详情」里。</div>
+
+  <aside id="drawer">
+    <button class="close" id="drawerClose" title="收起">×</button>
+
+    <section>
+      <h3>这一拍的判断</h3>
+      <div class="judge-hint">判停、要不要回答、应声、节奏、垫句、插话、冷场都收在这里；有结论写结论，没回来就留「—」，不猜。</div>
+      <div class="judge-seat" id="hub-D"><div class="js-head"><b>主驾</b><i>—</i></div></div>
+      <div class="judge-seat" id="hub-P"><div class="js-head"><b>副驾</b><i>—</i></div></div>
+      <div class="judge-hint" id="hub-source">判断来源：—</div>
+    </section>
+
+    <section>
+      <h3>设备与音量（次级设置）</h3>
+      <div class="micmode">
+        <em>话筒</em>
+        <select id="micMode" title="只开哪一路麦克风（默认两路都开）">
+          <option value="both">两路都开（默认）</option>
+          <option value="D">只开主驾</option>
+          <option value="P">只开副驾</option>
+        </select>
+        <i id="micModeNote">两路麦克风都会打开并识别</i>
+      </div>
+      <div class="group">
+        <div class="mic d" id="mic-wrap-D">
+          <span class="dot"></span>
+          <span class="mic-body"><b>主驾麦克风</b><i id="mic-name-D">未选设备</i></span>
+          <select id="mic-D" title="主驾输入设备"></select>
+        </div>
+        <div class="mic p" id="mic-wrap-P">
+          <span class="dot"></span>
+          <span class="mic-body"><b>副驾麦克风</b><i id="mic-name-P">未选设备</i></span>
+          <select id="mic-P" title="副驾输入设备"></select>
+        </div>
+        <button class="refresh" id="refresh" title="重新枚举输入设备">⟳</button>
+      </div>
+      <div class="thr d">
+        <em>主驾降噪线</em>
+        <div class="thr-track" id="thr-D">
+          <div class="thr-fill" id="fill-D"></div>
+          <div class="thr-level" id="level-D"></div>
+          <div class="thr-tick" id="tick-D"></div>
+          <input type="range" id="range-D" min="-70" max="-10" step="1" value="-45"/>
+        </div>
+        <span class="num" id="thrnum-D">-45 dBFS</span>
+      </div>
+      <div class="thr p">
+        <em>副驾降噪线</em>
+        <div class="thr-track" id="thr-P">
+          <div class="thr-fill" id="fill-P"></div>
+          <div class="thr-level" id="level-P"></div>
+          <div class="thr-tick" id="tick-P"></div>
+          <input type="range" id="range-P" min="-70" max="-10" step="1" value="-45"/>
+        </div>
+        <span class="num" id="thrnum-P">-45 dBFS</span>
+      </div>
+      <div class="group">
+        <button class="btn" id="startBtn">▶ 开始双路</button>
+        <button class="btn" id="camBtn"><span class="camstat"></span>画面 · 未开</button>
+        <button class="btn" id="textBtn">文字验证</button>
+      </div>
+      <div class="mem-pill" id="memPill"><b>记忆</b><span id="memText">收住后读心落地、快判断通过才写 · 还没写</span></div>
+      <div id="textPanel">
+        <div class="tp-title">文字验证 · 不靠真麦 · 发送即收住</div>
+        <div class="tp-row">
+          <input id="textInput-D" placeholder="主驾这一句原话（回车发送）"/>
+          <button id="textSend-D">发送</button>
+        </div>
+        <div class="tp-row">
+          <input id="textInput-P" placeholder="副驾这一句原话（回车发送）"/>
+          <button id="textSend-P">发送</button>
+        </div>
+        <div class="tp-note">走真读心 + 真记忆：发送即收住 → 读心读一次 → 写前快判断通过才写一刀。</div>
+      </div>
+    </section>
+
+    <section>
+      <h3>会话</h3>
+      <div class="row"><span>session</span><b id="d-session">—</b></div>
+      <div class="row"><span>读心档</span><b id="d-model">—</b></div>
+      <div class="row"><span>读心引擎</span><span id="d-engine">—</span></div>
+      <div class="row"><span>判停来源</span><span id="d-eot">—</span></div>
+      <div class="row"><span>话筒</span><span id="d-micmode">两路都开</span></div>
+      <div class="row"><span>记忆</span><span id="d-memory">—</span></div>
+      <div class="row lang"><span>本页边界</span><span>只判停 + 中枢出声（应声 / 垫句 / 冷场接话）；不开闸、不进 Agent</span></div>
+    </section>
+
+    <section>
+      <h3>两路判停（只判「说完没说完」）</h3>
+      <div class="row"><span>主驾</span><b id="d-eot-D">—</b></div>
+      <div class="score" id="d-score-D"></div>
+      <div class="row"><span>静音窗（主驾）</span><span id="d-wait-D">—</span></div>
+      <div class="row"><span>副驾</span><b id="d-eot-P">—</b></div>
+      <div class="score" id="d-score-P"></div>
+      <div class="row"><span>静音窗（副驾）</span><span id="d-wait-P">—</span></div>
+    </section>
+
+    <section>
+      <h3>音量（降噪线 / 当前电平）</h3>
+      <div class="row"><span>主驾</span><span id="d-lvl-D">—</span></div>
+      <div class="row"><span>副驾</span><span id="d-lvl-P">—</span></div>
+    </section>
+
+    <section>
+      <h3>读心</h3>
+      <div class="row"><span>这一句</span><span id="d-scene">—</span></div>
+      <div class="row"><span>来源 / 年龄</span><span id="d-scene-src">—</span></div>
+      <div class="row lang"><span>判断带上的前几次结果（最多 5 份）</span><span id="d-prior">—</span></div>
+      <div class="row lang"><span>两路进读心的字</span><span id="d-lanes">—</span></div>
+      <img id="frameThumb" alt="送读心的一帧"/>
+      <div class="row"><span>送帧</span><span id="d-frame">—</span></div>
+    </section>
+
+    <section>
+      <h3>记忆（收住后读心落地 + 快判断通过才写，显示的是查回来的内容）</h3>
+      <div class="row lang"><span>收住写入</span><span id="d-mem-write">—</span></div>
+      <div class="row lang"><span>这一次没写 / 为什么</span><span id="d-mem-skip">—</span></div>
+      <div class="row lang"><span>记忆里查回</span><span id="d-mem-recall">—</span></div>
+      <div class="memrow">
+        <input id="d-mem-query" placeholder="按这个问法再查一次（例如：副驾是谁）"/>
+        <button id="d-mem-go">查</button>
+      </div>
+    </section>
+
+    <section>
+      <h3>错误</h3>
+      <div class="errors" id="d-errors">—</div>
+    </section>
+
+    <section class="links">
+      <a href="/">← 工程测试台首页</a>
+      <a href="/mind">读心页</a>
+    </section>
+  </aside>
+</div>
+
+<script src="/island.js"></script>
+<script src="/mic_route.js"></script>
+<script>
+(() => {
+  const RATE = 16000, FRAME_SAMPLES = 320;            // 16 kHz / 20 ms，与现网真麦同口径
+  const MIN_DB = -70, MAX_DB = -10;                   // 降噪线范围（dBFS）
+  const CONNECT_TIMEOUT_MS = 8000;                    // 识别通道这么久还没接上就算失败（写明哪一席哪一步）
+  const GATE_QUIET_MS = 3000;                         // 连续这么久低于降噪线就在主画面说明「只有底噪」
+  const STAGE_CN = {join: '接识别通道', asr: '连识别引擎', socket: '识别连接',
+                    threshold: '设降噪线', frame: '送画面'};
+  const $ = id => document.getElementById(id);
+  const SEATS = ['D', 'P'];
+  // 话筒开关：只开一路时，另一路不申请设备、不采集、不识别（那一席仍可用文字通道）
+  const MIC_MODES = {both: ['D', 'P'], D: ['D'], P: ['P']};
+  const activeSeats = () => MIC_MODES[state.micMode] || SEATS;
+
+  const state = {
+    sessionId: null, turn: 0, running: false, phase: 'idle', failed: false,
+    noticeKind: '', noticeTimer: null, listeningSince: 0, lastOverAt: 0, wsRetry: {D: 0, P: 0},
+    model: null, eotMode: 'real', engine: null,
+    threshold: {D: -45, P: -45},
+    micMode: 'both',                    // 话筒开关：both 两路都开 / D 只开主驾 / P 只开副驾（默认两路）
+    mic: {D: null, P: null},            // 浏览器侧：{socket, context, node, stream, pending, frames,
+                                        //   selectedDeviceId/selectedLabel/actualDeviceId/actualLabel/routeState}
+    primed: null,                       // 点「开始」时当场建、还没接到麦上的 AudioContext（失败/停止要关）
+    routeFailed: false, routeConfirmed: false,   // 开麦路由：这一轮已判成没开成 / 已确认两路分开
+    level: {D: -90, P: -90},
+    quiet: {D: true, P: true},
+    text: {D: '', P: ''},
+    final: {D: '', P: ''},
+    speaking: {D: false, P: false},
+    eot: {D: null, P: null},
+    // 判停给了「截断 / 还在想」之后挂的静音窗（与主链同一套：截断 1.5s / 还在想 3s，到点收口）
+    wait: {D: null, P: null},
+    sceneSummary: '', ghosts: [], lastScene: '',
+    // 用户页：中间的球、车说过的话（详情里回溯用）、车此刻是否在说
+    island: null, orbState: '', carSpeaking: false, carLog: [],
+    camera: {stream: null, on: false, timer: null, last: null, count: 0},
+    // 文字验证通道（不靠真麦）：一条 WS 一席，发送即收住；会话与真麦那条分开，互不抢 conn。
+    text: {sessionId: null, ws: {D: null, P: null}, sending: {D: false, P: false}},
+    // 记忆：最近一次「收住写入」、写前快判断「这一次没写」与「查回来」的回执
+    // （页上显示的必须是查回来的内容，不是把旁白再贴一次）
+    memory: {write: null, skip: null, recall: null, store: null},
+    errors: [],
+    devices: [],
+  };
+
+  const SEAT_NAME = {D: '主驾', P: '副驾'};
+  // 写前快判断 / 读心等待没通过时的原因（后端给英文键，页上翻成人话；模型给的中文原因照原样显示）
+  const REASON_CN = {
+    still_speaking: '说话还在进行中（只更新旁白，不写）',
+    no_scene: '这次读心还没有场景',
+    mind_timeout: '这次收住触发的读心没等到（宁可不写）',
+    same_as_last_cut: '和上一刀重复 / 没有新信息',
+    leak_indistinguishable: '两席几乎是同一句、分不清是谁说的',
+    leak_other_more_complete: '像是另一席那句话漏过来的（另一席那版更完整）',
+    judge_error: '写前判断失败 / 超时（宁可不写）',
+    empty_content: '没有内容',
+  };
+  const addError = message => {
+    state.errors.push(new Date().toLocaleTimeString() + ' · ' + message);
+    if (state.errors.length > 12) state.errors.shift();
+    $('d-errors').textContent = state.errors.join('\n');
+  };
+  // 主画面通告：不能只埋在详情抽屉里（只有底噪 / 识别中断 / 没接上都要在画面上看得见）。
+  function setNotice(kind, title, body, autoClearMs) {
+    state.noticeKind = kind;
+    $('notice').className = 'notice ' + kind + ' show';
+    $('notice-title').textContent = title;
+    $('notice-body').textContent = body || '';
+    if (state.noticeTimer) { clearTimeout(state.noticeTimer); state.noticeTimer = null; }
+    if (autoClearMs) state.noticeTimer = setTimeout(() => {
+      if (state.noticeKind === kind) clearNotice();
+    }, autoClearMs);
+  }
+  function clearNotice() {
+    if (state.noticeTimer) { clearTimeout(state.noticeTimer); state.noticeTimer = null; }
+    state.noticeKind = '';
+    $('notice').className = 'notice';
+    $('notice-title').textContent = '';
+    $('notice-body').textContent = '';
+  }
+  function showError(title, message) { addError(message); setNotice('error', title, message); }
+  function describeError(error) {
+    const name = (error && error.name) || '';
+    if (name === 'NotAllowedError' || name === 'SecurityError') return '没给麦克风权限（需要在 localhost/https 下允许麦克风）';
+    if (name === 'NotFoundError') return '没找到这支麦（设备可能没插好）';
+    if (name === 'OverconstrainedError') return '这支麦现在不可用（可能被别的应用占用）';
+    if (name === 'NotReadableError' || name === 'AbortError') return '这支麦被别的应用占用或系统拒绝访问';
+    return (error && error.message) || String(error);
+  }
+
+  // ---------- 降噪线 / 电平 ----------
+  const pct = db => Math.max(0, Math.min(100, ((db - MIN_DB) / (MAX_DB - MIN_DB)) * 100));
+  function paintThreshold(seat) {
+    const db = state.threshold[seat];
+    $('tick-' + seat).style.left = pct(db) + '%';
+    $('fill-' + seat).style.width = pct(db) + '%';     // 彩色段 = 降噪线位（白刻度落在这条边上）
+    $('thrnum-' + seat).textContent = db + ' dBFS';
+    $('range-' + seat).value = String(db);
+  }
+  function paintLevel(seat) {
+    const db = state.level[seat];
+    const line = $('level-' + seat);
+    line.style.left = pct(db) + '%';
+    line.classList.toggle('on', state.running && !state.quiet[seat]);
+    line.style.background = state.quiet[seat] ? 'rgba(255,255,255,.45)' : '#fff';
+    $('d-lvl-' + seat).textContent = (db > -89 ? db.toFixed(1) : '静音')
+      + ' dBFS · 降噪线 ' + state.threshold[seat] + ' · ' + (state.quiet[seat] ? '线以下' : '线以上');
+  }
+  function sendCmd(seat, payload) {
+    const socket = state.mic[seat] && state.mic[seat].socket;
+    if (socket && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(payload));
+    return !!(socket && socket.readyState === WebSocket.OPEN);
+  }
+  SEATS.forEach(seat => {
+    const range = $('range-' + seat);
+    range.addEventListener('input', () => {
+      state.threshold[seat] = Number(range.value);
+      paintThreshold(seat);
+      paintLevel(seat);
+      sendCmd(seat, {cmd: 'threshold', value: state.threshold[seat]});
+    });
+  });
+
+  // ---------- 字幕 / 判停徽标 ----------
+  const LABEL_CN = {complete: '说完', cut: '截断', wait: '没说完'};
+  // 真实 ASR 的 text 是整段累积，页上只留最近一段（否则字幕会一路变长）
+  function tailText(text, limit = 48) {
+    const clean = String(text || '').replace(/\s+/g, ' ').trim();
+    return clean.length > limit ? '…' + clean.slice(-limit) : clean;
+  }
+  function paintSeat(seat) {
+    const sub = $('sub-' + seat), badge = $('badge-' + seat), textEl = $('text-' + seat);
+    const body = state.text[seat] || state.final[seat] || '';
+    textEl.textContent = tailText(body);
+    sub.classList.toggle('show', !!body.trim());
+    const verdict = state.eot[seat];
+    let cls = 'off', label = '未开口';
+    if (state.speaking[seat] && body.trim()) { cls = 'say'; label = '正在说'; }
+    else if (verdict && verdict.label) {
+      if (verdict.label === 'complete') { cls = 'done'; label = '已说完'; }
+      else if (verdict.label === 'cut') { cls = 'cut'; label = '截断'; }
+      else { cls = 'off'; label = '没说完'; }
+    } else if (state.final[seat]) { cls = 'done'; label = '已说完'; }
+    else if (body.trim()) { cls = 'off'; label = '正在说'; }
+    badge.className = 'badge ' + cls;
+    badge.textContent = label;
+    const dLabel = verdict
+      ? (LABEL_CN[verdict.label] || verdict.label)
+        + (verdict.may_confirm ? '（可确认）' : '（不可确认）')
+        + ' · ' + (verdict.latency_ms != null ? verdict.latency_ms.toFixed(0) + 'ms' : '')
+      : '—（还没判）';
+    $('d-eot-' + seat).textContent = dLabel;
+    const scores = (verdict && verdict.scores) || {};
+    $('d-score-' + seat).innerHTML = ['complete', 'cut', 'wait'].map(key =>
+      '<i>' + key + ' ' + (scores[key] != null && Number.isFinite(Number(scores[key]))
+        ? Number(scores[key]).toFixed(2) : '—') + '</i>').join('');
+    paintWait(seat);
+  }
+
+  // 静音窗（判停给「截断 / 还在想」之后）：截断 1.5s、还在想 3s（与主链同一套阈值）。
+  // 到点且这段时间没有新字 → 服务端收口并交给读心（旁白随即出现），抽屉里如实写这一刻。
+  function paintWait(seat) {
+    const el = $('d-wait-' + seat);
+    if (!el) return;
+    const wait = state.wait[seat];
+    if (!wait) { el.textContent = '—'; return; }
+    if (wait.event === 'silence_close') {
+      el.textContent = '已到点收住 · 静音 ' + (wait.window_ms != null ? wait.window_ms : '?')
+        + 'ms（实际 ' + (wait.silence_ms != null ? wait.silence_ms : '?') + 'ms 没新字）';
+      return;
+    }
+    el.textContent = '等 ' + (wait.window_ms != null ? wait.window_ms : '?') + 'ms'
+      + '（判停：' + (LABEL_CN[wait.label] || wait.label_cn || wait.label || '—') + '）';
+  }
+
+  // 读心这一次判断带上的前几次结果（最多 5 份）：抽屉里照实写，验「前后旁白能不能连上」。
+  function paintPrior(scene) {
+    const prior = (scene && scene.prior_results) || [];
+    const limit = (scene && scene.prior_limit) || 5;
+    if (!prior.length) {
+      $('d-prior').textContent = '这次是第 1 次判断（还没有前序结果）';
+      return;
+    }
+    const body = prior.map(item => '「' + tailText(String((item && item.scene) || ''), 10) + '」').join(' ');
+    const used = scene.prior_used ? '真模型这次判断读到了' : '离线替身只记账、不读上下文';
+    $('d-prior').textContent = prior.length + '/' + limit + ' 份 · ' + body + ' · ' + used;
+  }
+
+  // ---------- 读心旁白：每次大小/位置/角度随机，旧的保形褪成半透明叠住 ----------
+  // ---------- 记忆：页上显示「查回来的内容」，不是把读心旁白再贴一次 ----------
+  function paintMemoryWrite(data) {
+    state.memory.write = data;
+    const status = data.status === 'queued' ? '已交上去'
+      : data.status === 'ok' ? '已记下'
+      : data.status === 'skipped' ? '没写（' + (data.reason || '空文本') + '）'
+      : (data.status || '—');
+    const text = String(data.text || '');
+    const scene = String(data.scene || '');
+    $('memText').textContent = '收住写入 ' + status + '「' + text + '」'
+      + (scene ? ' · 场景：' + scene : '') + ' · 正在查回…';
+    $('memPill').classList.remove('hit');
+    $('d-mem-write').textContent = status + ' · ' + (text || '—')
+      + (scene ? '\n场景：' + scene : '')
+      + (data.latency_ms != null ? '\n' + Math.round(data.latency_ms) + 'ms' : '');
+    $('d-mem-write').style.whiteSpace = 'pre-line';
+  }
+  function paintMemorySkip(data) {
+    state.memory.skip = data;
+    const reason = REASON_CN[data.reason] || data.reason || '—';
+    const text = String(data.text || '');
+    const score = (typeof data.write_score === 'number')
+      ? ' · 写分 ' + data.write_score + (data.threshold != null ? ' / 线 ' + data.threshold : '')
+      : '';
+    const err = data.judge_error ? '（' + String(data.judge_error).slice(0, 80) + '）' : '';
+    $('memText').textContent = '这次没写：' + reason + '「' + text.slice(0, 24) + '」';
+    $('memPill').classList.remove('hit');
+    $('d-mem-skip').textContent = reason + ' · 「' + text + '」' + score + err
+      + (data.judge_source ? '\n判断来源：' + data.judge_source : '');
+    $('d-mem-skip').style.whiteSpace = 'pre-line';
+  }
+  function paintMemoryRecall(data) {
+    state.memory.recall = data;
+    const items = (data.items || []).map(item => String(item || '')).filter(Boolean);
+    if (items.length) {
+      // 显示的第一条就是记忆里查回来的原文（不加工成旁白口吻）
+      $('memText').textContent = '记忆里查回：' + items.slice(0, 2).join(' / ');
+      $('memPill').classList.add('hit');
+      $('d-mem-recall').textContent = '「' + (data.query || '') + '」→\n'
+        + items.join('\n') + '\n（第 ' + (data.attempt || 1) + ' 次查回，共 ' + items.length + ' 条）';
+    } else {
+      $('memText').textContent = '记忆 ' + (data.note || '还没查到')
+        + '（第 ' + (data.attempt || 1) + ' 次查）';
+      $('d-mem-recall').textContent = '「' + (data.query || '') + '」→ 还没查到'
+        + (data.status ? '（' + data.status + '）' : '') + ' · 第 ' + (data.attempt || 1) + ' 次';
+    }
+    $('d-mem-recall').style.whiteSpace = 'pre-line';
+  }
+
+  const rand = (a, b) => a + Math.random() * (b - a);
+  function placeLine(el, metrics) {
+    el.style.fontSize = metrics.font + 'px';
+    el.style.transform = 'translate(-50%,-50%) translate(' + metrics.jx + 'px,'
+      + metrics.jy + 'px) rotate(' + metrics.rot + 'deg) scale(' + metrics.scale + ')';
+  }
+  // 旁白只显示一句话的头一小段（与示意稿一样「一句话一屏」，不被长句拖成三行）
+  function shortenNarration(text) {
+    const clean = String(text || '').replace(/\s+/g, ' ').trim();
+    const sentence = clean.split(/[。！？!?；;]/).filter(Boolean)[0] || clean;
+    const parts = sentence.split(/[，,、]/).map(part => part.trim()).filter(Boolean);
+    let picked = parts[0] || sentence;
+    for (let index = 1; index < parts.length && picked.length < 7; index += 1) {
+      picked += '，' + parts[index];
+    }
+    return picked.length > 16 ? picked.slice(0, 15) + '…' : picked;
+  }
+
+  // ---------- 读心：飘过去的弹幕（车看见的场景，不是标题、也不是判断） ----------
+  const DM_LANES = [0.13, 0.21, 0.29];
+  let dmLane = 0;
+  function mindLine(text) {
+    const body = shortenNarration(text);
+    if (!body || body === state.lastNarration) return;
+    state.lastNarration = body;
+    const layer = $('mindLayer');
+    const el = document.createElement('div');
+    el.className = 'dm';
+    el.textContent = body;
+    const width = layer.clientWidth, height = window.innerHeight;
+    el.style.fontSize = Math.max(18, Math.min(30, Math.round(width / 60))) + 'px';
+    el.style.top = Math.round(height * DM_LANES[dmLane++ % DM_LANES.length]) + 'px';
+    el.style.left = '100%';                       // 从画面右边缘进场
+    el.style.opacity = '0';
+    layer.appendChild(el);
+    // 画面上最多留 4 条：再多的先去掉，别糊成一片
+    while (layer.children.length > 4) layer.firstElementChild.remove();
+    const own = el.getBoundingClientRect().width;
+    // 整条先落在画面里（靠右），再慢慢往左飘：截图 / 抬眼看都能读到，不是从画面外挤进来
+    const inset = 72 + Math.round(Math.random() * Math.min(240, width * 0.12));
+    el.style.left = Math.max(48, width - own - inset) + 'px';
+    el.getBoundingClientRect();                   // 先落位，再上过渡
+    el.style.transition = 'opacity .45s ease';
+    el.style.opacity = '.96';
+    setTimeout(() => {                            // 停一下再往左飘（弹幕那种飘法）
+      el.style.transition = 'transform 14s linear, opacity 14s linear';
+      el.style.transform = 'translateX(' + (-Math.round(width * 0.34)) + 'px)';
+      el.style.opacity = '0';
+    }, 900);
+    setTimeout(() => el.remove(), 16000);
+    state.lastScene = body;
+    $('d-scene').textContent = body;
+    const hint = $('hint');
+    if (hint) hint.style.opacity = '0';
+  }
+
+  // ---------- 中间大字：车说的话（应声 / 垫句 / 冷场接话）。车没开口时这一行不出现 ----------
+  const CAR_SPEECH_MS = 4200;                          // 同一句在画面上停多久（新的来了就续上）
+  let carHideTimer = null;
+  function paintCarSpeech(data) {
+    const box = $('carSpeech'), line = $('carText');
+    const text = String((data && data.text) || '').trim();
+    if (!text) { box.classList.remove('show'); setCarSpeaking(false); return; }
+    line.textContent = text;
+    box.classList.add('show');
+    setCarSpeaking(true);
+    if (carHideTimer) clearTimeout(carHideTimer);
+    carHideTimer = setTimeout(() => { box.classList.remove('show'); setCarSpeaking(false); }, CAR_SPEECH_MS);
+    state.carLog.unshift({slot: (data && data.slot) || '', text: text,
+                          source: (data && data.source) || '', t: Date.now()});
+    state.carLog.length = Math.min(state.carLog.length, 6);
+  }
+  function setCarSpeaking(on) {
+    state.carSpeaking = !!on;
+    paintOrb();
+  }
+
+  // ---------- 中间的球：听的时候偏冷，车开口时偏暖（与示意稿同一套状态） ----------
+  function paintOrb() {
+    const island = state.island;
+    if (!island) return;
+    const level = Math.max(state.level.D, state.level.P);
+    // 电平封顶 .6：示意稿那颗球在说的时候是暖而不糊，满格会把中间烧成一片白
+    island.levels.mic = Math.max(0, Math.min(.6, (level + 70) / 55));
+    island.levels.agent = state.carSpeaking ? .6 : 0;
+    const wanted = state.carSpeaking ? 'speaking'
+      : state.phase === 'listening' ? 'listening' : 'idle';
+    if (state.orbState !== wanted) { island.setState(wanted); state.orbState = wanted; }
+    updateModePill();
+  }
+  function updateModePill() {
+    const pill = $('modePill');
+    if (!pill) return;
+    pill.textContent = (state.running || state.text.sessionId) ? '双席在听'
+      : '点「详情」开始';
+  }
+
+  // ---------- 详情：这一拍的判断（页面只从 /api/neixinxi/hub 读；主画面不出现判断） ----------
+  const HUB_ROWS = [['eot', '判停'], ['accept', '要不要回答'], ['ack', '应声'],
+                    ['pace', '节奏'], ['cushion', '垫句'], ['floor', '插话'], ['quiet', '冷场']];
+  // 每一路的来源：真判断 / 离线替身 / 失败（这一拍没出声）。详情里要能看出来，不能只写结论。
+  function hubSrcTag(snap, key, eotMode) {
+    const rec = (snap && snap[key]) || {};
+    if (key === 'eot') return eotMode === 'offline' ? '离线替身' : (eotMode ? '真判断' : '');
+    if (rec.state === 'failed' || rec.state === 'timeout') return '失败（这一拍没出声）';
+    const info = (snap && snap.sources && snap.sources[key]) || null;
+    const mode = String((info && info.mode) || '');
+    if (mode.indexOf('kev') === 0 || mode === 'model' || mode === 'real' || mode === 'judge') return '真判断';
+    if (mode === 'rule' || mode === 'temp' || mode === 'offline') return '离线替身';
+    return '';
+  }
+  function hubValue(snap, key) {
+    if (!snap) return {value: '—', note: ''};
+    const spoken = snap.spoken || {};
+    if (key === 'eot') {
+      const item = snap.eot;
+      if (!item) return {value: '—', note: '还没判停'};
+      const cn = LABEL_CN[item.label] || item.label || '—';
+      return {value: cn + (item.may_confirm ? '（可确认）' : '（不可确认）'),
+              note: [item.settled_by || item.source || '',
+                     item.latency_ms != null ? Math.round(item.latency_ms) + 'ms' : '']
+                .filter(Boolean).join(' · ')};
+    }
+    if (key === 'accept') {
+      const item = snap.accept;
+      if (!item) return {value: '—', note: '还没回来'};
+      return {value: item.accept ? '要回答' : '不回答', note: item.reason || ''};
+    }
+    if (key === 'ack') {
+      const item = snap.ack, gate = snap.last_gate || {};
+      const times = spoken.ack ? ' · 已应 ' + spoken.ack + ' 声' : '';
+      if (gate.slot === 'ack') {
+        return {value: gate.spoken ? '应了一声' : '不出声',
+                note: (gate.reason || '') + times};
+      }
+      if (!item) return {value: '—', note: '还没回来' + times};
+      return {value: item.say ? '可以应一声' : '不出声', note: (item.reason || '') + times};
+    }
+    if (key === 'pace') {
+      const item = snap.pace;
+      if (!item) return {value: '—', note: '还没回来'};
+      return {value: item.label || '—', note: item.reason || ''};
+    }
+    if (key === 'cushion') {
+      const item = snap.cushion, gate = snap.last_gate || {};
+      if (!item) return {value: '—', note: '还没回来'};
+      if (gate.slot === 'cushion' && !gate.spoken) return {value: '不垫', note: gate.reason || ''};
+      return {value: item.say ? '这拍垫一句' : '不垫', note: item.reason || ''};
+    }
+    if (key === 'floor') {
+      const item = snap.floor || {};
+      const label = item.label || '';
+      const who = (item.outlet || item.choice) || '';
+      if (!who) {
+        return {value: item.state === 'asked' ? '问着' : '—',
+                note: item.state === 'asked' ? (item.reason || '车这句还在说，人又开口：四选还没回来')
+                                             : (item.reason || '车没在说 / 人没插话，这一拍不问')};
+      }
+      const acted = item.action || ({yield: '停下这句、回到收听（本轮作废，话都留下）',
+                                     finish_first: '这句说完再接：插话排队，随后作为下一轮回答',
+                                     continue: '继续说：插话只进旁听上下文',
+                                     cushion_back: '垫句抢回：这句说完紧接一句垫句'})[who] || '';
+      return {value: label || who,
+              note: [acted, item.reason,
+                     item.latency_ms != null ? Math.round(item.latency_ms) + 'ms' : '',
+                     item.sentence ? '车这句「' + tailText(item.sentence, 12) + '」' : '',
+                     item.text ? '人插话「' + tailText(item.text, 12) + '」' : '']
+                .filter(Boolean).join(' · ')};
+    }
+    const item = snap.quiet || {};
+    const times = spoken.quiet ? ' · 已开口 ' + spoken.quiet + ' 次' : '';
+    const label = item.label || '';
+    return {value: label || (item.state === 'counting' || item.state === 'asked' ? '还没到' : '—'),
+            note: (item.reason || '') + times};
+  }
+  function paintHubSeat(seat, snap) {
+    const box = $('hub-' + seat);
+    if (!box) return;
+    box.replaceChildren();
+    const head = document.createElement('div');
+    head.className = 'js-head';
+    const name = document.createElement('b');
+    name.textContent = SEAT_NAME[seat];
+    const meta = document.createElement('i');
+    meta.textContent = snap ? '第 ' + (snap.turns || 0) + ' 轮 · 第 ' + (snap.version || 0) + ' 版'
+      : '还没开口';
+    head.appendChild(name); head.appendChild(meta);
+    box.appendChild(head);
+    HUB_ROWS.forEach(pair => {
+      const got = hubValue(snap, pair[0]);
+      const tag = hubSrcTag(snap, pair[0], snap && snap.eot_mode);
+      const note = [tag, got.note].filter(Boolean).join(' · ');
+      const row = document.createElement('div');
+      row.className = 'js-row';
+      const label = document.createElement('span');
+      label.textContent = pair[1];
+      const value = document.createElement('b');
+      value.textContent = got.value;
+      if (note) {
+        const small = document.createElement('small');
+        small.textContent = note;
+        value.appendChild(small);
+      }
+      row.appendChild(label); row.appendChild(value);
+      box.appendChild(row);
+    });
+  }
+  function paintHubSource(snap) {
+    const el = $('hub-source');
+    if (!el) return;
+    const sources = (snap && snap.sources) || {};
+    const items = Object.keys(sources).map(key => sources[key]).filter(Boolean);
+    if (!items.length) { el.textContent = '判断来源：—（还没连上会话）'; return; }
+    // 真判断 = 每一路都走判断模型；只要有一路落回离线替身，就照实说「有回落」
+    const real = items.every(item => String(item.mode || '').indexOf('kev') === 0 || item.mode === 'model');
+    const offline = items.some(item => ['rule', 'temp', 'offline'].indexOf(String(item.mode || '')) >= 0);
+    const label = items.map(item => item.model).filter(Boolean)[0] || '—';
+    const kind = real ? '真判断' : (offline ? '有回落：部分判断走离线替身（结论照实标）' : '来源未标');
+    el.textContent = '判断来源：' + kind + ' · ' + label + '（8009 判断模型）';
+  }
+  async function loadHub() {
+    const sid = state.sessionId || state.text.sessionId;
+    if (!sid) {
+      paintHubSeat('D', null); paintHubSeat('P', null); paintHubSource(null);
+      return;
+    }
+    try {
+      const res = await fetch('/api/neixinxi/hub?session_id=' + encodeURIComponent(sid));
+      const body = await res.json();
+      const hub = (body && body.hub) || {};
+      const eotMode = (body && body.eot_mode) || null;
+      if (hub.D) hub.D.eot_mode = eotMode;
+      if (hub.P) hub.P.eot_mode = eotMode;
+      state.hub = hub;
+      paintHubSeat('D', hub.D || null);
+      paintHubSeat('P', hub.P || null);
+      paintHubSource(hub.D || hub.P || null);
+    } catch (error) {
+      // 详情取不到不该打断主画面
+    }
+  }
+
+  // ---------- 设备枚举 / 选麦 ----------
+  // 没授权时浏览器只给空设备号（deviceId = ''）：这时按「默认」开麦就会两路落到同一支，
+  // 正是这次要修的 bug。所以点「开始」时先要一次授权 + 重新枚举，拿到真设备号再开；
+  // 拿不到就当场说明，不按默认开（宁可这一轮没开成，也不假装在听两支）。
+  async function listInputs(unlock) {
+    let all = await navigator.mediaDevices.enumerateDevices();
+    let inputs = all.filter(device => device.kind === 'audioinput');
+    if (unlock && !inputs.some(device => device.deviceId)) {
+      let probe = null;
+      try {
+        probe = await navigator.mediaDevices.getUserMedia({audio: true});
+      } catch (error) {
+        throw new Error('还没给麦克风权限，拿不到真实设备号：' + describeError(error));
+      } finally {
+        if (probe) probe.getTracks().forEach(track => track.stop());
+      }
+      all = await navigator.mediaDevices.enumerateDevices();
+      inputs = all.filter(device => device.kind === 'audioinput');
+    }
+    return inputs;
+  }
+  function seatSelection(seat) {
+    const select = $('mic-' + seat), option = select.options[select.selectedIndex];
+    return {deviceId: select.value, label: option ? option.textContent : ''};
+  }
+  // 用真设备列表重建下拉：旧选择按「设备号 → 标签」保留（绝不悄悄换成另一支/默认那支）
+  function fillSeatSelects(inputs, wanted) {
+    SEATS.forEach(seat => {
+      const select = $('mic-' + seat);
+      select.replaceChildren();
+      inputs.forEach((device, index) => select.append(
+        new Option(device.label || ('输入设备 ' + (index + 1)), device.deviceId)));
+      if (!inputs.length) select.append(new Option('（没有检测到输入设备）', ''));
+      const options = [...select.options];
+      const want = wanted && wanted[seat];
+      let index = -1;
+      if (want && want.deviceId) index = options.findIndex(option => option.value === want.deviceId);
+      if (index < 0 && want && want.label) {
+        index = options.findIndex(option => option.value && option.textContent === want.label);
+      }
+      if (index < 0) index = (seat === 'P' && options.length > 1) ? 1 : 0;   // 副驾默认第二支麦
+      select.selectedIndex = options.length ? index : -1;
+      paintMicName(seat);
+    });
+  }
+  async function refreshDevices(unlock) {
+    const wanted = {};
+    SEATS.forEach(seat => { wanted[seat] = seatSelection(seat); });
+    try {
+      state.devices = await listInputs(!!unlock);
+      fillSeatSelects(state.devices, wanted);
+      if (!state.devices.length) addError('没有检测到输入设备（浏览器未授权时，点「开始」会请求授权）');
+      return true;
+    } catch (error) {
+      addError('枚举设备失败：' + error.message);
+      return false;
+    }
+  }
+  // 点开始前把「两席到底要哪支」定死：没真设备号就先授权 + 重枚举；授权后列表刷新、按标签对不上的，
+  // 明确让用户按真名再选一次（不猜、不按默认开）。
+  async function ensureSeatRoute(seatsOn) {
+    const seats = (seatsOn && seatsOn.length) ? seatsOn : activeSeats();
+    const before = {};
+    seats.forEach(seat => { before[seat] = seatSelection(seat); });
+    if (seats.some(seat => !before[seat].deviceId)) {
+      state.devices = await listInputs(true);
+      fillSeatSelects(state.devices, before);
+      for (const seat of seats) {
+        const now = seatSelection(seat);
+        if (!now.deviceId) {
+          throw new Error('席 ' + seat + '（' + SEAT_NAME[seat] + '）还没拿到真实设备号：'
+            + '浏览器没给麦克风权限或没有输入设备 —— 先刷新设备、按真名选一次再开始（不按默认开）');
+        }
+        if (!before[seat].deviceId && now.label !== before[seat].label) {
+          throw new Error('授权后设备列表刷新了：请按真名重新选一次主驾 / 副驾的麦，再点开始（不按默认开）');
+        }
+      }
+    }
+    const selected = {};
+    seats.forEach(seat => { selected[seat] = seatSelection(seat); });
+    const plan = MicRoute.plan(selected);
+    if (!plan.ok) throw new Error(plan.message);
+    return selected;
+  }
+  function paintMicMode() {
+    if (!MIC_MODES[state.micMode]) state.micMode = 'both';
+    const active = activeSeats();
+    const select = $('micMode');
+    if (select) select.value = state.micMode;
+    const note = state.micMode === 'both'
+      ? '两路麦克风都会打开并识别'
+      : ('只开' + SEAT_NAME[state.micMode] + '：另一席不申请设备、不采集、不识别（文字仍可用）');
+    if ($('micModeNote')) $('micModeNote').textContent = note;
+    if ($('d-micmode')) {
+      $('d-micmode').textContent = state.micMode === 'both'
+        ? '两路都开（主驾 + 副驾）'
+        : ('只开' + SEAT_NAME[state.micMode] + '（' + SEAT_NAME[state.micMode === 'D' ? 'P' : 'D'] + '话筒关着）');
+    }
+    SEATS.forEach(seat => {
+      const on = active.indexOf(seat) >= 0;
+      const wrap = $('mic-wrap-' + seat);
+      if (wrap) wrap.classList.toggle('off', !on);
+      const micSelect = $('mic-' + seat);
+      if (micSelect) micSelect.disabled = !on;
+      const badge = $('badge-' + seat);
+      if (!on) {
+        if ($('mic-name-' + seat)) $('mic-name-' + seat).textContent = '话筒关着（这一席可用文字说）';
+        if (wrap) wrap.title = '这一席话筒关着：不申请设备、不采集、不识别；要用就用下方文字输入';
+        if (badge) { badge.className = 'badge off'; badge.textContent = '话筒关着'; }
+        if ($('sub-' + seat)) $('sub-' + seat).classList.remove('show');
+      } else if (!state.mic[seat]) {
+        paintMicName(seat);
+      }
+    });
+    paintStartButton();
+  }
+
+  function paintMicName(seat) {
+    const select = $('mic-' + seat);
+    const option = select.options[select.selectedIndex];
+    const chosenName = option ? option.textContent : '未选设备';
+    const mic = state.mic[seat];
+    let stateText = '';
+    if (mic) {
+      stateText = mic.asrReady ? ' · 已接入'
+        : (mic.socketReady ? ' · 等识别' : ' · 麦克风已开');
+    }
+    if (mic) {
+      // 只写「真正在用的那支」：浏览器回报的实际设备（拿不到回报才退回所选），与所选不一致要写明
+      const actual = mic.actualLabel || chosenName;
+      const mismatch = mic.routeMatch === false;
+      const routeText = misrouteText(mic, actual, chosenName, mismatch);
+      $('mic-name-' + seat).textContent = '真在用：' + actual + routeText + stateText;
+      $('mic-wrap-' + seat).title = mismatch
+        ? '选的是「' + chosenName + '」，浏览器实际给的是「' + actual + '」'
+        : '选的是「' + chosenName + '」，浏览器实际开的就是这支';
+    } else {
+      $('mic-name-' + seat).textContent = chosenName;
+      $('mic-wrap-' + seat).title = '还没开麦；点「开始双路」按这支开';
+    }
+    // 两路麦 + 两路识别引擎都真接上才发光；接上之前不显示「已接入」
+    $('mic-wrap-' + seat).classList.toggle('live', !!(mic && mic.asrReady));
+  }
+  function misrouteText(mic, actual, chosen, mismatch) {
+    if (mismatch) return '（与所选不一致）';
+    if (mic.asrReady && mic.routeState === 'ok') return ' · 两路已确认分开';
+    if (mic.asrReady && mic.routeState === 'same_source') return ' · 两路是同一份声音';
+    if (mic.asrReady && mic.routeState === 'pending') return ' · 确认两路是否分开…';
+    return '';
+  }
+  paintMicMode();
+  SEATS.forEach(seat => {
+    $('mic-' + seat).addEventListener('change', () => {
+      paintMicName(seat);
+      if (state.running) addError('换了输入设备：点「停止」再「开始双路」才按新设备重开');
+    });
+  });
+  $('refresh').addEventListener('click', event => {
+    event.stopPropagation();
+    refreshDevices();
+  });
+
+  // ---------- 两路麦 → 两路 WS ----------
+  function micResample(input, inputRate) {
+    if (inputRate === RATE) {
+      const out = new Int16Array(input.length);
+      for (let i = 0; i < input.length; i++) out[i] = Math.max(-1, Math.min(1, input[i])) * 0x7fff;
+      return out;
+    }
+    const ratio = inputRate / RATE, length = Math.floor(input.length / ratio);
+    const out = new Int16Array(length);
+    for (let i = 0; i < length; i++) out[i] = Math.max(-1, Math.min(1, input[Math.floor(i * ratio)])) * 0x7fff;
+    return out;
+  }
+  function flush(seat, samples) {
+    const mic = state.mic[seat];
+    if (!mic || !samples || !samples.length) return;
+    const pending = mic.pending;
+    const merged = pending && pending.length
+      ? (() => { const all = new Int16Array(pending.length + samples.length);
+                 all.set(pending, 0); all.set(samples, pending.length); return all; })()
+      : samples;
+    let offset = 0;
+    while (merged.length - offset >= FRAME_SAMPLES) {
+      if (!(mic.socket && mic.socket.readyState === WebSocket.OPEN)) break;   // 识别通道没接上：先攒着
+      mic.socket.send(merged.slice(offset, offset + FRAME_SAMPLES).buffer);
+      mic.frames += 1;
+      offset += FRAME_SAMPLES;
+    }
+    mic.pending = offset < merged.length ? merged.slice(offset) : null;
+  }
+
+  // 声音通路必须在点「开始双路」的那一次点击里就打开（不能等建会话、拉设备列表之后才开：
+  // 那样浏览器会把 AudioContext 挂起，ScriptProcessor 不出回调，整页就「假装在听」）。
+  function primeAudio() {
+    let context;
+    try { context = new (window.AudioContext || window.webkitAudioContext)(); }
+    catch (error) { throw new Error('浏览器不支持 AudioContext：' + error.message); }
+    const resumed = context.state === 'running'
+      ? Promise.resolve(true)
+      : context.resume().then(() => true).catch(() => false);
+    return {context: context, resumed: resumed};
+  }
+
+  // 只按「这一席选的那支」开麦：设备号必须真有（空号 = 会落到系统默认，直接失败不猜）；
+  // 浏览器回报的实际设备不是所选那支，也算这一轮没开成（不悄悄用另一支顶上）。
+  async function openSeatAudio(seat, turn, primed, selected) {
+    const deviceId = selected.deviceId;
+    const chosenName = selected.label || '所选设备';
+    if (!deviceId) {
+      throw new Error('席 ' + seat + '（' + SEAT_NAME[seat] + '）没有真实设备号：不按默认开麦');
+    }
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: {deviceId: {exact: deviceId}, channelCount: 1,
+                echoCancellation: false, noiseSuppression: false, autoGainControl: false}});
+    } catch (error) {
+      throw new Error('席 ' + seat + '（' + SEAT_NAME[seat] + '）没打开所选那支麦「'
+        + chosenName + '」：' + describeError(error));
+    }
+    const track = stream.getAudioTracks()[0];
+    const settings = (track && track.getSettings) ? track.getSettings() : {};
+    const granted = MicRoute.grant(selected, settings);
+    if (granted.known && !granted.ok) {
+      stream.getTracks().forEach(item => item.stop());
+      throw new Error('席 ' + seat + '（' + SEAT_NAME[seat] + '）：' + granted.message);
+    }
+    const context = primed.context;
+    const mic = {socket: null, socketReady: false, asrReady: false, context: context,
+                 source: null, node: null, stream: stream, pending: null, frames: 0,
+                 selectedDeviceId: deviceId, selectedLabel: chosenName,
+                 actualDeviceId: granted.actualDeviceId || '',
+                 actualLabel: granted.label || chosenName,
+                 routeState: '', routeKnown: granted.known, routeMatch: granted.match};
+    state.mic[seat] = mic;
+    const running = await primed.resumed;
+    if (state.turn !== turn) {
+      stopMicStream(stream);
+      state.mic[seat] = null;
+      return false;
+    }
+    if (!running || context.state !== 'running') {
+      stopMicStream(stream);
+      state.mic[seat] = null;
+      throw new Error('声音通路没起来（AudioContext=' + context.state + '）');
+    }
+    const source = context.createMediaStreamSource(stream);
+    const node = context.createScriptProcessor(2048, 1, 1);
+    node.onaudioprocess = event => {
+      if (state.turn !== turn) return;
+      flush(seat, micResample(event.inputBuffer.getChannelData(0), context.sampleRate));
+    };
+    const mute = context.createGain(); mute.gain.value = 0;
+    source.connect(node); node.connect(mute); mute.connect(context.destination);
+    mic.source = source; mic.node = node;
+    paintMicName(seat);
+    return true;
+  }
+  function stopMicStream(stream) {
+    if (!stream) return;
+    stream.getTracks().forEach(track => { try { track.stop(); } catch (error) { /* 已停 */ } });
+  }
+  // 告诉服务端「这一席向浏览器要的是哪支、实际给的是哪支」（只有标签与是否一致，不发设备号）。
+  // 服务端拿这个 + 两路实际收到的声音，判这一轮到底有没有开成两支。
+  function sendRouteClaim(seat) {
+    const mic = state.mic[seat];
+    if (!mic || !mic.socket || mic.socket.readyState !== WebSocket.OPEN) return;
+    // 只有「浏览器明确给的是另一支（设备名也不对）」才报不一致；设备号回声对不上但名字一样/没名字
+    // 按不可判（null），由服务端按两路实际声音判——不拿回声冒充结论。
+    const match = mic.routeMatch === true ? true : (mic.routeMatch === false ? false : null);
+    try {
+      mic.socket.send(JSON.stringify({cmd: 'route', seat: seat,
+        selected_label: mic.selectedLabel || '', actual_label: mic.actualLabel || '',
+        match: match, requested_exact: true}));
+    } catch (error) { /* 连接刚好断了：重连时会再报一次 */ }
+  }
+
+  // 授权之后设备才有名字：补一次枚举，并把「这一轮实际在用」的那支麦选回下拉（不改本轮已开的麦）
+  function syncDeviceLabels() {
+    refreshDevices().then(() => {
+      SEATS.forEach(seat => {
+        const mic = state.mic[seat];
+        const track = mic && mic.stream && mic.stream.getAudioTracks()[0];
+        const used = track && track.getSettings ? track.getSettings().deviceId : null;
+        if (!used) return;
+        const select = $('mic-' + seat);
+        if ([...select.options].some(option => option.value === used)) select.value = used;
+        paintMicName(seat);
+      });
+    }).catch(() => {});
+  }
+
+  // 一条识别通道：WS 连上 + 服务端「识别引擎真接上」（asr_ready）都到齐才算接上。
+  // 中途断开（服务端 45000081、网络、浏览器侧关连接）自动接回去，页面上写明中断/已重新接上。
+  function connectSeat(seat, sessionId, turn, recoveredAlready) {
+    const mic = state.mic[seat];
+    if (!mic) return Promise.reject(new Error('席 ' + seat + ' 的声音通路没开'));
+    return new Promise((resolve, reject) => {
+      const socket = new WebSocket(location.origin.replace(/^http/, 'ws')
+        + '/api/neixinxi/asr?session_id=' + encodeURIComponent(sessionId) + '&seat=' + seat);
+      mic.socket = socket;
+      mic.socketReady = false;
+      socket.binaryType = 'arraybuffer';
+      let settled = false;
+      const fail = reason => {
+        if (settled) return;
+        settled = true; clearTimeout(timer);
+        try { socket.close(); } catch (error) { /* 已经关了 */ }
+        reject(new Error(reason));
+      };
+      const finish = () => { if (!settled) { settled = true; clearTimeout(timer); resolve(); } };
+      const timer = setTimeout(() => fail('席 ' + seat + '（' + SEAT_NAME[seat] + '）'
+        + '识别通道 ' + Math.round(CONNECT_TIMEOUT_MS / 1000) + ' 秒没接上'), CONNECT_TIMEOUT_MS);
+      socket.onopen = () => { mic.socketReady = true; sendRouteClaim(seat); paintMicName(seat); };
+      socket.onmessage = message => {
+        if (state.turn !== turn) return;
+        let packet;
+        try { packet = JSON.parse(message.data); } catch (error) { return; }
+        const data = packet.data || {};
+        if (packet.kind === 'asr_ready') {
+          const wasReady = mic.asrReady;
+          mic.asrReady = true; mic.socketReady = true; mic.asrDown = false;
+          paintMicName(seat);
+          state.wsRetry[seat] = 0;
+          if (wasReady || data.recovered || recoveredAlready) {
+            addError('席 ' + seat + ' 识别中断，已重新接上'
+              + (data.attempt ? '（第 ' + data.attempt + ' 次尝试）' : ''));
+            setNotice('info', '识别中断，已重新接上',
+              '席 ' + seat + '（' + SEAT_NAME[seat] + '）断过一次，已自动接回来；继续说就继续上屏', 5000);
+          }
+          handlePacket(seat, packet);
+          finish();
+          return;
+        }
+        if (packet.kind === 'error' && !mic.asrReady && data.stage) {
+          const reason = '席 ' + seat + '（' + SEAT_NAME[seat] + '）第 '
+            + (STAGE_CN[data.stage] || data.stage) + '没接上：' + (data.error || data.error_type || '未知原因');
+          addError(reason);
+          fail(reason);
+          return;
+        }
+        handlePacket(seat, packet);
+      };
+      socket.onerror = () => {
+        // 自己主动停的那一席（换话筒开关 / 点停止）：关连接不算出错，不要把错误写到脸上
+        if (mic.stopping || state.phase !== 'listening') { try { finish(); } catch (error) { /* 已经结束了 */ } return; }
+        if (!settled) fail('席 ' + seat + '（' + SEAT_NAME[seat] + '）识别连接出错');
+        else addError('席 ' + seat + ' 的识别连接出错');
+      };
+      socket.onclose = () => {
+        if (state.turn !== turn) return;
+        mic.socketReady = false; mic.asrReady = false;
+        paintMicName(seat);
+        if (!settled) { fail('席 ' + seat + '（' + SEAT_NAME[seat] + '）识别连接被关掉'); return; }
+        if (state.phase === 'listening' && !mic.stopping) reconnectSeatSocket(seat, turn);
+      };
+      paintMicName(seat);
+    });
+  }
+
+  // 浏览器这条 WS 自己断了（不是识别引擎断）：同一会话内接回去，不打断这一轮收听。
+  function reconnectSeatSocket(seat, turn) {
+    const tries = state.wsRetry[seat] || 0;
+    if (tries >= 3) {
+      showError('识别连接断了，接不回来',
+        '席 ' + seat + '（' + SEAT_NAME[seat] + '）的识别连接重连 3 次都没接上：点「停止」再重新开始');
+      return;
+    }
+    state.wsRetry[seat] = tries + 1;
+    setNotice('warn', '识别中断，正在重新接上',
+      '席 ' + seat + '（' + SEAT_NAME[seat] + '）的连接断了（第 ' + (tries + 1) + ' 次重连），音频先攒着');
+    addError('席 ' + seat + ' 识别连接断了，正在重新接上（第 ' + (tries + 1) + ' 次）');
+    setTimeout(() => {
+      if (state.turn !== turn || state.phase !== 'listening' || !state.mic[seat]) return;
+      connectSeat(seat, state.sessionId, turn, true)
+        .catch(error => {
+          addError('席 ' + seat + ' 重连接不上：' + error.message);
+          if (state.phase === 'listening') reconnectSeatSocket(seat, turn);
+        });
+    }, 400 * (tries + 1));
+  }
+
+  function stopSeat(seat) {
+    const mic = state.mic[seat];
+    if (!mic) return;
+    mic.stopping = true;
+    if (mic.socket && mic.socket.readyState === WebSocket.OPEN) {
+      mic.socket.send(JSON.stringify({cmd: 'stop'}));
+    }
+    if (mic.socket) {
+      // 留一小段时间让本席最后一句回来，再关连接
+      const socket = mic.socket;
+      setTimeout(() => { try { socket.close(); } catch (error) { /* 已经关了 */ } }, 700);
+    }
+    if (mic.node) { mic.node.onaudioprocess = null; mic.node.disconnect(); }
+    if (mic.stream) mic.stream.getTracks().forEach(track => track.stop());
+    if (mic.context) { try { mic.context.close(); } catch (error) { /* 已经关了 */ } }
+    state.mic[seat] = null;
+    paintMicName(seat);
+  }
+
+  function paintStartButton() {
+    const button = $('startBtn');
+    if (state.phase === 'connecting') {
+      button.disabled = true;
+      button.textContent = '… 正在接入（等两路识别）';
+      button.classList.remove('rec');
+    } else if (state.phase === 'listening') {
+      button.disabled = false;
+      button.textContent = '■ 停止';
+      button.classList.add('rec');
+    } else {
+      button.disabled = false;
+      const one = state.micMode === 'both' ? '' : ('（只' + SEAT_NAME[state.micMode] + '）');
+      button.textContent = state.failed ? ('▶ 重试接入' + one)
+        : (state.micMode === 'both' ? '▶ 开始双路' : '▶ 开始' + one);
+      button.classList.remove('rec');
+    }
+  }
+
+  // 接入失败 / 没开成两支：不留「假装在听」，把哪一席哪一步写进错误区 + 主画面，按钮回到可重试
+  function abort(message, title) {
+    state.turn += 1;
+    SEATS.forEach(stopSeat);
+    closePrimedAudio();
+    state.phase = 'idle'; state.running = false; state.failed = true;
+    state.routeFailed = false; state.routeConfirmed = false;
+    paintStartButton();
+    showError(title || '没接上，不会出字', message);
+    $('hint').style.opacity = '';
+  }
+
+  // 服务端按两路实际收到的声音判「这一轮到底开成没开成两支」：
+  //   ok           = 真分开（各自是所选那支，电平走势对不上）
+  //   same_source  = 两路是同一份声音（浏览器把两路开成了同一支；回报的名字可能不一样）
+  //   device_mismatch = 浏览器给的不是所选那支
+  // 后两种必须当场说清并停下 —— 静默按一路继续听就是「假装在听两路」。
+  function handleMicRoute(seat, data) {
+    const mic = state.mic[seat];
+    if (mic) {
+      mic.routeState = data.status || '';
+      // 服务端回的是页面自己报过的标签（真在用哪支以浏览器回报为准，见 openSeatAudio）；
+      // 这里只按判定状态改那一行「真在用 / 两路是否已确认分开」。
+      paintMicName(seat);
+    }
+    if (data.status === 'ok') {
+      if (!state.routeConfirmed) {
+        state.routeConfirmed = true;
+        setNotice('info', '两路已确认分开',
+          data.message || MicRoute.statusText('ok'), 5000);
+      }
+      return;
+    }
+    if (data.status === 'same_source' || data.status === 'device_mismatch') {
+      if (state.routeFailed) return;
+      state.routeFailed = true;
+      abort(data.message || MicRoute.statusText(data.status),
+        data.status === 'same_source' ? '没开成两支：两路是同一份声音'
+                                      : '没开成两支：浏览器给的不是所选那支麦');
+    }
+  }
+
+  // 点「开始」时当场建了、但还没接到麦克风上的 AudioContext：失败/停止时要关掉，
+  // 不然会留一个挂起的空通路，页面上像是还在听。
+  function closePrimedAudio() {
+    (state.primed || []).forEach(item => {
+      try { item.context.close(); } catch (error) { /* 已经关了 */ }
+    });
+    state.primed = null;
+  }
+
+  async function start() {
+    if (state.phase === 'connecting' || state.phase === 'listening') return;
+    const turn = ++state.turn;
+    state.errors = []; $('d-errors').textContent = '—';
+    state.failed = false;
+    state.routeFailed = false; state.routeConfirmed = false;
+    clearNotice();
+    state.phase = 'connecting';
+    paintStartButton();
+    $('hint').style.opacity = '0';
+    state.sceneSummary = ''; state.lastNarration = '';
+    $('d-prior').textContent = '—'; $('d-scene').textContent = '—'; $('d-scene-src').textContent = '—';
+    SEATS.forEach(seat => {
+      state.final[seat] = ''; state.text[seat] = ''; state.eot[seat] = null;
+      state.wait[seat] = null;
+      state.speaking[seat] = false; state.quiet[seat] = true; state.level[seat] = -90;
+      paintSeat(seat); paintLevel(seat);
+    });
+    const seatsOn = activeSeats();
+    if (!seatsOn.length) return abort('话筒开关没选：至少开一路（两路都关着不能开始听音）', '没开成');
+    paintMicMode();
+    // 1) 这一次点击里先把声音通路打开（两个 AudioContext 当场建，不等建会话、不等设备列表）
+    const primed = {};
+    for (const seat of seatsOn) {
+      try { primed[seat] = primeAudio(); }
+      catch (error) { return abort('席 ' + seat + ' 的声音通路打不开：' + describeError(error)); }
+    }
+    state.primed = seatsOn.map(seat => primed[seat]);
+    // 2) 把「两席到底要哪支」定死：没拿到真设备号就先授权 + 重枚举；拿不到/对不上就当场失败，
+    //    绝不按系统默认开（那正是两路落到同一支的 bug）。
+    let selected;
+    try { selected = await ensureSeatRoute(seatsOn); }
+    catch (error) { return abort(error.message, seatsOn.length > 1 ? '没开成两支' : '没开成这一支'); }
+    if (state.turn !== turn) return;
+    for (const seat of seatsOn) {
+      try {
+        const opened = await openSeatAudio(seat, turn, primed[seat], selected[seat]);
+        if (!opened || state.turn !== turn) return;
+      } catch (error) {
+        return abort('席 ' + seat + '（' + SEAT_NAME[seat] + '）开麦失败：' + describeError(error));
+      }
+    }
+    if (state.turn !== turn) return;
+    // 3) 建会话
+    let info;
+    try {
+      const response = await fetch('/api/neixinxi/open', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({eot: state.eotMode, thresholds: state.threshold}),
+      });
+      info = await response.json();
+      if (!response.ok) throw new Error(info.error || ('HTTP ' + response.status));
+    } catch (error) {
+      return abort('建会话失败：' + describeError(error));
+    }
+    if (state.turn !== turn) return;
+    state.sessionId = info.session_id;
+    state.model = info.model;
+    state.engine = info.mind_engine;
+    $('d-session').textContent = info.session_id;
+    $('d-model').textContent = (state.engine && state.engine.label) || info.model;
+    $('d-engine').textContent = [state.engine && state.engine.mode,
+      state.engine && state.engine.vision && ('视觉 ' + (state.engine.vision.capability || '未知'))]
+      .filter(Boolean).join(' · ');
+    $('d-eot').textContent = info.eot.label + '（' + info.eot.mode + '）';
+    SEATS.forEach(seat => {
+      const db = Math.round(info.thresholds[seat]);
+      state.threshold[seat] = db; paintThreshold(seat); paintLevel(seat);
+    });
+    syncDeviceLabels();
+    // 4) 识别通道：只给开着的席连（关着的那一席不连、不识别；要用就用文字通道）
+    for (const seat of seatsOn) {
+      try { await connectSeat(seat, info.session_id, turn); }
+      catch (error) { return abort(error.message); }
+    }
+    if (state.turn !== turn) return;
+    // 5) 到这里才算「在听」
+    state.phase = 'listening'; state.running = true;
+    state.listeningSince = performance.now(); state.lastOverAt = state.listeningSince;
+    state.wsRetry = {D: 0, P: 0};
+    SEATS.forEach(seat => paintMicName(seat));
+    paintMicMode();
+    paintStartButton();
+  }
+
+  function stop() {
+    state.turn += 1;
+    SEATS.forEach(stopSeat);
+    closePrimedAudio();
+    state.phase = 'idle'; state.running = false; state.failed = false;
+    state.routeFailed = false; state.routeConfirmed = false;
+    state.wsRetry = {D: 0, P: 0};
+    clearNotice();
+    paintStartButton();
+  }
+
+  $('micMode').addEventListener('change', event => {
+    const next = event.target.value;
+    if (!MIC_MODES[next]) return;
+    const wasLive = state.phase === 'listening' || state.phase === 'connecting';
+    state.micMode = next;
+    if (wasLive) {
+      stop();   // 没被选中的那一路：立刻停采集、停识别（stopSeat 关 track / 关 WS）
+      addError('换了话筒开关：已先停止听音，按「' + (next === 'both' ? '开始双路' : '开始') + '」按新的选择重开');
+    }
+    paintMicMode();
+  });
+  $('startBtn').addEventListener('click', () => (state.phase === 'listening' ? stop() : start()));
+
+  // ---------- WS 事件 → 字幕 / 降噪线 / 判停 / 读心 ----------
+  function handlePacket(seat, packet) {
+    const kind = packet.kind, data = packet.data || {};
+    if (kind === 'ready') {
+      state.threshold[seat] = Math.round(data.threshold != null ? data.threshold : state.threshold[seat]);
+      paintThreshold(seat); paintLevel(seat);
+      return;
+    }
+    if (kind === 'threshold') {
+      state.threshold[seat] = Math.round(data.value);
+      paintThreshold(seat); paintLevel(seat);
+      return;
+    }
+    if (kind === 'asr_stopped') return;
+    if (kind === 'stopping') { addError('席 ' + seat + ' 已停止送音频，等本席最后一句'); return; }
+    if (kind === 'error') {
+      const stage = STAGE_CN[data.stage] || data.stage || '识别';
+      const reason = (data.error || data.error_type || '未知原因');
+      showError('识别出错，这一席不会出字',
+        '席 ' + seat + '（' + SEAT_NAME[seat] + '）' + stage + '出错：' + reason
+        + ' —— 可以先点「停止」再重新开始');
+      return;
+    }
+    if (kind !== 'event') return;
+
+    if (data.event === 'mic_route') {
+      handleMicRoute(seat, data);
+      return;
+    }
+
+    if (data.event === 'asr_interrupted' && data.seat_id === seat) {
+      const mic = state.mic[seat];
+      if (mic) mic.asrDown = true;
+      addError('席 ' + seat + ' 识别中断（' + (data.error_type || '识别出错') + '），正在重新接上');
+      setNotice('warn', '识别中断，正在重新接上',
+        '席 ' + seat + '（' + SEAT_NAME[seat] + '）的识别断了一次，正在自动接回来；这期间的声音先攒着，接上后接着上屏');
+      return;
+    }
+
+    if (data.event === 'asr_update' && data.seat_id === seat) {
+      state.text[seat] = data.text || '';
+      state.speaking[seat] = !data.final && !!(data.text || '').trim();
+      if (data.final) { state.final[seat] = data.text || ''; state.text[seat] = ''; state.speaking[seat] = false; }
+      paintSeat(seat);
+      return;
+    }
+    if (data.event === 'asr_settled' && data.seat_id === seat) {
+      // 这句被判停收住、已经交给读心：字幕另起一句（用过的字清掉，只留这句之后的新字）。
+      // 不是「这句还没说完」：没到边界时服务端不会发这条，字幕照旧按当前这句往上长。
+      state.final[seat] = '';
+      state.text[seat] = data.text || '';
+      state.speaking[seat] = !!state.text[seat];
+      paintSeat(seat);
+      return;
+    }
+    if (data.event === 'level' && data.seat_id === seat) {
+      state.level[seat] = Number(data.dbfs);
+      state.quiet[seat] = !!data.quiet;
+      if (data.threshold != null && Math.round(data.threshold) !== state.threshold[seat]) {
+        state.threshold[seat] = Math.round(data.threshold); paintThreshold(seat);
+      }
+      paintLevel(seat);
+      return;
+    }
+    if (data.event === 'eot' && data.seat_id === seat) {
+      state.eot[seat] = data;
+      if (data.may_confirm) state.wait[seat] = null;   // 当刻收住：不用再等静音窗
+      paintSeat(seat);
+      return;
+    }
+    if ((data.event === 'silence_wait' || data.event === 'silence_close') && data.seat_id === seat) {
+      // 判停给「截断 / 还在想」之后挂的静音窗：截断 1.5s、还在想 3s（主链同一套阈值）。
+      // 到点且这段时间没有新字 → 服务端收口并交给读心（旁白随即出现），这里只把这一刻写进抽屉。
+      state.wait[seat] = data;
+      paintWait(seat);
+      return;
+    }
+    if (data.event === 'mind_scene') {
+      const scene = data.scene || {};
+      paintPrior(scene);
+      const summary = String(scene.summary || '').trim();
+      if (summary && summary !== state.sceneSummary && scene.source !== 'llm_pending') {
+        state.sceneSummary = summary;
+        mindLine(summary);
+      }
+      const why = {close: '句子收住', frame_change: '画面变了（没人说话）', idle_10s: '满 10 秒兜底'}[scene.trigger] || '—';
+      $('d-scene-src').textContent = (scene.source || '—') + ' · ' + (scene.age_ms != null ? Math.round(scene.age_ms) + 'ms' : '—')
+        + ' · ' + why + ' · ' + (scene.engine || state.model || '');
+      // 场景里带的 lane 优先；场景快照没带 lane 时用页上已有的两路字兜底（不在抽屉里留空）。
+      const seatRows = Array.isArray(scene.seats) && scene.seats.length
+        ? scene.seats
+        : SEATS.map(seat => ({seat: seat, label: seat === 'D' ? '主驾' : '副驾',
+                              settled: state.final[seat], text: state.text[seat]}));
+      // 这一拍两路进读心的字：只认这次读心请求里实际带的两路（正在说的用 text，刚收住的用 settled），
+      // 不拿页面上此刻的实时字、也不拿上一次已收住的 settled 来冒充这一拍。
+      const lanes = seatRows.map(lane => {
+        const sceneText = lane.text || lane.settled || '';
+        const pageText = state.final[lane.seat] || state.text[lane.seat] || '';
+        return (lane.label || lane.seat) + '「' + tailText(sceneText || pageText || '—', 14) + '」';
+      });
+      $('d-lanes').textContent = lanes.length ? lanes.join('\n') : '—';
+      $('d-lanes').style.whiteSpace = 'pre-line';
+      if (data.frame && data.frame.image) {
+        $('frameThumb').src = data.frame.image;
+        $('frameThumb').style.display = 'block';
+        $('d-frame').textContent = '读心那次请求送的图（' + (data.frame.w || '?') + '×' + (data.frame.h || '?') + '）';
+      }
+      return;
+    }
+    if (data.event === 'car_floor') {
+      // 期三插话四选回来了：详情照实写；让路 = 停下这句、回到收听
+      state.floor = data;
+      if (data.stopped) paintCarSpeech({text: ''});
+      if (state.hub && (state.hub[seat] || seat === 'D')) {
+        try { paintHubSeat(seat, state.hub[seat]); } catch (error) { /* 详情自己会再刷 */ }
+      }
+      return;
+    }
+    if (data.event === 'car_speech') {
+      // 中枢出声（应声 / 垫句 / 冷场接话）：中间大字就是车说的这一句；判断不进主画面。
+      paintCarSpeech(data);
+      return;
+    }
+    if (data.event === 'memory_write') {
+      paintMemoryWrite(data);
+      return;
+    }
+    if (data.event === 'memory_skip') {
+      paintMemorySkip(data);
+      return;
+    }
+    if (data.event === 'memory_recall') {
+      paintMemoryRecall(data);
+      return;
+    }
+    if (data.event === 'frame_seen') {
+      if (data.scene && data.scene.summary) {
+        paintPrior(data.scene);
+        const summary = String(data.scene.summary).trim();
+        if (summary && summary !== state.sceneSummary) { state.sceneSummary = summary; mindLine(summary); }
+      }
+      $('d-frame').textContent = '已送读心 ' + (data.count || 0) + ' 帧 · ' + (data.w || '?') + '×' + (data.h || '?');
+      return;
+    }
+    if (data.event === 'error') {
+      showError('识别出错，这一席不会出字',
+        '席 ' + seat + '（' + SEAT_NAME[seat] + '）识别出错：' + (data.error || data.error_type || '未知原因'));
+    }
+  }
+
+  // ---------- 视频：彩色原画铺满 + 送读心的帧与屏上同像素 ----------
+  async function cameraOn() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {width: {ideal: 1280}, height: {ideal: 720}, facingMode: 'user'}, audio: false});
+      state.camera.stream = stream;
+      const video = $('cam');
+      video.srcObject = stream;
+      await video.play().catch(() => {});
+      video.style.display = 'block';
+      $('fallback').style.display = 'none';
+      state.camera.on = true;
+      $('camBtn').classList.add('on');
+      $('camBtn').innerHTML = '<span class="camstat"></span>画面 · 彩色原画';
+      state.camera.timer = setInterval(sendFrame, 1000);
+      if (!state.camera.last) $('d-frame').textContent = '（开画面后按 1 帧/秒送读心）';
+    } catch (error) {
+      addError('打开摄像头失败：' + error.message);
+    }
+  }
+  function cameraOff() {
+    state.camera.on = false;
+    if (state.camera.timer) { clearInterval(state.camera.timer); state.camera.timer = null; }
+    if (state.camera.stream) state.camera.stream.getTracks().forEach(track => track.stop());
+    state.camera.stream = null;
+    $('cam').style.display = 'none';
+    $('fallback').style.display = 'block';
+    $('camBtn').classList.remove('on');
+    $('camBtn').innerHTML = '<span class="camstat"></span>画面 · 未开';
+  }
+  $('camBtn').addEventListener('click', () => state.camera.on ? cameraOff() : cameraOn());
+
+  const frameSocket = () => {
+    for (const seat of SEATS) {
+      const mic = state.mic[seat];
+      if (mic && mic.socket && mic.socket.readyState === WebSocket.OPEN) return mic.socket;
+    }
+    for (const seat of SEATS) {
+      const socket = state.text.ws[seat];
+      if (socket && socket.readyState === WebSocket.OPEN) return socket;
+    }
+    return null;
+  };
+  const canvas = document.createElement('canvas');
+  function sendFrame() {
+    const video = $('cam');
+    if (!state.camera.on || !video.videoWidth) return;
+    const socket = frameSocket();
+    if (!socket) return;
+    // 与屏上同一套取景：视频 object-fit:cover 到 16:9 舞台，这里把源中心按同一比例裁成 16:9 再缩到
+    // 320×180 —— 送进读心的就是页上看到的那一块（彩色，不转灰阶、不二次放大）。
+    const cw = 320, ch = 180;
+    if (canvas.width !== cw || canvas.height !== ch) { canvas.width = cw; canvas.height = ch; }
+    const ctx = canvas.getContext('2d');
+    const vw = video.videoWidth, vh = video.videoHeight;
+    const scale = Math.max(cw / vw, ch / vh);
+    const sw = Math.min(vw, cw / scale), sh = Math.min(vh, ch / scale);
+    ctx.drawImage(video, (vw - sw) / 2, (vh - sh) / 2, sw, sh, 0, 0, cw, ch);
+    let brightness = 0.5;
+    try {
+      const pixels = ctx.getImageData(0, 0, cw, ch).data;
+      let total = 0;
+      for (let i = 0; i < pixels.length; i += 16) total += (pixels[i] * 0.3 + pixels[i + 1] * 0.59 + pixels[i + 2] * 0.11);
+      brightness = Math.min(1, total / ((pixels.length / 16) * 255));
+    } catch (error) { /* 取不到像素就沿用默认亮度 */ }
+    const image = canvas.toDataURL('image/jpeg', 0.72);
+    state.camera.last = image; state.camera.count += 1;
+    socket.send(JSON.stringify({cmd: 'frame', image: image, w: cw, h: ch,
+                                brightness: brightness, motion: 0}));
+    $('frameThumb').src = image;
+    $('frameThumb').style.display = 'block';
+    $('d-frame').textContent = '已送 ' + state.camera.count + ' 帧 · 320×180 彩色 JPEG（与屏上同一取景）';
+  }
+
+  // ---------- 文字验证：两席输入框 → 文字通道（发送即收住，走真读心 + 真记忆） ----------
+  // 这条通道与真麦那条链分开开会话：不占麦、不开 ASR，只把「这一席的整句原话」交给同一套
+  // 读心 / 判停口径 / 记忆写入（服务端 `/api/neixinxi/text`）。
+  function connectTextSeat(seat, sessionId) {
+    return new Promise((resolve, reject) => {
+      const existing = state.text.ws[seat];
+      if (existing && existing.readyState === WebSocket.OPEN) { resolve(); return; }
+      const socket = new WebSocket(location.origin.replace(/^http/, 'ws')
+        + '/api/neixinxi/text?session_id=' + encodeURIComponent(sessionId) + '&seat=' + seat);
+      state.text.ws[seat] = socket;
+      let settled = false;
+      const fail = reason => {
+        if (settled) return;
+        settled = true; clearTimeout(timer);
+        try { socket.close(); } catch (error) { /* 已经关了 */ }
+        reject(new Error(reason));
+      };
+      const timer = setTimeout(() => fail('席 ' + seat + '（' + SEAT_NAME[seat] + '）文字通道 8 秒没接上'), 8000);
+      socket.onopen = () => { /* 等 ready 再算接上 */ };
+      socket.onmessage = message => {
+        let packet;
+        try { packet = JSON.parse(message.data); } catch (error) { return; }
+        const data = packet.data || {};
+        if (packet.kind === 'ready') {
+          if (!settled) { settled = true; clearTimeout(timer); resolve(); }
+        }
+        if (packet.kind === 'error' && !settled && data.stage === 'join') {
+          fail(data.error || '文字通道接不上'); return;
+        }
+        handlePacket(seat, packet);
+      };
+      socket.onerror = () => { if (!settled) fail('席 ' + seat + ' 的文字通道出错'); };
+      socket.onclose = () => {
+        state.text.ws[seat] = null;
+        if (!settled) fail('席 ' + seat + ' 的文字通道被关掉');
+      };
+    });
+  }
+
+  async function ensureTextSession() {
+    if (state.text.sessionId) {
+      const live = SEATS.every(seat => state.text.ws[seat]
+        && state.text.ws[seat].readyState === WebSocket.OPEN);
+      if (!live) await Promise.all(SEATS.map(seat => connectTextSeat(seat, state.text.sessionId)));
+      return state.text.sessionId;
+    }
+    const response = await fetch('/api/neixinxi/open', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({eot: state.eotMode, thresholds: state.threshold}),
+    });
+    const info = await response.json();
+    if (!response.ok) throw new Error(info.error || ('HTTP ' + response.status));
+    state.text.sessionId = info.session_id;
+    state.model = info.model;
+    state.engine = info.mind_engine;
+    state.memory.store = info.memory || null;
+    $('d-session').textContent = info.session_id;
+    $('d-model').textContent = (state.engine && state.engine.label) || info.model;
+    $('d-engine').textContent = [state.engine && state.engine.mode,
+      state.engine && state.engine.vision && ('视觉 ' + (state.engine.vision.capability || '未知'))]
+      .filter(Boolean).join(' · ');
+    $('d-eot').textContent = info.eot.label + '（' + info.eot.mode + '）';
+    const mem = info.memory || {};
+    $('d-memory').textContent = mem.enabled
+      ? '已接 · ' + (mem.kind || '') + ' · ' + (mem.user_id || '') + ' · 凭据 ' + (mem.key_source || '—')
+      : '未接 · ' + (mem.reason || '没有凭据');
+    await Promise.all(SEATS.map(seat => connectTextSeat(seat, state.text.sessionId)));
+    return state.text.sessionId;
+  }
+
+  async function sendText(seat) {
+    const input = $('textInput-' + seat);
+    const text = String(input.value || '').trim();
+    if (!text) {
+      showError('空文本不发', '发出去的就是这一句完整原话：先输入一句，再点发送');
+      return;
+    }
+    try {
+      await ensureTextSession();
+      const socket = state.text.ws[seat];
+      if (!socket || socket.readyState !== WebSocket.OPEN) {
+        throw new Error('席 ' + seat + '（' + SEAT_NAME[seat] + '）的文字通道没接上');
+      }
+      socket.send(JSON.stringify({cmd: 'text', text: text}));
+      input.value = '';
+      clearNotice();
+    } catch (error) {
+      showError('文字没发出去', error.message || String(error));
+    }
+  }
+
+  $('textBtn').addEventListener('click', () => {
+    const panel = $('textPanel');
+    panel.classList.toggle('open');
+    if (panel.classList.contains('open') && !state.text.sessionId) {
+      ensureTextSession().catch(error => addError('文字通道开不了：' + (error.message || error)));
+    }
+  });
+  SEATS.forEach(seat => {
+    $('textSend-' + seat).addEventListener('click', () => sendText(seat));
+    $('textInput-' + seat).addEventListener('keydown', event => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      sendText(seat);
+    });
+  });
+  $('d-mem-go').addEventListener('click', async () => {
+    const query = String($('d-mem-query').value || '').trim();
+    if (!query) { addError('先写一个问法再查（例如：副驾是谁）'); return; }
+    if (!state.text.sessionId) { addError('还没有会话：先发一句文字再查'); return; }
+    try {
+      const response = await fetch('/api/neixinxi/memory?session_id='
+        + encodeURIComponent(state.text.sessionId) + '&q=' + encodeURIComponent(query) + '&seat=D');
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || ('HTTP ' + response.status));
+      paintMemoryRecall(Object.assign({}, body.query || {},
+        {attempt: 1, note: '按「' + query + '」再查一次（查的是记忆库）'}));
+    } catch (error) {
+      addError('再查失败：' + (error.message || error));
+    }
+  });
+
+  // ---------- 抽屉 ----------
+  function setDrawer(open) {
+    $('drawer').classList.toggle('open', !!open);
+    document.body.classList.toggle('drawer-open', !!open);
+    if (open) loadHub();
+  }
+  $('drawerBtn').addEventListener('click', () => setDrawer(!$('drawer').classList.contains('open')));
+  $('drawerClose').addEventListener('click', () => setDrawer(false));
+
+  // 正常入口就是真判断（8009 同一套模型）；`?eot=offline` 是留给联调的离线测试入口，
+  // 离线时详情里照实标「离线替身」，不冒充真判断。
+  const params = new URLSearchParams(location.search);
+  if (params.get('eot') === 'offline') state.eotMode = 'offline';
+  if (params.get('eot') === 'real') state.eotMode = 'real';
+
+  // ?demo=1：不带麦、不连服务，只按已拍视觉演一遍（字幕 + 三层鬼畜叠字），给验收看观感。
+  // 真链跑起来后这条分支完全不走（默认无参数）。
+  function demoPreview() {
+    state.final.D = '今天天气真好，咱晚上去哪吃';
+    state.eot.D = {label: 'complete', may_confirm: true, latency_ms: 118,
+                   scores: {complete: 0.94, cut: 0.03, wait: 0.03}};
+    state.text.P = '随便啊，看你心情';
+    state.speaking.P = true;
+    paintSeat('D'); paintSeat('P');
+    state.threshold.D = -45; state.threshold.P = -38;
+    paintThreshold('D'); paintThreshold('P');
+    state.level.D = -22; state.level.P = -16; state.quiet.D = false; state.quiet.P = false;
+    state.running = true; state.phase = 'listening'; paintLevel('D'); paintLevel('P'); paintStartButton();
+    $('hint').style.opacity = '0';
+    const lines = ['车里有两个人正在聊天', '这气氛也太松弛了', '他俩好像很开心'];
+    lines.forEach((line, index) => setTimeout(() => {
+      state.sceneSummary = line;
+      mindLine(line);
+    }, 260 + index * 620));
+    setTimeout(() => paintCarSpeech({slot: 'cushion', source: '演示档（不连服务）',
+                                     text: '我不插话，你俩接着说。'}), 2200);
+    setTimeout(() => { $('modePill').textContent = '演示档 · 不连服务'; }, 300);
+  }
+  if (params.get('demo') === '1') demoPreview();
+
+  // ---------- 主画面通告：只有底噪就说出来（只写在抽屉里不算） ----------
+  function monitorGate() {
+    if (state.phase !== 'listening') return;
+    if (state.noticeKind && state.noticeKind !== 'gate') return;   // 中断/出错通告优先，别被盖掉
+    const now = performance.now();
+    let over = false;
+    SEATS.forEach(seat => { if (!state.quiet[seat] && state.level[seat] > -89) over = true; });
+    if (over) {
+      state.lastOverAt = now;
+      if (state.noticeKind === 'gate') clearNotice();
+      return;
+    }
+    if (!state.lastOverAt) state.lastOverAt = state.listeningSince;
+    if (now - state.lastOverAt < GATE_QUIET_MS) return;
+    const parts = SEATS.map(seat => SEAT_NAME[seat] + ' '
+      + (state.level[seat] > -89 ? state.level[seat].toFixed(0) + ' dBFS' : '没声音')
+      + ' / 降噪线 ' + state.threshold[seat] + ' dBFS');
+    setNotice('gate', '两席都在降噪线以下，只有底噪',
+      parts.join(' · ') + ' —— 底噪不会被送进识别；说话很小声时把顶栏的降噪线往下调（例如 -55 dBFS）会更稳');
+  }
+
+  SEATS.forEach(seat => { paintThreshold(seat); paintLevel(seat); paintSeat(seat); });
+  refreshDevices();
+  paintStartButton();
+  setInterval(monitorGate, 400);
+  // 中间的球：听着偏冷、车开口偏暖；电平由两席真实的降噪后电平推
+  if (window.JevIsland) {
+    try {
+      state.island = new window.JevIsland($('island'));
+      // 球按示意稿放大到画面中上部约两成宽：缩放放在建好之后（岛自己按 getBoundingClientRect
+      // 定画布分辨率，先缩会让它把 320×320 当成本来就那么大，等于没放大）。
+      const isl = state.island, cv = $('island');
+      // 车开口时那颗球偏暖（示意稿：听着偏冷、说话偏暖）；暖色是这一颗球自己的暖色带
+      isl.setAccent('#ff9d4d');
+      // 按 2 倍分辨率画、再整体放大到画面里：示意稿那颗球约两成宽，直接放大会糊，
+      // 所以画布固定 2 倍、岛按 CSS 尺寸算「装得下多大」，观察器不再按放大后的矩形重设。
+      isl.dpr = 2; isl.cw = 320; isl.ch = 320;
+      cv.width = 640; cv.height = 640;
+      isl._resize = () => {};
+      if (isl._drawGL) isl._drawGL(); else if (isl._draw2D) isl._draw2D();
+      cv.style.transformOrigin = 'center center';
+      cv.style.transform = 'scale(1.9)';
+    } catch (error) { state.island = null; }
+  }
+  paintOrb();
+  setInterval(paintOrb, 200);
+  // 详情开着才去问「这一拍的判断」（关着不发请求，也不占主画面）
+  setInterval(() => { if ($('drawer').classList.contains('open')) loadHub(); }, 1200);
+  window.addEventListener('beforeunload', () => SEATS.forEach(stopSeat));
+})();
+</script>
+</body>
+</html>
