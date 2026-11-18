@@ -28,7 +28,26 @@ from simple_websocket import Server as WsServer
 from core_pipeline_run import TOOL_SET, run
 from model_clients import warm_slow_model
 from shared.text import normalize
+
+# 云端 PoC 的运行时注入口：这台机器没有 corp LiteLLM，只有本机 127.0.0.1:4000 的代理。
+# 主链原先把「必须是 corp 地址 + deepseek-v4.1-flash」写死在 `existing_slow_configuration()` 里；
+# 这里只在显式设了 `POC_ALLOW_LOCAL_LITELLM=1` 时放行本机代理，不动判停/闸/工具/阈值，
+# 也不打印任何凭据。没设这个开关时仍走原校验（默认行为不变）。
+if os.environ.get("POC_ALLOW_LOCAL_LITELLM") == "1":
+    import core_pipeline_run as _cpr
+
+    def _poc_existing_slow_configuration():
+        base = str(os.environ.get("LITELLM_BASE_URL") or "")
+        if not (base.startswith("http://127.0.0.1:") or base.startswith("http://localhost:")):
+            raise ValueError("POC_ALLOW_LOCAL_LITELLM only allows a loopback LiteLLM base")
+        if not os.environ.get("LITELLM_API_KEY"):
+            raise FileNotFoundError("Local LiteLLM credential unavailable")
+        if not os.environ.get("SLOW_MODEL"):
+            raise FileNotFoundError("Local LiteLLM model unavailable")
+
+    _cpr.existing_slow_configuration = _poc_existing_slow_configuration
 from hub_speech import HubSpeech          # 中枢出声接线（判断全走 gate/ 现成那批，不新判）
+from neixinxi_log import NeixinxiLogReader, NeixinxiLogWriter
 
 app = Flask(__name__)
 app.json.ensure_ascii = False
@@ -1116,11 +1135,15 @@ def _frame_body(value):
     for number in (brightness, motion):
         if number is not None and not isinstance(number, (int, float)):
             return None, "frame.brightness/motion must be numbers"
+    source = str(value.get("source") or "").strip()
+    if not source:
+        source = "test_asset" if bool(value.get("test_asset")) else "camera"
     return {"image": image,
             "w": int(width) if width is not None else None,
             "h": int(height) if height is not None else None,
             "brightness": float(brightness) if brightness is not None else None,
-            "motion": float(motion) if motion is not None else None}, None
+            "motion": float(motion) if motion is not None else None,
+            "source": source}, None
 
 
 def _mind_ingest(session, frame, text, final, seat=None):
@@ -1858,7 +1881,8 @@ def dual_mic_open():
 #       两路出字 ──▶ 本席判停（`gate.turn_eot` 同一条口径，只判「这句说完没说完」）
 #       两路出字 + 当时画面 ──▶ 一份读心（只出一句场景旁白，不判停、不判接不接）
 #
-# 本页**不建 TurnSession**：不判「要不要回答」、不开闸、不进 Agent、不接记忆。
+# 本页**不建 TurnSession**：页面那一拍「要不要回答」只记录；收住后交主链跑闸 + 工具 + Agent，
+# 回执上屏；记忆只写不查进 Agent。
 # 两席单写者纪律沿用 `DualMicZoom`：worker 只往自己队列放更新，driver 线程统一派（不串席）。
 
 NEIXINXI_KEEP = 8
@@ -1961,6 +1985,17 @@ class NeixinxiZoom:
         self.eot_mode = eot_mode if eot_mode in HUB_EOT_MODES else "offline"
         self.started = time.monotonic() * 1000
         self.done = False
+        # 运行日志：只写这一会话真实发生的事（判停 / 原话 / 读心 / 主链事件）。
+        # 失败不影响产品页（日志是旁路，不参与判断，也不回写主画面）。
+        try:
+            self.log = NeixinxiLogWriter(session_id, {
+                "model": self.model, "eot_mode": self.eot_mode,
+                "seats": [{"seat": seat, "label": DUAL_SEAT_NAME[seat]} for seat in DUAL_SEATS],
+                "source": "内心戏产品页（文字验证 / 双路麦）",
+            })
+        except Exception as error:  # noqa: BLE001
+            app.logger.warning("neixinxi log disabled: %s", type(error).__name__)
+            self.log = None
         self.driver_started = False
         self.conns = {}                                          # seat -> _DualMicConn
         self.pcm_in = {seat: Queue() for seat in DUAL_SEATS}
@@ -2161,6 +2196,11 @@ class NeixinxiZoom:
             "prior_used": scene.get("prior_used"),
         })
         del self.mind_trace[:-8]
+        if self.log is not None:
+            try:
+                self.log.record_mind(scene, frame, self.model, event["t_ms"])
+            except Exception as error:  # noqa: BLE001 - 日志故障不回写产品页
+                app.logger.warning("neixinxi log mind failed: %s", type(error).__name__)
 
     # ---- 出字另起一句：用过的字不再叠到下一句 ----
     @staticmethod
@@ -2346,20 +2386,34 @@ class NeixinxiZoom:
         return text
 
     def _formal_wait_accept(self, seat, timeout_ms=2600):
-        """等这一版的「要不要回答」结论回来（最多 2.6 秒，与主链那一路的判断时延同量级）。"""
+        """等这一版的「要不要回答」结论回来（最多 2.6 秒，与主链那一路的判断时延同量级）。
+
+        返回原样快照（含 state / accept / at），只用于页面侧记录；不拿它替主链吞句。
+        """
         began = time.monotonic() * 1000
         while True:
             try:
                 snap = self.speech.snapshot(seat) or {}
                 accept = snap.get("accept") or {}
-                if accept.get("state") == "ok" and accept.get("accept") is not None:
-                    return bool(accept.get("accept"))
-                if accept.get("state") in ("failed", "timeout"):
-                    return False
+                state = accept.get("state")
+                if state == "ok" and accept.get("accept") is not None:
+                    return {"state": "ok", "accept": bool(accept.get("accept")),
+                            "accept_source": accept.get("source"),
+                            "at": int(time.time() * 1000),
+                            "truth": "页面这一拍的判断，只记录，不决定主链"}
+                if state in ("failed", "timeout"):
+                    return {"state": state, "accept": None,
+                            "error": accept.get("error"),
+                            "at": int(time.time() * 1000),
+                            "truth": "页面判断没回来；主链照常自己决定"}
             except Exception:  # noqa: BLE001 - 判断没回来就按「不回答」处置，不出声
-                return False
+                return {"state": "error", "accept": None,
+                        "at": int(time.time() * 1000),
+                        "truth": "页面判断读取失败；主链照常自己决定"}
             if time.monotonic() * 1000 - began >= timeout_ms:
-                return False
+                return {"state": "timeout", "accept": None,
+                        "at": int(time.time() * 1000),
+                        "truth": "页面判断超时；主链照常自己决定"}
             time.sleep(0.05)
 
     def _formal_worker(self, seat, text, page_accept=None):
@@ -2371,13 +2425,26 @@ class NeixinxiZoom:
         - 办理记录（「（已执行：某工具…）」那个 receipt）→ 只进台账，不上屏；
         - 主链一句都没有 → 中间保持空，也不编台词。
         `page_accept` 是页面上那一拍「要不要回答」的结论（只记录，不拿它吞句）。
-        执行面沿用主链的 mock 执行器（无副作用），DETAIL 里显式标注。
+        这一趟的 SSE 事件原样落进运行日志（带 `run_id` / 主链 `duo_session_id`），
+        并记下缺口（判答 / 工具披露 / Agent 对话没回来的照实列出）。
         """
         began = time.monotonic()
+        run_id = "run-" + uuid.uuid4().hex[:10]
+        run_t0 = self.now_ms()
+        captured = []
+        duo_session_id = None
         said, receipt, why, said_kind = "", "", "主链这一趟没有开闸", "ask_user"
+        error_text = None
         try:
             import urllib.request
-            body = json.dumps({"seats": {seat: {"script": text}}, "speed": 20}).encode()
+            # 一句一趟：只送这一句的**一版终稿**（不再用逐字脚本回放）。
+            # 逐字回放会让主链按每个中间版本反复决策（实测 4000+ 次），既不是「一句一办」，
+            # 也会把日志灌满中间事件。`updates` 是主链接口本来就支持的入参。
+            body = json.dumps({"seats": {seat: {
+                "updates": [{"t_ms": 0, "text": text, "final": True}],
+                "vad": [{"t_ms": 0, "kind": "speech_start"},
+                        {"t_ms": 1, "kind": "speech_end"}],
+            }}}, ensure_ascii=False).encode()
             req = urllib.request.Request(
                 "http://127.0.0.1:%d/api/session/dual/stream" % PORT, data=body,
                 headers={"Content-Type": "application/json"})
@@ -2391,45 +2458,68 @@ class NeixinxiZoom:
                     except ValueError:
                         continue
                     kind = packet.get("event")
-                    if kind == "au_executed" and str(packet.get("kind") or "") in ("ask_user", "done"):
+                    if not kind and packet.get("session_id"):
+                        # `duo_accepted` 这一条 data 里没有 event 字段，事件名在 SSE 的 event: 行。
+                        kind = "duo_accepted"
+                    if not kind:
+                        continue
+                    if kind in ("duo_accepted", "gate_decision", "gate_open",
+                                "gate_context_only", "tools_start", "tools_scores",
+                                "llm_decision", "au_decided", "au_executed",
+                                "receipt", "error", "duo_done"):
+                        captured.append({"event": kind, "at": int(time.time() * 1000),
+                                         "data": packet})
+                    if kind == "duo_accepted":
+                        duo_session_id = str(packet.get("session_id") or "") or None
+                    elif kind == "au_executed" and str(packet.get("kind") or "") in ("ask_user", "done"):
                         question = str((packet.get("arguments") or {}).get("question") or "").strip()
                         if not question:
                             head = "已回问："
                             got = str(packet.get("receipt") or "")
                             question = got.split(head, 1)[1].strip() if head in got else ""
-                        if question:
+                        if question and not said:
                             said, why, said_kind = question, "", "ask_user"
-                            break
                     elif kind == "au_executed":
                         # 办完了：主链给的那句「对人说的话」就是这一轮的回复（办理记录不上屏）
                         spoken = str(packet.get("spoken") or "").strip()
                         receipt = str(packet.get("receipt") or "").strip() or receipt
-                        if spoken:
+                        if spoken and not said:
                             said, why, said_kind = spoken, "", "done"
-                            break
-                        why = "主链办完了但没给出一句对人说的话"
+                        elif not spoken and not why:
+                            why = "主链办完了但没给出一句对人说的话"
                     elif kind == "receipt":
-                        receipt = str(packet.get("text") or "").strip()
-                        if not why:
+                        receipt = str(packet.get("text") or "").strip() or receipt
+                        if not said and not why:
                             why = "主链只给了办理回执，没有一句对人说的话"
                     elif kind == "duo_done":
-                        if not why:
+                        if not said and not why:
                             why = "主链跑完但没开闸 / 没有对人说的话"
                         break
         except Exception as error:  # noqa: BLE001 - 主链这一趟没跑完：不出声，页面可见
-            why = "主链这一趟没跑完：" + type(error).__name__ + ": " + str(error)[:120]
+            error_text = type(error).__name__ + ": " + str(error)[:160]
+            why = "主链这一趟没跑完：" + error_text
         finally:
             with self.formal_lock:
                 self.formal_busy[seat] = False
+        if self.log is not None:
+            try:
+                self.log.record_run(
+                    run_id, seat, text, page_accept, captured,
+                    duo_session_id=duo_session_id, said=said, said_kind=said_kind,
+                    receipt=receipt, error=error_text, t_ms=run_t0)
+            except Exception as error:  # noqa: BLE001 - 日志故障不影响回执上屏
+                app.logger.warning("neixinxi log run failed: %s", type(error).__name__)
         if not said:
             self._on_event({"event": "formal_skip", "t_ms": self.now_ms(), "seat_id": seat,
                             "utterance": text, "reason": why, "receipt": receipt or None,
-                            "page_accept": page_accept,
+                            "page_accept": page_accept, "run_id": run_id,
+                            "duo_session_id": duo_session_id,
                             "note": "主链这一趟没有一句对人说的话：中间保持空（回执只在台账里，不上屏）"})
             return
         event = {"event": "car_speech", "slot": "formal", "text": said, "t_ms": self.now_ms(),
                  "seat_id": seat, "shared": True, "utterance": text,
                  "kind": said_kind, "receipt": receipt or None, "page_accept": page_accept,
+                 "run_id": run_id, "duo_session_id": duo_session_id,
                  "reason": ("人说完、判断要回答、闸开了、主链办完后给出这一句：这就是这一轮的回复"
                             if said_kind == "done" else
                             "人说完、判断要回答、闸开了、主链给出回问：回问原文上屏"),
@@ -2476,13 +2566,21 @@ class NeixinxiZoom:
         self.eot[seat] = verdict
         self.eot_text[seat] = text
         self.eot_at[seat] = now
-        self._on_event({"event": "eot", "t_ms": now, "seat_id": seat, "text": text,
-                        "final": True, "label": "complete", "label_cn": "说完",
-                        "may_confirm": True,
-                        "scores": {key: verdict[key] for key in ("complete", "cut", "wait")},
-                        "source": "text", "source_mode": "text", "error": None,
-                        "latency_ms": 0.0,
-                        "note": "文字输入发送即收住：这句交给读心读一次（不判接不接）"})
+        eot_event = {"event": "eot", "t_ms": now, "seat_id": seat, "text": text,
+                     "final": True, "label": "complete", "label_cn": "说完",
+                     "may_confirm": True,
+                     "scores": {key: verdict[key] for key in ("complete", "cut", "wait")},
+                     "source": "text", "source_mode": "text", "error": None,
+                     "latency_ms": 0.0,
+                     "note": "文字输入发送即收住：这句交给读心读一次（不判接不接）"}
+        self._on_event(eot_event)
+        if self.log is not None:
+            try:
+                self.log.record_utterance(seat, text, "text_send", now)
+                self.log.record_eot(seat, text, dict(verdict, label_cn="说完", source="text"),
+                                    "text", 0.0, now)
+            except Exception as error:  # noqa: BLE001
+                app.logger.warning("neixinxi log text failed: %s", type(error).__name__)
         # 读心：与判停「说完」那一刻同一条入口（用这一句完整原话 + 当时的画面读一次）
         self.feed_mind(seat, text, final=True)
         try:
@@ -2975,7 +3073,7 @@ class NeixinxiZoom:
                     conn.send("asr_stopped", {"seat": seat})
         Thread(target=worker, daemon=True).start()
 
-    # ---- 判停：每一路各自判「这句说完没说完」（只判停，不接要不要回答） ----
+    # ---- 判停：每一路各自判「这句说完没说完」（页面不替主链决定接不接） ----
     def maybe_eot(self, seat, text, final=False):
         text = (text or "").strip()
         if not text:
@@ -3004,17 +3102,25 @@ class NeixinxiZoom:
         self.eot[seat] = verdict
         self.eot_text[seat] = text
         labels = {"complete": "说完", "cut": "截断", "wait": "没说完"}
-        self._on_event({"event": "eot", "t_ms": self.now_ms(), "seat_id": seat,
-                        "text": text, "final": final,
-                        "label": verdict.get("label"),
-                        "label_cn": labels.get(verdict.get("label"), verdict.get("label")),
-                        "may_confirm": bool(verdict.get("may_confirm")),
-                        "scores": {key: verdict.get(key)
-                                   for key in ("complete", "cut", "wait")},
-                        "source": verdict.get("source") or self.eot_mode,
-                        "source_mode": self.eot_mode,
-                        "error": verdict.get("error"),
-                        "latency_ms": round(latency, 1)})
+        event = {"event": "eot", "t_ms": self.now_ms(), "seat_id": seat,
+                 "text": text, "final": final,
+                 "label": verdict.get("label"),
+                 "label_cn": labels.get(verdict.get("label"), verdict.get("label")),
+                 "may_confirm": bool(verdict.get("may_confirm")),
+                 "scores": {key: verdict.get(key)
+                            for key in ("complete", "cut", "wait")},
+                 "source": verdict.get("source") or self.eot_mode,
+                 "source_mode": self.eot_mode,
+                 "error": verdict.get("error"),
+                 "latency_ms": round(latency, 1)}
+        self._on_event(event)
+        if self.log is not None:
+            try:
+                self.log.record_eot(seat, text, dict(verdict, **{
+                    "label_cn": event["label_cn"], "source": event["source"],
+                }), self.eot_mode, event["latency_ms"], event["t_ms"])
+            except Exception as error:  # noqa: BLE001
+                app.logger.warning("neixinxi log eot failed: %s", type(error).__name__)
         # 判停结论回填给闸门（应声 / 垫句要用「说完没说」；与主链 `_on_eot_result` 同一条）
         self.speech.on_eot(seat, hub_version, self.now_ms(),
                            dict(verdict, latency_ms=round(latency, 1)))
@@ -3150,6 +3256,11 @@ class NeixinxiZoom:
         # 记成「这一句要另起一行」：等 ASR 报这段结束 / 这席停住，就把用过的字清掉
         # （页面、判停、读心从下一版起都只认这一句之后的新字）。
         self.note_settle(seat, text)
+        if self.log is not None:
+            try:
+                self.log.record_utterance(seat, text, str(why), self.now_ms())
+            except Exception as error:  # noqa: BLE001
+                app.logger.warning("neixinxi log utterance failed: %s", type(error).__name__)
         try:
             self.mind.on_utterance_close(seat, why=str(why))
             self.push_mind_scenes()
@@ -3262,6 +3373,72 @@ def neixinxi_page():
     return send_file(Path(__file__).with_name("neixinxi.html"))
 
 
+# ---------- 运行日志（只读；与产品主画面分开） ----------
+@app.get("/fonts/<name>")
+def neixinxi_font(name):
+    """本页自带的中文字体（只列这两个文件，避免任意路径读取）。"""
+    if name not in ("NotoSansSC-Regular.ttf", "NotoSansSC-Bold.ttf"):
+        return jsonify({"error": "font not found"}), 404
+    path = Path(__file__).with_name("fonts") / name
+    if not path.is_file():
+        return jsonify({"error": "font not found"}), 404
+    return send_file(path, mimetype="font/ttf")
+
+
+@app.get("/log")
+def neixinxi_log_page():
+    """内心戏运行日志：中轴时间线，左=对话中枢/Agent，右=读心/画面。只读真实落盘记录。"""
+    return send_file(Path(__file__).with_name("log.html"))
+
+
+@app.get("/log.css")
+def neixinxi_log_css():
+    return send_file(Path(__file__).with_name("log.css"), mimetype="text/css")
+
+
+@app.get("/log.js")
+def neixinxi_log_js():
+    return send_file(Path(__file__).with_name("log.js"), mimetype="application/javascript")
+
+
+@app.get("/api/neixinxi/log/sessions")
+def neixinxi_log_sessions():
+    """最近会话列表（只列真实落盘的会话；没有跨会话检索，也不假装有）。"""
+    try:
+        limit = max(1, min(200, int(request.args.get("limit") or 100)))
+    except (TypeError, ValueError):
+        limit = 100
+    return jsonify({"sessions": NeixinxiLogReader().sessions(limit=limit),
+                    "limits": {"search": "未建设", "retention": "未建设",
+                               "permission": "未建设"}}), 200
+
+
+@app.get("/api/neixinxi/log/media/<session_id>/<name>")
+def neixinxi_log_media(session_id, name):
+    """日志里保存的那一帧。只允许固定目录下的 png/jpg，不允许路径穿越。"""
+    if not re.match(r"^[A-Za-z0-9_.-]{1,120}$", session_id or ""):
+        return jsonify({"error": "bad session id"}), 400
+    if not re.match(r"^[A-Za-z0-9_.-]{1,80}\.(?:png|jpg|jpeg)$", name or ""):
+        return jsonify({"error": "bad media name"}), 400
+    root = Path(os.environ.get("NEIXINXI_LOG_DIR")
+                or Path(__file__).resolve().parents[1] / "var" / "neixinxi_log")
+    path = root / "media" / session_id / name
+    if not path.is_file():
+        return jsonify({"error": "media not found"}), 404
+    return send_file(path)
+
+
+@app.get("/api/neixinxi/log/<session_id>")
+def neixinxi_log_session(session_id):
+    """一条会话的完整时间线事件（原话 / 判停 / 主链 / 读心 / 画面）。"""
+    data = NeixinxiLogReader().get(session_id)
+    if data is None:
+        return jsonify({"error": "unknown log session: " + str(session_id)}), 404
+    return jsonify({"session": data["session"], "events": data["events"],
+                    "limits": {"search": "未建设", "retention": "未建设",
+                               "permission": "未建设"}}), 200
+
+
 @app.get("/mic_route.js")
 def mic_route_js():
     """开麦路由共用脚本（内心戏页 / 对话流页同一份纯函数，见文件头注释）。"""
@@ -3319,8 +3496,10 @@ def neixinxi_open():
                     # 记忆：只报「开没开 / 挂在谁 / 凭据来源标签」，不含任何密钥信息（见 memory.memos.status）。
                     "memory": zoom.memory.status(),
                     "text_channel": "/api/neixinxi/text?session_id=…&seat=D|P",
-                    "limits": ("只接判停；不接要不要回答、不开闸、不进 Agent；"
-                               "收住后读心落地 + 写前快判断通过才写一刀记忆（只写不查进 Agent）")}), 200
+                    "limits": ("判停只判说完没说完；页面那一拍「要不要回答」只记录，"
+                               "收住后交主链跑闸 + 工具 + Agent，回执上屏；"
+                               "读心 / 判停 / 主链事件写入运行日志；"
+                               "记忆写入仍需读心落地 + 写前快判断通过")}), 200
 
 
 @app.route("/api/neixinxi/asr", websocket=True)
@@ -3420,7 +3599,7 @@ def neixinxi_text():
 
     `{"cmd":"text","text":"…"}` = 这一席的整句原话，**发送即收住**（走真读心 + 真记忆，
     与真麦那条链同一份读心 / 判停口径 / 记忆写入；不另开第二条链）。
-    不开 ASR（没有麦），也不判接不接 / 不开闸 / 不进 Agent（本页本来就不做这三件事）。
+    不开 ASR（没有麦）；页面那一拍「要不要回答」只记录，收住后仍交主链跑闸 + 工具 + Agent。
     """
     qs = request.args
     session_id = (qs.get("session_id") or "").strip()

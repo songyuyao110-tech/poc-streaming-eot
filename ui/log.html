@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>内心戏 · 运行日志</title>
+<meta name="color-scheme" content="light"/>
+<meta name="google" content="notranslate"/>
+<link rel="stylesheet" href="/log.css"/>
+</head>
+<body translate="no" class="notranslate">
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">
+      <svg viewBox="0 0 28 28" width="28" height="28" fill="none">
+        <rect x="2.5" y="3" width="23" height="22" rx="6" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M9 8.5v11M9 8.5h5.2c2.8 0 4.6 1.5 4.6 3.8S17 16 14.2 16H9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M14.5 16 19.2 19.6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+      </svg>
+    </span>
+    <span class="brand-text">
+      <span class="brand-title">内心戏 · 运行日志</span>
+      <span class="brand-sub">车载对话 · 只读</span>
+    </span>
+  </div>
+
+  <div class="top-actions">
+    <span class="draft-pill"><span class="pulse" aria-hidden="true"></span>真实记录</span>
+    <a class="ghost-btn" href="/neixinxi">回到内心戏</a>
+    <button type="button" class="ghost-btn" id="refreshBtn">刷新</button>
+    <button type="button" class="ghost-btn" id="drawerBtn">字段与缺口</button>
+  </div>
+</header>
+
+<div id="truthBanner" class="truth-banner is-real" aria-live="polite"></div>
+
+<main class="stage" id="stage">
+  <div class="session-bar" id="sessionBar" hidden></div>
+  <div class="session-meta" id="sessionMeta" hidden></div>
+  <div class="timeline-wrap" id="timelineMount"></div>
+</main>
+
+<div class="drawer-overlay" id="drawerOverlay" hidden></div>
+<aside class="drawer" id="drawer" aria-hidden="true" aria-labelledby="drawerTitle">
+  <div class="drawer-head">
+    <div>
+      <span class="eyebrow">这一页是什么</span>
+      <h2 id="drawerTitle">字段与缺口</h2>
+      <p>只把真实落盘的记录按发生时间排开；没记录的字段照实标缺失。</p>
+    </div>
+    <button type="button" class="icon-btn" id="drawerClose" aria-label="关闭字段说明">
+      <svg viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+  <div class="drawer-body">
+    <div class="legend" aria-label="图例">
+      <span><i class="dot ok"></i>日志里已有</span>
+      <span><i class="dot no"></i>缺失已标明</span>
+      <span><i class="dot demo"></i>本页无示例数据</span>
+    </div>
+
+    <section class="drawer-section">
+      <h3>左右两条独立轨道</h3>
+      <p class="section-lede">左边是智能对话中枢与 Agent 结果：原话、判停、判答、工具披露、Agent 对话与办理回执。右边是读心输出与画面。两边各自按自己的发生时间挂到中轴上，不是一句话左右对齐。</p>
+      <p class="section-lede">读心可以先于判停出现，也可以在一句话里更新多次，也可以只有读心没有办理；办理出现时，右侧不一定有新的读心。对侧空着是正常的，不会为了对齐补空白卡片。</p>
+    </section>
+
+    <section class="drawer-section">
+      <h3>默认只看结论</h3>
+      <p class="section-lede">每条默认只显示关键结果和一行原因；分数、候选工具、原始事件和关联键都要点开才看。</p>
+    </section>
+
+    <section class="drawer-section">
+      <h3>缺失会标明，不补造</h3>
+      <ul class="plain-list">
+        <li>没有判停、判答、工具披露、Agent 对话、读心或画面：照实标「未记录」，不编时间、不拿示例图顶上。</li>
+        <li>页面那一拍「要不要回答」只作记录，以主链的判答为准；两者都显示，不混成一个。</li>
+        <li>这一页不提供全文检索、长期保留、权限和跨会话平台；没有做的能力不画成已实现。</li>
+      </ul>
+    </section>
+
+    <section class="drawer-section">
+      <h3>数据来源</h3>
+      <p id="drawerSource" class="source-copy">正在读取落盘记录…</p>
+      <p class="source-copy">日志由内心戏会话的真实入口写入：文字发送 / 判停收住、判停结果、读心输出、主链闸/工具/Agent 事件。读取需要请求本机服务，不收集密钥。</p>
+    </section>
+  </div>
+</aside>
+
+<noscript><div class="noscript">这一页需要浏览器启用 JavaScript 才能读取日志。</div></noscript>
+
+<script src="/log.js" defer></script>
+</body>
+</html>

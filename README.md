@@ -26,6 +26,7 @@ src/                 PoC 核心代码（按模块分目录）
 fixtures/            core_score 工具集：tools-core-score.yaml（242 tools / 17 domains）+ 域描述 + 源 JSON
 ui/                  本地回环 UI（Flask + 原生 WebSocket）
   neixinxi.html      现行面向用户的界面 /neixinxi（打开即接通正式答复、默认真判断）
+  log.html           日志查看 /log（按中轴时间线回看内心戏会话，主屏仍是产品演示）
   index.html         工程测试台 /（调试用，不是验收面）
   mind.html          读心调试页 /mind
   server.py          页面与会话接口
@@ -141,8 +142,9 @@ PY=.venv/bin/python
 
 # 起 UI（默认 8765，麦克风模式需要 localhost）
 $PY -u -B ui/server.py
-# 两个页面：http://127.0.0.1:8765/neixinxi 是**现行面向用户的界面**（打开即接通正式答复、默认真判断；
+# 页面：http://127.0.0.1:8765/neixinxi 是**现行面向用户的界面**（打开即接通正式答复、默认真判断；
 # ?eot=offline 才是离线替身，离线通过只算预检），用户与最终验收都看这一页；
+# http://127.0.0.1:8765/log 可回看内心戏会话的中轴时间线；
 # http://127.0.0.1:8765/ 的工程测试台只作调试，不是验收面。页面口径见 ui/README.md。
 
 # 验收（需 UI 在跑）

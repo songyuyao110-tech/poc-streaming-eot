@@ -13,7 +13,8 @@
   判停 / 要不要回答 / 应声 / 节奏 / 垫句 / 插话 / 冷场这些判断只在「详情」里，默认关上。
   设备、降噪线、文字验证、原始事件也一并收进详情的次级设置（主画面不摊表）。
 
-  本页不判「要不要回答」、不开闸、不进 Agent；判停只判「这句说完没说完」。
+  页面那一拍「要不要回答」只记录；收住后交主链跑闸 + 工具 + Agent，回执上屏。
+  判停只判「这句说完没说完」，页面不替主链决定接不接。
   记忆（2026-11-12 10:29–10:31 拍板）：收住只是有资格——这句收住触发的那次读心落地后，再用判停
   同一套模型做一次很快的写前快判断（有没有必要写），通过才落一刀（攒并后的原话 `主驾说：“…”` +
   `当时场景：<读心>`）；写完把记忆**查回来**显示在页上——显示的是查回来的内容，不是把旁白再贴一次。
@@ -24,8 +25,8 @@
     --teal:#2fd6c4; --teal-soft:#6ff0e2; --amber:#f0a93b; --amber-soft:#ffc56a;
     --ink:#fbf6ee; --warm:#ffd9ac; --line:rgba(255,255,255,.16);
     --panel:rgba(8,10,16,.42);
-    --font:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
-    --serif:"Songti SC","Noto Serif CJK SC","Times New Roman",serif;
+    --font:"Noto Sans SC Web",-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    --serif:"Noto Sans SC Web","Songti SC","Noto Serif CJK SC","Times New Roman",serif;
     --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
   }
   *{box-sizing:border-box}
@@ -246,6 +247,7 @@
     <div class="brand"><h1>内心戏</h1><span>车内对话</span></div>
     <div class="top-right">
       <span class="pill" id="modePill">未连服务</span>
+      <a class="pill" href="/log" style="text-decoration:none">运行日志</a>
       <button class="pill" id="drawerBtn">详情</button>
     </div>
   </header>
@@ -353,7 +355,7 @@
       <div class="row"><span>判停来源</span><span id="d-eot">—</span></div>
       <div class="row"><span>话筒</span><span id="d-micmode">两路都开</span></div>
       <div class="row"><span>记忆</span><span id="d-memory">—</span></div>
-      <div class="row lang"><span>本页边界</span><span>只判停 + 中枢出声（应声 / 垫句 / 冷场接话）；不开闸、不进 Agent</span></div>
+      <div class="row lang"><span>本页边界</span><span>判停 + 中枢出声；收住后交主链跑闸 + 工具 + Agent，回执上屏；页面「要不要回答」只记录</span></div>
     </section>
 
     <section>
@@ -399,6 +401,7 @@
     </section>
 
     <section class="links">
+      <a href="/log">运行日志（中轴时间线）</a>
       <a href="/">← 工程测试台首页</a>
       <a href="/mind">读心页</a>
     </section>
@@ -637,7 +640,7 @@
       $('d-mem-recall').textContent = '「' + (data.query || '') + '」→\n'
         + items.join('\n') + '\n（第 ' + (data.attempt || 1) + ' 次查回，共 ' + items.length + ' 条）';
     } else {
-      $('memText').textContent = '记忆 ' + (data.note || '还没查到')
+      $('memText').textContent = '记忆 ' + (/memos 未启用|MEMOS_/.test(String(data.note||'')) ? '未接 · 长期记忆未启用' : (data.note || '还没查到'))
         + '（第 ' + (data.attempt || 1) + ' 次查）';
       $('d-mem-recall').textContent = '「' + (data.query || '') + '」→ 还没查到'
         + (data.status ? '（' + data.status + '）' : '') + ' · 第 ' + (data.attempt || 1) + ' 次';
@@ -1757,7 +1760,7 @@
     const mem = info.memory || {};
     $('d-memory').textContent = mem.enabled
       ? '已接 · ' + (mem.kind || '') + ' · ' + (mem.user_id || '') + ' · 凭据 ' + (mem.key_source || '—')
-      : '未接 · ' + (mem.reason || '没有凭据');
+      : '未接 · ' + (/memos 未启用|MEMOS_/.test(String(mem.reason||'')) ? '长期记忆未启用' : (mem.reason || '没有凭据'));
     await Promise.all(SEATS.map(seat => connectTextSeat(seat, state.text.sessionId)));
     return state.text.sessionId;
   }
