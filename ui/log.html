@@ -27,6 +27,7 @@
   <div class="top-actions">
     <span class="draft-pill"><span class="pulse" aria-hidden="true"></span>真实记录</span>
     <a class="ghost-btn" href="/neixinxi">回到内心戏</a>
+    <button type="button" class="ghost-btn convo-btn" id="convoBtn" disabled>打开对话</button>
     <button type="button" class="ghost-btn" id="refreshBtn">刷新</button>
     <button type="button" class="ghost-btn" id="drawerBtn">字段与缺口</button>
   </div>
@@ -66,6 +67,16 @@
     </section>
 
     <section class="drawer-section">
+      <h3>画面默认收起</h3>
+      <p class="section-lede">读心文字照常留在时间线上；每一帧画面默认不加载，点「展开画面」才显示这一帧，再点「收起画面」收回去。会话帧多时也可以一次展开或收起全部画面，不会一进日志页就铺满图。</p>
+    </section>
+
+    <section class="drawer-section">
+      <h3>对话可以单独打开</h3>
+      <p class="section-lede">顶栏「打开对话」只把这一场会话里人对车说的和车上对人说的按发生时间从上往下排开；读心画面、判停分数、工具细节不插进这段对话，仍留在左侧时间线按需看。</p>
+    </section>
+
+    <section class="drawer-section">
       <h3>默认只看结论</h3>
       <p class="section-lede">每条默认只显示关键结果和一行原因；分数、候选工具、原始事件和关联键都要点开才看。</p>
     </section>
@@ -86,6 +97,21 @@
     </section>
   </div>
 </aside>
+
+<div class="convo-overlay" id="convoOverlay" hidden></div>
+<section class="convo-panel" id="convoPanel" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="convoTitle">
+  <header class="convo-head">
+    <div>
+      <span class="eyebrow">这一场会话 · 人对车说</span>
+      <h2 id="convoTitle">对话</h2>
+      <p id="convoSub">按真实发生时间从上往下排；读心画面和工程细节不插进这段对话。</p>
+    </div>
+    <button type="button" class="icon-btn" id="convoClose" aria-label="关闭对话">
+      <svg viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+    </button>
+  </header>
+  <div class="convo-body" id="convoBody"></div>
+</section>
 
 <noscript><div class="noscript">这一页需要浏览器启用 JavaScript 才能读取日志。</div></noscript>
 

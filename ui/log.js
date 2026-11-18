@@ -12,6 +12,8 @@
     selectedId: null,
     data: null,
     openFolds: new Set(),
+    openShots: new Set(),
+    convoOpen: false,
     loading: false
   };
   const dom = {};
@@ -64,6 +66,124 @@
   }
   function foldKey(ev, name) { return String(ev.seq) + '::' + name; }
   function isOpen(ev, name) { return state.openFolds.has(foldKey(ev, name)); }
+
+  function frameEvents(detail) {
+    return ((detail && detail.events) || []).filter(function (e) { return e.kind === 'frame'; });
+  }
+  function shotKey(frame) { return String(frame && frame.seq); }
+  function isShotOpen(frame) { return state.openShots.has(shotKey(frame)); }
+  function allShotsOpen(detail) {
+    const frames = frameEvents(detail);
+    return frames.length > 0 && frames.every(isShotOpen);
+  }
+  function framesToggleHTML(detail) {
+    const frames = frameEvents(detail);
+    if (!frames.length) return '';
+    const open = allShotsOpen(detail);
+    return '<button type="button" class="ghost-btn sm-frame-btn" data-frames-toggle aria-expanded="' +
+      (open ? 'true' : 'false') + '">' +
+      (open ? '收起全部画面' : '展开全部画面') + '（' + frames.length + '）</button>';
+  }
+  function shotToggleButton(frame) {
+    const open = isShotOpen(frame);
+    return '<button type="button" class="shot-toggle' + (open ? ' is-open' : '') +
+      '" data-shot="' + esc(shotKey(frame)) + '" aria-expanded="' + (open ? 'true' : 'false') + '">' +
+      '<span class="caret" aria-hidden="true"></span>' + (open ? '收起画面' : '展开画面') + '</button>';
+  }
+  function shotBlockHTML(frame, caption) {
+    const label = frame.payload.label || '画面';
+    if (!isShotOpen(frame)) {
+      return '<div class="shot-tools"><div class="shot-tools-k">' +
+        '<span class="shot-title">画面默认收起</span>' +
+        '<span class="shot-hint">读心文字照常显示；点开才加载这一帧</span></div>' +
+        shotToggleButton(frame) + '</div>';
+    }
+    return '<section class="card shot"><div class="shot-frame">' +
+      '<img src="' + esc(frame.payload.frame_ref) + '" alt="日志中保存的画面" loading="lazy"/>' +
+      '<span class="shot-badge">' + esc(label) + '</span></div>' +
+      '<div class="shot-cap"><strong>' + esc(label) + '</strong> · ' + esc(caption) + '</div></section>' +
+      '<div class="shot-tools is-open">' + shotToggleButton(frame) + '</div>';
+  }
+
+  function conversationTurns(detail) {
+    const events = (detail && detail.events) || [];
+    const replies = {};
+    const runEnds = {};
+    events.forEach(function (e) {
+      const p = e.payload || {};
+      if (e.kind === 'main' && p.name === 'au_executed') {
+        const d = p.data || {};
+        const text = String(d.spoken || (d.kind === 'ask_user' ? (d.arguments || {}).question : '') || '').trim();
+        if (text) {
+          replies[p.run_id] = { type: 'car', at: e.at, seq: e.seq, seat: p.seat,
+            text: text, kind: d.kind || '' };
+        }
+      } else if (e.kind === 'run_end') {
+        runEnds[p.run_id] = e;
+      }
+    });
+    const turns = [];
+    events.forEach(function (e) {
+      const p = e.payload || {};
+      if (e.kind === 'utterance' && String(p.text || '').trim()) {
+        turns.push({ type: 'human', at: e.at, seq: e.seq, seat: p.seat, text: String(p.text).trim() });
+      }
+    });
+    Object.keys(replies).forEach(function (runId) { turns.push(replies[runId]); });
+    Object.keys(runEnds).forEach(function (runId) {
+      if (replies[runId]) return;
+      const e = runEnds[runId];
+      const p = e.payload || {};
+      const text = String(p.said || '').trim();
+      if (text) {
+        turns.push({ type: 'car', at: e.at, seq: e.seq, seat: p.seat,
+          text: text, kind: p.said_kind || '' });
+      }
+    });
+    turns.sort(function (a, b) { return (a.at - b.at) || (a.seq - b.seq); });
+    return turns;
+  }
+
+  function convoWho(turn) {
+    if (turn.type === 'human') return (seatOf(turn.seat).label || '人') + '说';
+    return turn.kind === 'ask_user' ? '车上问' : '车上说';
+  }
+
+  function renderConversation() {
+    if (!dom.convoBtn) return;
+    const turns = state.data ? conversationTurns(state.data) : [];
+    dom.convoBtn.disabled = !turns.length;
+    dom.convoBtn.textContent = '打开对话' + (turns.length ? ' · ' + turns.length + ' 条' : '');
+    if (!state.data) {
+      dom.convoSub.textContent = '还没有选中的会话；先在日志页选一场有原话的会话。';
+      dom.convoBody.innerHTML = '<div class="convo-empty"><strong>还没有可打开的对话</strong>' +
+        '<p>这一页只读真实落盘记录；没有原话时不编造对话。</p></div>';
+      return;
+    }
+    const session = state.data.session || {};
+    dom.convoSub.textContent = day(session.started_at) + ' ' + clock(session.started_at) +
+      ' · 共 ' + turns.length + ' 条；按真实发生时间从上往下，读心画面和工程细节不插进来。';
+    if (!turns.length) {
+      dom.convoBody.innerHTML = '<div class="convo-empty"><strong>这场会话没有留下原话</strong>' +
+        '<p>日志里只有读心或工程事件时，这里不补台词。对读心内容仍可在左侧时间线回看。</p></div>';
+      return;
+    }
+    const rows = turns.map(function (turn, index) {
+      const seat = seatOf(turn.seat);
+      const human = turn.type === 'human';
+      const side = human ? ('is-human ' + seat.cls) : 'is-car';
+      const to = !human && seat.label ? '<span class="convo-to">回' + esc(seat.label) + '</span>' : '';
+      return '<article class="convo-row ' + side + '">' +
+        '<div class="convo-time">' + esc(clock(turn.at)) + '</div>' +
+        '<div class="convo-rail" aria-hidden="true"><span class="convo-dot"></span></div>' +
+        '<div class="convo-msg">' +
+        '<div class="convo-who"><span class="convo-num">' + esc(String(index + 1).padStart(2, '0')) + '</span>' +
+        esc(convoWho(turn)) + to + '</div>' +
+        '<p class="convo-text">' + esc(turn.text) + '</p></div></article>';
+    }).join('');
+    dom.convoBody.innerHTML = '<div class="convo-thread">' + rows + '</div>' +
+      '<p class="convo-foot">这段只放人对车说的和车上对人说的；读心画面、判停分数、工具细节留在左侧时间线，按需再看。</p>';
+  }
 
   function engineLabel(engine) {
     if (!engine) return '未记录引擎';
@@ -121,6 +241,7 @@
   async function loadSession(sessionId) {
     state.selectedId = sessionId;
     state.openFolds.clear();
+    state.openShots.clear();
     state.loading = true;
     try {
       const body = await api('/api/neixinxi/log/' + encodeURIComponent(sessionId));
@@ -205,6 +326,7 @@
       metaEl.hidden = true;
       metaEl.innerHTML = '';
       mount.innerHTML = emptyHTML();
+      renderConversation();
       return;
     }
     const session = detail.session || {};
@@ -217,7 +339,7 @@
     const tags = ['真实记录'];
     if (summary.mind_engine) tags.push('读心：' + engineLabel(summary.mind_engine));
     if (summary.run_count) tags.push('主链 ' + summary.run_count + ' 趟');
-    if (summary.frame_count) tags.push('画面 ' + summary.frame_count + ' 帧');
+    if (summary.frame_count) tags.push('画面 ' + summary.frame_count + ' 帧（默认收起）');
     metaEl.hidden = false;
     metaEl.innerHTML =
       '<div class="sm-top"><div><h1>' +
@@ -226,11 +348,12 @@
         ' · 会话 ' + (session.session_id || '') + ' · 模型 ' + ((session.meta || {}).model || '未记录')) +
       '</p></div><div class="sm-tags">' + tags.map(function (t) {
         return '<span class="badge neutral">' + esc(t) + '</span>';
-      }).join('') + '</div></div>' +
+      }).join('') + framesToggleHTML(detail) + '</div></div>' +
       (chips.length ? '<div class="sm-notes">' + chips.map(function (t) {
         return '<span class="badge muted">' + esc(t) + '</span>';
       }).join('') + '</div>' : '');
     mount.innerHTML = timelineHTML(detail);
+    renderConversation();
   }
 
   function emptyHTML() {
@@ -555,9 +678,7 @@
     const badge = revision > 1 ? { label: '读心更新', cls: 'teal' } : { label: '有输出', cls: 'teal' };
     const frame = ev.frame;
     const shot = frame
-      ? '<section class="card shot"><div class="shot-frame"><img src="' + esc(frame.payload.frame_ref) + '" alt="日志中保存的画面"/>' +
-        '<span class="shot-badge">' + esc(frame.payload.label || '画面') + '</span></div>' +
-        '<div class="shot-cap"><strong>' + esc(frame.payload.label || '画面') + '</strong> · 这一帧与这份读心同一次记录；来源照实标注。</div></section>'
+      ? shotBlockHTML(frame, '这一帧与这份读心同一次记录；来源照实标注。')
       : '<p class="card-extra missing-line">这一拍未记录画面（不拿示例图代替）。</p>';
     return cardShell(revision > 1 ? '读心更新' : '读心', badge,
       '<p class="mind-lead">' + esc(m.summary || '没有读心旁白。') + '</p>' +
@@ -569,9 +690,10 @@
 
   function cardFrame(ev) {
     const p = ev.payload;
-    return '<section class="card shot"><div class="shot-frame"><img src="' + esc(p.frame_ref) + '" alt="日志中保存的画面"/>' +
-      '<span class="shot-badge">' + esc(p.label || '画面') + '</span></div>' +
-      '<div class="shot-cap"><strong>' + esc(p.label || '画面') + '</strong> · 这一帧没有配对的读心记录，单独挂在自己的时间上。</div></section>';
+    return cardShell('画面', { label: '画面', cls: 'neutral' },
+      '<p class="card-reason">这一帧没有配对的读心记录，单独挂在自己的时间上；默认收起，点开才加载。</p>' +
+      shotBlockHTML(ev, '这一帧没有配对的读心记录，单独挂在自己的时间上。'),
+      '', '', false, false);
   }
 
   function chip(k, v) {
@@ -613,6 +735,13 @@
       ' 趟。没有读心或画面时只标明缺失，没有编造读心时间或示例图。';
   }
 
+  function repaintLog() {
+    if (!state.data) return;
+    const y = window.scrollY;
+    renderMain();
+    window.scrollTo(0, y);
+  }
+
   function bind() {
     dom.refreshBtn.addEventListener('click', function () { loadSessions(true); });
     dom.sessionBar.addEventListener('click', function (e) {
@@ -621,6 +750,29 @@
       loadSession(btn.getAttribute('data-session'));
     });
     document.body.addEventListener('click', function (e) {
+      const allBtn = e.target.closest('[data-frames-toggle]');
+      if (allBtn) {
+        const frames = frameEvents(state.data);
+        const open = allShotsOpen(state.data);
+        frames.forEach(function (frame) {
+          if (open) state.openShots.delete(shotKey(frame));
+          else state.openShots.add(shotKey(frame));
+        });
+        repaintLog();
+        const next = document.querySelector('[data-frames-toggle]');
+        if (next) next.focus();
+        return;
+      }
+      const shotBtn = e.target.closest('[data-shot]');
+      if (shotBtn) {
+        const key = shotBtn.getAttribute('data-shot');
+        if (state.openShots.has(key)) state.openShots.delete(key);
+        else state.openShots.add(key);
+        repaintLog();
+        const next = document.querySelector('[data-shot="' + key + '"]');
+        if (next) next.focus();
+        return;
+      }
       const btn = e.target.closest('[data-fold]');
       if (!btn) return;
       const key = btn.getAttribute('data-fold');
@@ -632,12 +784,41 @@
         window.scrollTo(0, y);
       }
     });
+    dom.convoBtn.addEventListener('click', openConversation);
+    dom.convoClose.addEventListener('click', closeConversation);
+    dom.convoOverlay.addEventListener('click', closeConversation);
     dom.drawerBtn.addEventListener('click', openDrawer);
     dom.drawerClose.addEventListener('click', closeDrawer);
     dom.drawerOverlay.addEventListener('click', closeDrawer);
     document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && dom.drawer.classList.contains('is-open')) closeDrawer();
+      if (e.key !== 'Escape') return;
+      if (state.convoOpen) { closeConversation(); return; }
+      if (dom.drawer.classList.contains('is-open')) closeDrawer();
     });
+  }
+
+  function openConversation() {
+    if (!state.data) return;
+    const turns = conversationTurns(state.data);
+    if (!turns.length) return;
+    state.convoOpen = true;
+    dom.convoLastFocus = document.activeElement;
+    renderConversation();
+    dom.convoPanel.classList.add('is-open');
+    dom.convoPanel.setAttribute('aria-hidden', 'false');
+    dom.convoOverlay.hidden = false;
+    dom.convoClose.focus();
+    requestAnimationFrame(function () {
+      dom.convoBody.scrollTop = dom.convoBody.scrollHeight;
+    });
+  }
+
+  function closeConversation() {
+    state.convoOpen = false;
+    dom.convoPanel.classList.remove('is-open');
+    dom.convoPanel.setAttribute('aria-hidden', 'true');
+    dom.convoOverlay.hidden = true;
+    if (dom.convoLastFocus && dom.convoLastFocus.focus) dom.convoLastFocus.focus();
   }
 
   function openDrawer() {
@@ -663,6 +844,12 @@
     dom.drawerOverlay = document.getElementById('drawerOverlay');
     dom.drawerBtn = document.getElementById('drawerBtn');
     dom.drawerClose = document.getElementById('drawerClose');
+    dom.convoBtn = document.getElementById('convoBtn');
+    dom.convoPanel = document.getElementById('convoPanel');
+    dom.convoOverlay = document.getElementById('convoOverlay');
+    dom.convoBody = document.getElementById('convoBody');
+    dom.convoSub = document.getElementById('convoSub');
+    dom.convoClose = document.getElementById('convoClose');
     dom.refreshBtn = document.getElementById('refreshBtn');
     bind();
     let wanted = null;
