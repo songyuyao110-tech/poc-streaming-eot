@@ -212,6 +212,9 @@
   #textPanel button{border:1px solid rgba(255,255,255,.24);background:rgba(255,255,255,.08);color:#eaf2f8;
                     border-radius:8px;padding:8px 12px;font:inherit;font-size:12px;cursor:pointer}
   #textPanel .tp-note{font-size:10.5px;color:rgba(255,255,255,.42);line-height:1.55}
+  #textPanel .tp-live{align-items:center;justify-content:space-between}
+  #textPanel .tp-live span{font-size:11px;color:rgba(255,255,255,.55);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #textPanel #textStopBtn:disabled{opacity:.45;cursor:default}
   #drawer .memrow{display:flex;gap:6px;margin-top:6px}
   #drawer .memrow input{flex:1;min-width:0;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.18);
                         color:#f2f7fb;border-radius:8px;padding:7px 9px;font:inherit;font-size:11.5px}
@@ -343,7 +346,11 @@
           <input id="textInput-P" placeholder="副驾这一句原话（回车发送）"/>
           <button id="textSend-P">发送</button>
         </div>
-        <div class="tp-note">走真读心 + 真记忆：发送即收住 → 读心读一次 → 写前快判断通过才写一刀。</div>
+        <div class="tp-row tp-live">
+          <span id="textLiveHint">还没有本场会话</span>
+          <button id="textStopBtn" type="button" disabled>停止本场</button>
+        </div>
+        <div class="tp-note">走真读心 + 真记忆：发送即收住 → 读心读一次 → 写前快判断通过才写一刀。换页不会结束本场，只有点「停止本场」或「停止」才会关掉。</div>
       </div>
     </section>
 
@@ -456,6 +463,64 @@
   };
 
   const SEAT_NAME = {D: '主驾', P: '副驾'};
+  const LIVE_KEY = 'neixinxi.liveSessionId';
+
+  function rememberLive(id) {
+    try {
+      if (id) sessionStorage.setItem(LIVE_KEY, id);
+      else sessionStorage.removeItem(LIVE_KEY);
+    } catch (error) { /* 私密模式可能写不了 */ }
+  }
+  function rememberedLive() {
+    try { return sessionStorage.getItem(LIVE_KEY) || ''; } catch (error) { return ''; }
+  }
+  function closeTextSockets() {
+    SEATS.forEach(seat => {
+      const socket = state.text.ws[seat];
+      state.text.ws[seat] = null;
+      if (socket) { try { socket.close(); } catch (error) { /* 已经关了 */ } }
+    });
+  }
+  function paintTextLive() {
+    const hint = $('textLiveHint');
+    const stop = $('textStopBtn');
+    if (!hint || !stop) return;
+    if (state.text.sessionId) {
+      hint.textContent = '本场进行中 · ' + state.text.sessionId;
+      stop.disabled = false;
+    } else {
+      hint.textContent = '还没有本场会话';
+      stop.disabled = true;
+    }
+  }
+  async function fetchLiveSessions() {
+    const response = await fetch('/api/neixinxi/live', {cache: 'no-store'});
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body.error || ('HTTP ' + response.status));
+    return body.sessions || [];
+  }
+  async function pickLiveSessionId() {
+    const live = await fetchLiveSessions();
+    const remembered = rememberedLive();
+    if (remembered && live.some(item => item.session_id === remembered)) return remembered;
+    return (live[0] && live[0].session_id) || '';
+  }
+  async function endLiveSession(sessionId) {
+    if (!sessionId) return;
+    try {
+      await fetch('/api/neixinxi/reset', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({session_id: sessionId}),
+      });
+    } catch (error) { /* 停场失败仍清本地状态 */ }
+    if (state.text.sessionId === sessionId) {
+      closeTextSockets();
+      state.text.sessionId = null;
+    }
+    if (state.sessionId === sessionId) state.sessionId = null;
+    if (rememberedLive() === sessionId) rememberLive('');
+    paintTextLive();
+  }
   // 写前快判断 / 读心等待没通过时的原因（后端给英文键，页上翻成人话；模型给的中文原因照原样显示）
   const REASON_CN = {
     still_speaking: '说话还在进行中（只更新旁白，不写）',
@@ -1419,6 +1484,7 @@
     }
     if (state.turn !== turn) return;
     state.sessionId = info.session_id;
+    rememberLive(info.session_id);
     state.model = info.model;
     state.engine = info.mind_engine;
     $('d-session').textContent = info.session_id;
@@ -1448,6 +1514,7 @@
   }
 
   function stop() {
+    const sessionId = state.sessionId;
     state.turn += 1;
     SEATS.forEach(stopSeat);
     closePrimedAudio();
@@ -1456,6 +1523,7 @@
     state.wsRetry = {D: 0, P: 0};
     clearNotice();
     paintStartButton();
+    if (sessionId) endLiveSession(sessionId);
   }
 
   $('micMode').addEventListener('change', event => {
@@ -1734,12 +1802,53 @@
     });
   }
 
+  function paintOpenInfo(info) {
+    state.model = info.model;
+    state.engine = info.mind_engine || state.engine;
+    if (info.memory) state.memory.store = info.memory;
+    $('d-session').textContent = info.session_id || state.text.sessionId || state.sessionId || '—';
+    if (info.model || state.engine) {
+      $('d-model').textContent = (state.engine && state.engine.label) || info.model || $('d-model').textContent;
+      $('d-engine').textContent = [state.engine && state.engine.mode,
+        state.engine && state.engine.vision && ('视觉 ' + (state.engine.vision.capability || '未知'))]
+        .filter(Boolean).join(' · ') || $('d-engine').textContent;
+    }
+    if (info.eot) $('d-eot').textContent = info.eot.label + '（' + info.eot.mode + '）';
+    const mem = info.memory || state.memory.store || {};
+    if (mem && (mem.enabled != null || mem.reason)) {
+      $('d-memory').textContent = mem.enabled
+        ? '已接 · ' + (mem.kind || '') + ' · ' + (mem.user_id || '') + ' · 凭据 ' + (mem.key_source || '—')
+        : '未接 · ' + (/memos 未启用|MEMOS_/.test(String(mem.reason||'')) ? '长期记忆未启用' : (mem.reason || '没有凭据'));
+    }
+  }
+
+  async function connectTextSeats(sessionId) {
+    await Promise.all(SEATS.map(seat => connectTextSeat(seat, sessionId)));
+  }
+
   async function ensureTextSession() {
     if (state.text.sessionId) {
       const live = SEATS.every(seat => state.text.ws[seat]
         && state.text.ws[seat].readyState === WebSocket.OPEN);
-      if (!live) await Promise.all(SEATS.map(seat => connectTextSeat(seat, state.text.sessionId)));
-      return state.text.sessionId;
+      if (live) return state.text.sessionId;
+      try {
+        await connectTextSeats(state.text.sessionId);
+        paintTextLive();
+        return state.text.sessionId;
+      } catch (error) {
+        closeTextSockets();
+        state.text.sessionId = null;
+        paintTextLive();
+      }
+    }
+    const existing = await pickLiveSessionId();
+    if (existing) {
+      state.text.sessionId = existing;
+      rememberLive(existing);
+      $('d-session').textContent = existing;
+      await connectTextSeats(existing);
+      paintTextLive();
+      return existing;
     }
     const response = await fetch('/api/neixinxi/open', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -1748,21 +1857,26 @@
     const info = await response.json();
     if (!response.ok) throw new Error(info.error || ('HTTP ' + response.status));
     state.text.sessionId = info.session_id;
-    state.model = info.model;
-    state.engine = info.mind_engine;
-    state.memory.store = info.memory || null;
-    $('d-session').textContent = info.session_id;
-    $('d-model').textContent = (state.engine && state.engine.label) || info.model;
-    $('d-engine').textContent = [state.engine && state.engine.mode,
-      state.engine && state.engine.vision && ('视觉 ' + (state.engine.vision.capability || '未知'))]
-      .filter(Boolean).join(' · ');
-    $('d-eot').textContent = info.eot.label + '（' + info.eot.mode + '）';
-    const mem = info.memory || {};
-    $('d-memory').textContent = mem.enabled
-      ? '已接 · ' + (mem.kind || '') + ' · ' + (mem.user_id || '') + ' · 凭据 ' + (mem.key_source || '—')
-      : '未接 · ' + (/memos 未启用|MEMOS_/.test(String(mem.reason||'')) ? '长期记忆未启用' : (mem.reason || '没有凭据'));
-    await Promise.all(SEATS.map(seat => connectTextSeat(seat, state.text.sessionId)));
+    rememberLive(info.session_id);
+    paintOpenInfo(info);
+    await connectTextSeats(state.text.sessionId);
+    paintTextLive();
     return state.text.sessionId;
+  }
+
+  async function resumeLiveSession() {
+    try {
+      const id = await pickLiveSessionId();
+      if (!id) { paintTextLive(); return; }
+      state.text.sessionId = id;
+      rememberLive(id);
+      $('d-session').textContent = id;
+      await connectTextSeats(id);
+      paintTextLive();
+    } catch (error) {
+      addError('接回进行中的场次失败：' + (error.message || error));
+      paintTextLive();
+    }
   }
 
   async function sendText(seat) {
@@ -1792,6 +1906,9 @@
     if (panel.classList.contains('open') && !state.text.sessionId) {
       ensureTextSession().catch(error => addError('文字通道开不了：' + (error.message || error)));
     }
+  });
+  $('textStopBtn').addEventListener('click', () => {
+    endLiveSession(state.text.sessionId);
   });
   SEATS.forEach(seat => {
     $('textSend-' + seat).addEventListener('click', () => sendText(seat));
@@ -1856,6 +1973,7 @@
     setTimeout(() => { $('modePill').textContent = '演示档 · 不连服务'; }, 300);
   }
   if (params.get('demo') === '1') demoPreview();
+  else resumeLiveSession();
 
   // ---------- 主画面通告：只有底噪就说出来（只写在抽屉里不算） ----------
   function monitorGate() {

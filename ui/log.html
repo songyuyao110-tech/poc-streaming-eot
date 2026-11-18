@@ -20,18 +20,36 @@
     </span>
     <span class="brand-text">
       <span class="brand-title">内心戏 · 运行日志</span>
-      <span class="brand-sub">车载对话 · 只读</span>
+      <span class="brand-sub" id="brandSub">车载对话 · 日志</span>
     </span>
   </div>
 
   <div class="top-actions">
-    <span class="draft-pill"><span class="pulse" aria-hidden="true"></span>真实记录</span>
+    <span class="draft-pill" id="statusPill"><span class="pulse" aria-hidden="true"></span><span id="statusPillText">真实记录</span></span>
     <a class="ghost-btn" href="/neixinxi">回到内心戏</a>
     <button type="button" class="ghost-btn convo-btn" id="convoBtn" disabled>打开对话</button>
     <button type="button" class="ghost-btn" id="refreshBtn">刷新</button>
     <button type="button" class="ghost-btn" id="drawerBtn">字段与缺口</button>
   </div>
 </header>
+
+<div class="live-bar" id="liveBar">
+  <div class="live-status">
+    <span class="live-dot" id="liveDot" aria-hidden="true"></span>
+    <p id="liveStatus">还没有进行中的场次。这里也可以开整条链路，人说的和车上回话会持续往下长。</p>
+  </div>
+  <div class="live-controls">
+    <button type="button" class="ghost-btn live-start" id="liveStartBtn">开始本场</button>
+    <button type="button" class="ghost-btn" id="liveStopBtn" disabled>停止本场</button>
+    <label class="live-seat" for="liveSeat">席位</label>
+    <select id="liveSeat" disabled>
+      <option value="D">主驾</option>
+      <option value="P">副驾</option>
+    </select>
+    <input id="liveText" type="text" placeholder="对车说一句，发送即收住" autocomplete="off" disabled/>
+    <button type="button" class="ghost-btn live-send" id="liveSendBtn" disabled>发送</button>
+  </div>
+</div>
 
 <div id="truthBanner" class="truth-banner is-real" aria-live="polite"></div>
 
@@ -47,7 +65,7 @@
     <div>
       <span class="eyebrow">这一页是什么</span>
       <h2 id="drawerTitle">字段与缺口</h2>
-      <p>只把真实落盘的记录按发生时间排开；没记录的字段照实标缺失。</p>
+      <p>时间线按真实落盘记录排开；本场进行中时会持续接上新事件，不必整页刷新。没记录的字段照实标缺失。</p>
     </div>
     <button type="button" class="icon-btn" id="drawerClose" aria-label="关闭字段说明">
       <svg viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
@@ -73,7 +91,7 @@
 
     <section class="drawer-section">
       <h3>对话可以单独打开</h3>
-      <p class="section-lede">顶栏「打开对话」只把这一场会话里人对车说的和车上对人说的按发生时间从上往下排开；读心画面、判停分数、工具细节不插进这段对话，仍留在左侧时间线按需看。</p>
+      <p class="section-lede">顶栏「打开对话」只把这一场里人对车说的和车上对人说的按发生时间从上往下排开，进行中的场次会顺着往下长。读心画面、判停分数、工具细节不插进这段对话，仍留在时间线按需看。</p>
     </section>
 
     <section class="drawer-section">
@@ -88,6 +106,11 @@
         <li>页面那一拍「要不要回答」只作记录，以主链的判答为准；两者都显示，不混成一个。</li>
         <li>这一页不提供全文检索、长期保留、权限和跨会话平台；没有做的能力不画成已实现。</li>
       </ul>
+    </section>
+
+    <section class="drawer-section">
+      <h3>本页也可以开整条链路</h3>
+      <p class="section-lede">点「开始本场」走与内心戏同一条开闸 / 选工具 / 办理 / 回话链路（文字验证：发送即收住）。从内心戏换到这里，只要没点停止，场次还在，对话会接上并继续往下长。只有点「停止本场」才结束。</p>
     </section>
 
     <section class="drawer-section">
@@ -111,6 +134,7 @@
     </button>
   </header>
   <div class="convo-body" id="convoBody"></div>
+  <p class="convo-live-hint" id="convoLiveHint" hidden>本场还在进行：新的原话和车上回话会出现在上面，不用关掉再打开。</p>
 </section>
 
 <noscript><div class="noscript">这一页需要浏览器启用 JavaScript 才能读取日志。</div></noscript>

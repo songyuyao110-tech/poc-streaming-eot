@@ -1510,6 +1510,8 @@ class DualMicZoom:
 
         不在这里调 session：driver 是唯一写者（和 ASR 同一口径），两边都往队列里放、只由它派。
         """
+        if self.done:
+            raise ValueError("会话已结束")
         if seat not in DUAL_SEATS:
             raise ValueError("seat must be D or P: " + str(seat))
         text = (text or "").strip()
@@ -2592,6 +2594,7 @@ class NeixinxiZoom:
         self.speech.note_turn_closed(seat)
         with self.formal_lock:
             self._formal_enqueue(seat, text)
+        Thread(target=self._maybe_formal, args=(seat,), daemon=True).start()
 
     # ---- 记忆：收住之后 → 读心落地 → 写前快判断 → 通过才落一刀；页面显示「记忆里查回来」的内容 ----
     @staticmethod
@@ -3274,6 +3277,7 @@ class NeixinxiZoom:
         # 正式答复：这一句原话交给中枢那一路判断（要回答才开闸，由主链那一趟决定）
         with self.formal_lock:
             self._formal_enqueue(seat, text)
+        Thread(target=self._maybe_formal, args=(seat,), daemon=True).start()
         return True
 
     # ---- driver（单写者）：画面 → 读心；两席出字 → 判停 + 读心；电平回执 ----
@@ -3331,6 +3335,10 @@ class NeixinxiZoom:
                 self._maybe_commit(seat)
                 self.maybe_silence_close(seat)
                 self.hub_poll(seat)
+            # 换页后可能暂时没有页面连接：已排队的正式办理仍要跑完（只有点停止才结束场次）
+            for seat in DUAL_SEATS:
+                if seat not in self.conns:
+                    self._maybe_formal(seat)
             self.push_mind_scenes()
             now = self.now_ms()
             if now - level_at >= NEIXINXI_LEVEL_EVERY_MS:
@@ -3360,12 +3368,58 @@ class NeixinxiZoom:
 
 def _join_neixinxi(session_id):
     zoom = NEIXINXI_SESSIONS.get(session_id)
-    if zoom is None:
+    if zoom is None or zoom.done:
         raise ValueError("unknown or expired neixinxi session: " + str(session_id))
     if not zoom.driver_started:
         zoom.driver_started = True
         Thread(target=zoom.driver, daemon=True).start()
     return zoom
+
+
+def _neixinxi_live_ids():
+    return {sid for sid, zoom in NEIXINXI_SESSIONS.items() if not zoom.done}
+
+
+def _neixinxi_live_rows():
+    rows = []
+    for zoom in NEIXINXI_SESSIONS.values():
+        if zoom.done:
+            continue
+        rows.append({
+            "session_id": zoom.session_id,
+            "model": zoom.model,
+            "eot_mode": zoom.eot_mode,
+            "connected_seats": [seat for seat in DUAL_SEATS if seat in zoom.conns],
+            "_started": zoom.started,
+        })
+    rows.sort(key=lambda item: item["_started"], reverse=True)
+    for item in rows:
+        item.pop("_started", None)
+    return rows
+
+
+def _neixinxi_replace_conn(zoom, seat, ws):
+    """同一席只保留最新这一条连接：换页重连时顶掉旧连接，但不结束会话。"""
+    old = zoom.conns.get(seat)
+    if old is not None:
+        try:
+            old.close()
+        except Exception:
+            pass
+        if zoom.conns.get(seat) is old:
+            zoom.conns.pop(seat, None)
+    conn = _DualMicConn(ws)
+    zoom.conns[seat] = conn
+    return conn
+
+
+def _neixinxi_release_conn(zoom, seat, conn):
+    """只拆这一条页面连接；没有连接时会话仍保活，等明确 reset 才结束。"""
+    if zoom is not None and conn is not None and zoom.conns.get(seat) is conn:
+        zoom.conns.pop(seat, None)
+    if conn is not None:
+        conn.close()
+        conn.worker.join(timeout=0.8)
 
 
 @app.get("/neixinxi")
@@ -3408,7 +3462,11 @@ def neixinxi_log_sessions():
         limit = max(1, min(200, int(request.args.get("limit") or 100)))
     except (TypeError, ValueError):
         limit = 100
-    return jsonify({"sessions": NeixinxiLogReader().sessions(limit=limit),
+    sessions = NeixinxiLogReader().sessions(limit=limit)
+    live_ids = _neixinxi_live_ids()
+    for item in sessions:
+        item["live"] = item.get("session_id") in live_ids
+    return jsonify({"sessions": sessions, "live": _neixinxi_live_rows(),
                     "limits": {"search": "未建设", "retention": "未建设",
                                "permission": "未建设"}}), 200
 
@@ -3435,6 +3493,7 @@ def neixinxi_log_session(session_id):
     if data is None:
         return jsonify({"error": "unknown log session: " + str(session_id)}), 404
     return jsonify({"session": data["session"], "events": data["events"],
+                    "live": session_id in _neixinxi_live_ids(),
                     "limits": {"search": "未建设", "retention": "未建设",
                                "permission": "未建设"}}), 200
 
@@ -3522,8 +3581,6 @@ def neixinxi_asr():
             zoom = _join_neixinxi(session_id)
         except ValueError as error:
             closed_error = str(error)
-    if closed_error is None and seat in zoom.conns:
-        closed_error = "seat %s already joined" % seat
     if closed_error is not None:
         ws = WsServer.accept(request.environ)
         try:
@@ -3536,8 +3593,7 @@ def neixinxi_asr():
                 pass
         return ""
     ws = WsServer.accept(request.environ)
-    conn = _DualMicConn(ws)
-    zoom.conns[seat] = conn
+    conn = _neixinxi_replace_conn(zoom, seat, ws)
     zoom.start_seat(seat)
     conn.send("ready", {"session_id": session_id, "seat": seat,
                        "label": DUAL_SEAT_NAME[seat],
@@ -3585,11 +3641,7 @@ def neixinxi_asr():
         conn.send("error", {"stage": "socket", "error_type": type(error).__name__,
                             "error": str(error)})
     finally:
-        zoom.conns.pop(seat, None)
-        conn.close()
-        conn.worker.join(timeout=0.8)
-        if not zoom.conns:
-            zoom.close()
+        _neixinxi_release_conn(zoom, seat, conn)
     return ""
 
 
@@ -3615,8 +3667,6 @@ def neixinxi_text():
             zoom = _join_neixinxi(session_id)
         except ValueError as error:
             closed_error = str(error)
-    if closed_error is None and seat in zoom.conns:
-        closed_error = "seat %s already joined" % seat
     if closed_error is not None:
         ws = WsServer.accept(request.environ)
         try:
@@ -3629,8 +3679,7 @@ def neixinxi_text():
                 pass
         return ""
     ws = WsServer.accept(request.environ)
-    conn = _DualMicConn(ws)
-    zoom.conns[seat] = conn
+    conn = _neixinxi_replace_conn(zoom, seat, ws)
     # 文字通道不启 ASR worker：这一席只有「整句原话」这一种输入（发送即收住）。
     conn.send("ready", {"session_id": session_id, "seat": seat,
                         "label": DUAL_SEAT_NAME[seat], "mode": "text",
@@ -3670,11 +3719,7 @@ def neixinxi_text():
         conn.send("error", {"stage": "socket", "error_type": type(error).__name__,
                             "error": str(error)})
     finally:
-        zoom.conns.pop(seat, None)
-        conn.close()
-        conn.worker.join(timeout=0.8)
-        if not zoom.conns:
-            zoom.close()
+        _neixinxi_release_conn(zoom, seat, conn)
     return ""
 
 
@@ -3781,6 +3826,42 @@ def neixinxi_feed():
     except ValueError as error:
         return jsonify({"error": str(error)}), 400
     return jsonify({"session_id": zoom.session_id, "fed": fed}), 200
+
+
+@app.get("/api/neixinxi/live")
+def neixinxi_live():
+    """进行中的内心戏会话。换页只断开本页连接，场次仍在；只有点停止 / reset 才结束。"""
+    rows = _neixinxi_live_rows()
+    return jsonify({"sessions": rows, "current": rows[0] if rows else None}), 200
+
+
+@app.post("/api/neixinxi/say")
+def neixinxi_say():
+    """文字验证同一口径：发送即收住，走真读心 + 主链。不要求本席此时占着 WebSocket。"""
+    body = request.get_json(silent=True) or {}
+    session_id = str(body.get("session_id") or "").strip()
+    seat = str(body.get("seat") or "D").strip().upper()
+    text = str(body.get("text") or "")
+    if seat not in DUAL_SEATS:
+        return jsonify({"error": "seat must be D or P"}), 400
+    zoom = None
+    if session_id:
+        try:
+            zoom = _join_neixinxi(session_id)
+        except ValueError as error:
+            return jsonify({"error": str(error)}), 404
+    else:
+        picked = _neixinxi_zoom_pick("")
+        if picked is not None and not picked.done:
+            zoom = _join_neixinxi(picked.session_id)
+    if zoom is None:
+        return jsonify({"error": "先开一个内心戏会话（日志页点「开始本场」，或内心戏页开文字验证）"}), 404
+    try:
+        zoom.say_text(seat, text)
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 400
+    return jsonify({"ok": True, "session_id": zoom.session_id, "seat": seat,
+                    "text": text.strip()}), 200
 
 
 @app.post("/api/neixinxi/reset")

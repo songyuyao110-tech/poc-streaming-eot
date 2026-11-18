@@ -73,6 +73,32 @@ svg{display:block}
   border:1px solid var(--line-2);border-radius:9px;padding:7px 11px;font-size:12.5px;font-weight:600;
   color:var(--ink-2);white-space:nowrap}
 .ghost-btn:hover{border-color:#9fb2c4;background:#fbfcfd}
+.ghost-btn:disabled{opacity:.5;cursor:default}
+.ghost-btn.live-start{border-color:#a9cfc8;background:#f7fbfa;color:var(--teal-2)}
+.ghost-btn.live-send{border-color:#a9cfc8;background:var(--teal);color:#fff}
+.ghost-btn.live-send:hover{background:var(--teal-2);border-color:var(--teal-2)}
+.ghost-btn.live-send:disabled{background:#c5d0d6;border-color:#c5d0d6;color:#fff;opacity:1}
+
+/* 进行中的场次：操作条贴在顶栏下，叠在对话面板之上，打开对话时仍能发送 */
+.live-bar{position:sticky;top:64px;z-index:120;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  padding:8px 22px;background:rgba(247,251,250,.96);border-bottom:1px solid #d7ece8;
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+.live-status{display:flex;align-items:flex-start;gap:8px;flex:1 1 280px;min-width:0}
+.live-dot{margin-top:6px;width:8px;height:8px;border-radius:50%;background:#b7c4ce;flex:0 0 auto}
+.live-bar.is-live .live-dot{background:#0f9f6e;box-shadow:0 0 0 4px rgba(15,159,110,.16)}
+.live-status p{margin:0;font-size:12.5px;line-height:1.5;color:var(--ink-2)}
+.live-controls{display:flex;align-items:center;gap:8px;flex:1 1 420px;min-width:0;flex-wrap:wrap}
+.live-seat{font-size:11.5px;font-weight:650;color:var(--muted)}
+.live-controls select,.live-controls input{border:1px solid var(--line-2);border-radius:9px;background:var(--surface);
+  padding:7px 10px;font-size:12.5px}
+.live-controls select{padding-right:8px}
+.live-controls input{flex:1 1 220px;min-width:140px}
+.live-controls input:focus,.live-controls select:focus{outline:2px solid #cdeee6;outline-offset:1px;border-color:#9ecdc6}
+.draft-pill.is-live{color:#0b5f59;background:#e8f5f2;border-color:#c9e9e3}
+.draft-pill.is-live .pulse{background:#0f9f6e}
+.session-pill.is-live .sp-title::after{content:"进行中";margin-left:6px;font-size:10px;font-weight:750;
+  letter-spacing:.06em;color:#0b5f59;background:#e8f5f2;border-radius:999px;padding:1px 6px;vertical-align:1px}
+.convo-live-hint{margin:0;padding:10px 22px 16px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}
 
 /* ---------- 事实条 ---------- */
 .truth-banner{display:flex;align-items:flex-start;gap:10px;padding:11px 22px;border-bottom:1px solid var(--line);
@@ -337,9 +363,9 @@ svg{display:block}
 /* 日志页里打开对话：只放人对车说的与车上对人说的 */
 .convo-btn{border-color:#a9cfc8;background:#f7fbfa;color:var(--teal-2)}
 .convo-btn:disabled{opacity:.55;cursor:default;border-color:var(--line-2);background:var(--surface);color:var(--muted)}
-.convo-overlay{position:fixed;inset:0;background:rgba(23,33,43,.32);z-index:105}
-.convo-panel{position:fixed;z-index:110;top:50%;left:50%;width:min(760px,calc(100vw - 32px));
-  max-height:min(84vh,760px);transform:translate(-50%,-50%) scale(.985);opacity:0;pointer-events:none;
+.convo-overlay{position:fixed;top:128px;right:0;bottom:0;left:0;background:rgba(23,33,43,.18);z-index:105}
+.convo-panel{position:fixed;z-index:110;top:calc(50% + 36px);left:50%;width:min(760px,calc(100vw - 32px));
+  max-height:min(72vh,680px);transform:translate(-50%,-50%) scale(.985);opacity:0;pointer-events:none;
   display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);
   border-radius:16px;box-shadow:0 24px 70px rgba(16,24,40,.22);transition:opacity .16s ease,transform .16s ease}
 .convo-panel.is-open{opacity:1;pointer-events:auto;transform:translate(-50%,-50%) scale(1)}
@@ -378,8 +404,14 @@ svg{display:block}
 .convo-empty strong{display:block;font-size:15px;color:var(--ink-2);margin-bottom:5px}
 .convo-empty p{margin:0;font-size:12.5px}
 
+@media (max-width:900px){
+  .live-bar{align-items:flex-start}
+}
 @media (max-width:640px){
-  .convo-panel{width:100%;max-height:88vh;border-radius:14px}
+  .live-bar{padding:8px 14px;top:64px}
+  .convo-overlay{top:168px}
+  .convo-panel{width:100%;max-height:88vh;border-radius:14px;top:auto;bottom:0;transform:translate(-50%,8px) scale(.985)}
+  .convo-panel.is-open{transform:translate(-50%,0) scale(1)}
   .convo-head{padding:16px 16px 10px}
   .convo-body{padding:14px 14px 18px}
   .convo-row{grid-template-columns:42px 16px minmax(0,1fr);gap:4px}

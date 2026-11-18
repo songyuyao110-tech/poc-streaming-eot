@@ -7,6 +7,7 @@
     'null': { label: '', cls: 'single' }
   };
 
+  const LIVE_KEY = 'neixinxi.liveSessionId';
   const state = {
     sessions: [],
     selectedId: null,
@@ -14,7 +15,12 @@
     openFolds: new Set(),
     openShots: new Set(),
     convoOpen: false,
-    loading: false
+    loading: false,
+    liveId: null,
+    liveRows: [],
+    polling: false,
+    pollTimer: null,
+    sending: false
   };
   const dom = {};
 
@@ -152,20 +158,21 @@
   function renderConversation() {
     if (!dom.convoBtn) return;
     const turns = state.data ? conversationTurns(state.data) : [];
-    dom.convoBtn.disabled = !turns.length;
-    dom.convoBtn.textContent = '打开对话' + (turns.length ? ' · ' + turns.length + ' 条' : '');
+    const live = isLive(state.selectedId);
+    dom.convoBtn.disabled = !state.data && !live;
+    dom.convoBtn.textContent = (state.convoOpen ? '对话已打开' : '打开对话') + (turns.length ? ' · ' + turns.length + ' 条' : '');
     if (!state.data) {
-      dom.convoSub.textContent = '还没有选中的会话；先在日志页选一场有原话的会话。';
-      dom.convoBody.innerHTML = '<div class="convo-empty"><strong>还没有可打开的对话</strong>' +
-        '<p>这一页只读真实落盘记录；没有原话时不编造对话。</p></div>';
+      dom.convoSub.textContent = live ? '本场刚开始，说出第一句后会显示在这里。' : '还没有选中的会话；先在日志页选一场，或点「开始本场」。';
+      dom.convoBody.innerHTML = '<div class="convo-empty"><strong>' + (live ? '等第一句出来' : '还没有可打开的对话') + '</strong>' +
+        '<p>' + (live ? '发送一句后，人说的和车上回话会按时间从上往下排。' : '没有原话时不编造对话。') + '</p></div>';
       return;
     }
     const session = state.data.session || {};
     dom.convoSub.textContent = day(session.started_at) + ' ' + clock(session.started_at) +
-      ' · 共 ' + turns.length + ' 条；按真实发生时间从上往下，读心画面和工程细节不插进来。';
+      ' · 共 ' + turns.length + ' 条；按真实发生时间从上往下' + (live ? '，本场进行中会继续往下长' : '') + '，读心画面和工程细节不插进来。';
     if (!turns.length) {
-      dom.convoBody.innerHTML = '<div class="convo-empty"><strong>这场会话没有留下原话</strong>' +
-        '<p>日志里只有读心或工程事件时，这里不补台词。对读心内容仍可在左侧时间线回看。</p></div>';
+      dom.convoBody.innerHTML = '<div class="convo-empty"><strong>' + (live ? '等第一句出来' : '这场会话没有留下原话') + '</strong>' +
+        '<p>' + (live ? '发送一句后，人说的和车上回话会出现在这里。' : '日志里只有读心或工程事件时，这里不补台词。对读心内容仍可在时间线回看。') + '</p></div>';
       return;
     }
     const rows = turns.map(function (turn, index) {
@@ -205,55 +212,253 @@
     return route === 'agent' ? '开闸' : '只记上下文';
   }
 
-  async function api(path) {
-    const resp = await fetch(path, { cache: 'no-store' });
+  async function api(path, options) {
+    const resp = await fetch(path, Object.assign({ cache: 'no-store' }, options || {}));
     const body = await resp.json().catch(function () { return {}; });
     if (!resp.ok) throw new Error(body.error || ('HTTP ' + resp.status));
     return body;
   }
 
+  function rememberLive(id) {
+    try {
+      if (id) sessionStorage.setItem(LIVE_KEY, id);
+      else sessionStorage.removeItem(LIVE_KEY);
+    } catch (e) { /* 私密模式可能写不了 */ }
+  }
+  function rememberedLive() {
+    try { return sessionStorage.getItem(LIVE_KEY) || ''; } catch (e) { return ''; }
+  }
+  function isLive(sessionId) {
+    const id = sessionId || state.selectedId;
+    if (!id) return false;
+    if (state.liveId === id) return true;
+    return (state.liveRows || []).some(function (item) { return item.session_id === id; });
+  }
+  function lastSeq(detail) {
+    const events = (detail && detail.events) || [];
+    let max = 0;
+    events.forEach(function (e) { if (Number(e.seq) > max) max = Number(e.seq); });
+    return max;
+  }
+  function nearBottom(el) {
+    if (!el) return true;
+    return (el.scrollHeight - el.scrollTop - el.clientHeight) < 80;
+  }
+
+  function paintLiveBar() {
+    const live = isLive(state.liveId || state.selectedId);
+    const id = state.liveId || (live ? state.selectedId : null);
+    if (dom.liveBar) dom.liveBar.classList.toggle('is-live', !!id);
+    if (dom.statusPill) dom.statusPill.classList.toggle('is-live', !!id);
+    if (dom.statusPillText) dom.statusPillText.textContent = id ? '本场进行中' : '真实记录';
+    if (dom.brandSub) dom.brandSub.textContent = id ? '车载对话 · 本场进行中' : '车载对话 · 日志';
+    if (dom.liveStatus) {
+      dom.liveStatus.textContent = id
+        ? ('本场进行中 · ' + id + '。人说的和车上回话会顺着往下长，不必整页刷新。点「停止本场」才结束。')
+        : '还没有进行中的场次。这里也可以开整条链路，人说的和车上回话会持续往下长。';
+    }
+    if (dom.liveStopBtn) dom.liveStopBtn.disabled = !id || state.sending;
+    if (dom.liveStartBtn) {
+      dom.liveStartBtn.disabled = !!id || state.sending;
+      dom.liveStartBtn.textContent = id ? '本场已开始' : '开始本场';
+    }
+    if (dom.liveSeat) dom.liveSeat.disabled = !id || state.sending;
+    if (dom.liveText) {
+      dom.liveText.disabled = !id || state.sending;
+      dom.liveText.placeholder = id ? '对车说一句，发送即收住' : '先点「开始本场」，或从内心戏接上同一场';
+    }
+    if (dom.liveSendBtn) dom.liveSendBtn.disabled = !id || state.sending;
+    if (dom.convoLiveHint) {
+      const show = !!(id && state.convoOpen);
+      dom.convoLiveHint.hidden = !show;
+    }
+  }
+
+  async function refreshLiveRows() {
+    const body = await api('/api/neixinxi/live');
+    state.liveRows = body.sessions || [];
+    const remembered = rememberedLive();
+    const still = remembered && state.liveRows.some(function (item) { return item.session_id === remembered; });
+    if (still) state.liveId = remembered;
+    else if (state.liveId && !state.liveRows.some(function (item) { return item.session_id === state.liveId; })) {
+      state.liveId = (state.liveRows[0] && state.liveRows[0].session_id) || null;
+    } else if (!state.liveId && state.liveRows[0]) {
+      state.liveId = state.liveRows[0].session_id;
+    }
+    if (state.liveId) rememberLive(state.liveId);
+    else rememberLive('');
+    paintLiveBar();
+    return state.liveRows;
+  }
+
+  async function startLive() {
+    if (state.liveId && isLive(state.liveId)) return state.liveId;
+    const body = await api('/api/neixinxi/open', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ eot: 'real' })
+    });
+    state.liveId = body.session_id;
+    rememberLive(body.session_id);
+    state.selectedId = body.session_id;
+    paintLiveBar();
+    try {
+      await loadSessions(true);
+    } catch (e) {
+      await refreshSession(body.session_id, { keepView: true });
+    }
+    openConversation();
+    if (dom.liveText) dom.liveText.focus();
+    return body.session_id;
+  }
+
+  async function stopLive() {
+    const id = state.liveId || (isLive(state.selectedId) ? state.selectedId : null);
+    if (!id) return;
+    await api('/api/neixinxi/reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: id })
+    });
+    if (state.liveId === id) state.liveId = null;
+    rememberLive('');
+    await refreshLiveRows();
+    if (state.selectedId) await refreshSession(state.selectedId, { keepView: true });
+    paintLiveBar();
+  }
+
+  async function sayLive() {
+    const id = state.liveId || (isLive(state.selectedId) ? state.selectedId : null);
+    const text = String((dom.liveText && dom.liveText.value) || '').trim();
+    const seat = (dom.liveSeat && dom.liveSeat.value) || 'D';
+    if (!id) throw new Error('还没有进行中的场次');
+    if (!text) throw new Error('先输入一句完整原话再发送');
+    state.sending = true;
+    paintLiveBar();
+    try {
+      await api('/api/neixinxi/say', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: id, seat: seat, text: text })
+      });
+      if (dom.liveText) dom.liveText.value = '';
+      if (!state.convoOpen) openConversation();
+      await refreshSession(id, { keepView: true });
+    } finally {
+      state.sending = false;
+      paintLiveBar();
+    }
+  }
+
+  async function tickLive() {
+    if (state.polling) return;
+    state.polling = true;
+    try {
+      const hadSelection = !!state.selectedId;
+      await refreshLiveRows();
+      if (state.liveId && !hadSelection) state.selectedId = state.liveId;
+      if (state.selectedId && (state.selectedId === state.liveId || isLive(state.selectedId))) {
+        await refreshSession(state.selectedId, { keepView: true });
+      }
+    } catch (e) {
+      /* 轮询失败不打断页面，下一次再试 */
+    } finally {
+      state.polling = false;
+    }
+  }
+
+  function startPolling() {
+    if (state.pollTimer) return;
+    tickLive();
+    state.pollTimer = setInterval(tickLive, 800);
+  }
+
   async function loadSessions(keepSelection) {
-    dom.refreshBtn.disabled = true;
+    if (dom.refreshBtn) dom.refreshBtn.disabled = true;
     try {
       const body = await api('/api/neixinxi/log/sessions');
       state.sessions = body.sessions || [];
-      const wanted = keepSelection ? state.selectedId : null;
+      state.liveRows = body.live || state.liveRows || [];
+      if (body.live && body.live[0] && !state.liveId) state.liveId = body.live[0].session_id;
+      const wanted = keepSelection ? state.selectedId : (state.liveId || rememberedLive() || null);
       const found = wanted && state.sessions.some(function (s) { return s.session_id === wanted; });
-      state.selectedId = found ? wanted : (state.sessions[0] && state.sessions[0].session_id) || null;
+      if (found) state.selectedId = wanted;
+      else if (state.liveId) state.selectedId = state.liveId;
+      else state.selectedId = (state.sessions[0] && state.sessions[0].session_id) || null;
       renderSessionBar();
+      paintLiveBar();
       if (!state.selectedId) {
         state.data = null;
         renderBanner();
         renderMain();
+        renderConversation();
         renderDrawerSource();
         return;
       }
-      await loadSession(state.selectedId);
+      await refreshSession(state.selectedId, { keepView: keepSelection });
     } catch (error) {
       dom.truthBanner.className = 'truth-banner is-empty';
       dom.truthBanner.innerHTML = '<span class="tb-label">读取失败</span><p>' +
         esc('日志服务没有返回可读记录：' + error.message) + '</p>';
     } finally {
-      dom.refreshBtn.disabled = false;
+      if (dom.refreshBtn) dom.refreshBtn.disabled = false;
     }
   }
 
   async function loadSession(sessionId) {
-    state.selectedId = sessionId;
     state.openFolds.clear();
     state.openShots.clear();
+    return refreshSession(sessionId, { keepView: false });
+  }
+
+  async function refreshSession(sessionId, opts) {
+    const keepView = !!(opts && opts.keepView);
+    state.selectedId = sessionId;
     state.loading = true;
+    const stickTimeline = keepView && nearBottom(document.scrollingElement || document.documentElement);
+    const stickConvo = keepView && state.convoOpen && nearBottom(dom.convoBody);
+    const y = window.scrollY;
+    const prevSeq = lastSeq(state.data);
+    const prevCount = ((state.data && state.data.events) || []).length;
+    const sameId = state.data && state.data.session && state.data.session.session_id === sessionId;
     try {
       const body = await api('/api/neixinxi/log/' + encodeURIComponent(sessionId));
+      if (body.live) {
+        if (!state.liveRows.some(function (item) { return item.session_id === sessionId; })) {
+          state.liveRows = [{ session_id: sessionId }].concat(state.liveRows || []);
+        }
+        if (!state.liveId) state.liveId = sessionId;
+      }
+      const nextSeq = lastSeq(body);
+      const nextCount = (body.events || []).length;
+      const changed = !sameId || nextSeq !== prevSeq || nextCount !== prevCount;
       state.data = body;
-      renderSessionBar();
-      renderBanner();
-      renderMain();
-      renderDrawerSource();
+      if (!keepView) {
+        /* 手动点开另一场时，折叠状态已经清过 */
+      }
+      if (changed || !keepView) {
+        renderSessionBar();
+        renderBanner();
+        renderMain();
+        renderConversation();
+        renderDrawerSource();
+        paintLiveBar();
+        if (keepView && sameId && !stickTimeline) window.scrollTo(0, y);
+        if (state.convoOpen && (stickConvo || !keepView)) {
+          requestAnimationFrame(function () {
+            if (dom.convoBody) dom.convoBody.scrollTop = dom.convoBody.scrollHeight;
+          });
+        }
+      } else {
+        renderSessionBar();
+        paintLiveBar();
+      }
     } catch (error) {
-      dom.truthBanner.className = 'truth-banner is-empty';
-      dom.truthBanner.innerHTML = '<span class="tb-label">读取失败</span><p>' +
-        esc('这条会话读不出来：' + error.message) + '</p>';
+      if (!keepView) {
+        dom.truthBanner.className = 'truth-banner is-empty';
+        dom.truthBanner.innerHTML = '<span class="tb-label">读取失败</span><p>' +
+          esc('这条会话读不出来：' + error.message) + '</p>';
+      }
     } finally {
       state.loading = false;
     }
@@ -267,7 +472,7 @@
     const el = dom.truthBanner;
     if (!state.sessions.length) {
       el.className = 'truth-banner is-empty';
-      el.innerHTML = '<span class="tb-label">空态</span><p>还没有真实运行记录。先去 <a href="/neixinxi">内心戏</a> 完成一轮（收住 → 办理 → 回执上屏），再回这里看时间线。这是空态，不是检索无结果；跨会话检索还没建设。</p>';
+      el.innerHTML = '<span class="tb-label">空态</span><p>还没有真实运行记录。可以在本页点「开始本场」，或去 <a href="/neixinxi">内心戏</a> 开一轮。这是空态，不是检索无结果；跨会话检索还没建设。</p>';
       return;
     }
     const detail = state.data;
@@ -277,8 +482,11 @@
     const missing = [];
     if (!hasMind) missing.push('读心未记录');
     if (!hasFrame) missing.push('画面未记录');
-    el.className = 'truth-banner is-real';
-    el.innerHTML = '<span class="tb-label">真实记录</span><p>下面每个时间点都来自这次会话的落盘记录，按发生先后分别挂在中轴两侧，不是左右成对。' +
+    const live = isLive(state.selectedId);
+    el.className = 'truth-banner ' + (live ? 'is-real' : 'is-real');
+    el.innerHTML = '<span class="tb-label">' + (live ? '本场进行中' : '真实记录') + '</span><p>' +
+      (live ? '下面的时间线和对话会随着新事件更新，不必整页刷新。' : '') +
+      '每个时间点都来自这次会话的落盘记录，按发生先后分别挂在中轴两侧，不是左右成对。' +
       (missing.length ? '缺的项照实标：<strong>' + esc(missing.join(' · ')) + '</strong>，不编造时间，也不拿示例图顶上。' : '') +
       '产品会话与主链会话已用记录键关联；页面那一拍「要不要回答」只作记录，以主链判答为准。</p>';
   }
@@ -298,7 +506,8 @@
       if (item.mind_count) bits.push('读心 ' + item.mind_count);
       if (item.run_count) bits.push('主链 ' + item.run_count);
       if (!item.event_count) bits.push('空会话');
-      return '<button type="button" class="session-pill' + (active ? ' is-active' : '') +
+      const liveCls = (item.live || isLive(item.session_id)) ? ' is-live' : '';
+      return '<button type="button" class="session-pill' + (active ? ' is-active' : '') + liveCls +
         '" data-session="' + esc(item.session_id) + '">' +
         '<span class="sp-title">' + esc(clock(item.started_at) + ' · ' + first) + '</span>' +
         '<span class="sp-meta">' + esc(bits.join(' · ') || '无事件') + '</span></button>';
@@ -744,6 +953,30 @@
 
   function bind() {
     dom.refreshBtn.addEventListener('click', function () { loadSessions(true); });
+    if (dom.liveStartBtn) dom.liveStartBtn.addEventListener('click', function () {
+      startLive().catch(function (error) {
+        if (dom.liveStatus) dom.liveStatus.textContent = '没开成：' + error.message;
+      });
+    });
+    if (dom.liveStopBtn) dom.liveStopBtn.addEventListener('click', function () {
+      stopLive().catch(function (error) {
+        if (dom.liveStatus) dom.liveStatus.textContent = '没停成：' + error.message;
+      });
+    });
+    if (dom.liveSendBtn) dom.liveSendBtn.addEventListener('click', function () {
+      sayLive().catch(function (error) {
+        if (dom.liveStatus) dom.liveStatus.textContent = '没发出去：' + error.message;
+        paintLiveBar();
+      });
+    });
+    if (dom.liveText) dom.liveText.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      sayLive().catch(function (error) {
+        if (dom.liveStatus) dom.liveStatus.textContent = '没发出去：' + error.message;
+        paintLiveBar();
+      });
+    });
     dom.sessionBar.addEventListener('click', function (e) {
       const btn = e.target.closest('[data-session]');
       if (!btn) return;
@@ -798,9 +1031,7 @@
   }
 
   function openConversation() {
-    if (!state.data) return;
-    const turns = conversationTurns(state.data);
-    if (!turns.length) return;
+    if (!state.data && !isLive(state.selectedId || state.liveId)) return;
     state.convoOpen = true;
     dom.convoLastFocus = document.activeElement;
     renderConversation();
@@ -851,14 +1082,28 @@
     dom.convoSub = document.getElementById('convoSub');
     dom.convoClose = document.getElementById('convoClose');
     dom.refreshBtn = document.getElementById('refreshBtn');
+    dom.liveBar = document.getElementById('liveBar');
+    dom.liveStatus = document.getElementById('liveStatus');
+    dom.liveStartBtn = document.getElementById('liveStartBtn');
+    dom.liveStopBtn = document.getElementById('liveStopBtn');
+    dom.liveSeat = document.getElementById('liveSeat');
+    dom.liveText = document.getElementById('liveText');
+    dom.liveSendBtn = document.getElementById('liveSendBtn');
+    dom.convoLiveHint = document.getElementById('convoLiveHint');
+    dom.brandSub = document.getElementById('brandSub');
+    dom.statusPill = document.getElementById('statusPill');
+    dom.statusPillText = document.getElementById('statusPillText');
     bind();
+    paintLiveBar();
     let wanted = null;
     try { wanted = new URLSearchParams(location.search).get('session'); } catch (e) {}
+    if (!wanted) wanted = rememberedLive() || null;
     if (wanted) {
       state.selectedId = wanted;
-      loadSessions(true);
+      state.liveId = rememberedLive() || state.liveId;
+      loadSessions(true).then(function () { startPolling(); });
     } else {
-      loadSessions(false);
+      loadSessions(false).then(function () { startPolling(); });
     }
   }
 
